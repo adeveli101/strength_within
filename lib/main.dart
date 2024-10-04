@@ -99,35 +99,61 @@ class MainPageState extends State<MainPage> {
     firebaseProvider.signInSilently();
     sharedPrefsProvider.prepareData();
   }
+  void _showSettingsPopup() {
+    final RenderBox button = context.findRenderObject() as RenderBox;
+    final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final RelativeRect position = RelativeRect.fromRect(
+      Rect.fromPoints(
+        button.localToGlobal(Offset.zero, ancestor: overlay),
+        button.localToGlobal(button.size.bottomRight(Offset.zero), ancestor: overlay),
+      ),
+      Offset.zero & overlay.size,
+    );
 
-  void _showSettingsBottomSheet() {
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      isScrollControlled: true,
       builder: (BuildContext context) {
-        return SafeArea(
-          child: SizedBox(
-            height: MediaQuery.of(context).size.height * 0.9,
-            child: Column(
-              children: [
-                AppBar(
-                  leading: IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.of(context).pop(),
+        return Align(
+          alignment: Alignment.topRight,
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              width: MediaQuery.of(context).size.width * 0.6,
+              height: MediaQuery.of(context).size.height * 0.3,
+              margin: EdgeInsets.only(top: position.top, right: 9),
+              decoration: BoxDecoration(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 10,
+                    offset: Offset(0, 5),
                   ),
-                  title: const Text('Settings'),
-                ),
-                Expanded(
-                  child: SettingPage(signInCallback: signInCallback),
-                ),
-              ],
+                ],
+              ),
+              child: Column(
+                children: [
+                  AppBar(
+                    backgroundColor: Colors.transparent,
+                    elevation: 0,
+                    title: const Text('Settings'),
+                    leading: IconButton(
+                      icon: Icon(Icons.arrow_back),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ),
+                  Expanded(
+                    child: SettingPage(signInCallback: signInCallback),
+                  ),
+                ],
+              ),
             ),
           ),
         );
       },
     );
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -139,8 +165,8 @@ class MainPageState extends State<MainPage> {
           centerTitle: false,
           actions: [
             IconButton(
-              icon: const Icon(Icons.settings),
-              onPressed: _showSettingsBottomSheet,
+              icon: const Icon(FontAwesomeIcons.bars),
+              onPressed: _showSettingsPopup,
             ),
           ],
           bottom: const TabBar(

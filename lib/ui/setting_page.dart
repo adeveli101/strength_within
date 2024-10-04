@@ -13,6 +13,7 @@ import '../models/routine.dart';
 
 class SettingPage extends StatefulWidget {
   final VoidCallback signInCallback;
+
   const SettingPage({super.key, required this.signInCallback});
 
   @override
