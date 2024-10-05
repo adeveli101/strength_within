@@ -13,10 +13,10 @@ class RoutineEditPage extends StatefulWidget {
   final MainTargetedBodyPart mainTargetedBodyPart;
 
   const RoutineEditPage({
-    super.key,
+    Key? key,
     required this.addOrEdit,
     required this.mainTargetedBodyPart,
-  });
+  }) : super(key: key);
 
   @override
   State<RoutineEditPage> createState() => _RoutineEditPageState();
@@ -47,13 +47,13 @@ class _RoutineEditPageState extends State<RoutineEditPage> {
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
+    return PopScope<Object?>(
       canPop: false,
-      onPopInvokedWithResult: (bool didPop, dynamic result) async {
+      onPopInvokedWithResult: (bool didPop, Object? result) async {
         if (didPop) return;
         final shouldPop = await _onWillPop();
         if (shouldPop) {
-          if (context.mounted) {  // Use context.mounted here
+          if (context.mounted) {
             Navigator.of(context).pop();
           }
         }
@@ -61,50 +61,49 @@ class _RoutineEditPageState extends State<RoutineEditPage> {
       child: StreamBuilder<Routine>(
         stream: routinesBloc.currentRoutine,
         builder: (_, AsyncSnapshot<Routine> snapshot) {
-          if (snapshot.hasData) {
-            routine = snapshot.data!;
-            if (!_initialized) {
-              routineCopy = Routine.fromMap(routine.toMap());
-              _initialized = true;
-            }
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
+          routine = snapshot.data!;
+          if (!_initialized) {
+            routineCopy = Routine.fromMap(routine.toMap());
+            _initialized = true;
             if (widget.addOrEdit == AddOrEdit.edit) {
               textEditingController.text = routineCopy.routineName;
             }
-
-            return Scaffold(
-              key: scaffoldKey,
-              appBar: AppBar(
-                actions: [
-                  if (widget.addOrEdit == AddOrEdit.edit)
-                    IconButton(
-                      icon: const Icon(Icons.delete_forever),
-                      onPressed: _showDeleteDialog,
-                    ),
-                  IconButton(
-                    icon: const Icon(Icons.done),
-                    onPressed: onDonePressed,
-                  ),
-                ],
-              ),
-              body: ReorderableListView(
-                scrollController: scrollController,
-                onReorder: onReorder,
-                header: Form(key: formKey, child: _routineDescriptionEditCard()),
-                padding: const EdgeInsets.only(bottom: 128),
-                children: buildExerciseDetails(),
-              ),
-              floatingActionButton: FloatingActionButton.extended(
-                backgroundColor: Theme.of(context).primaryColor,
-                icon: const Icon(Icons.add, color: Colors.white),
-                label: const Text('ADD', style: TextStyle(color: Colors.white, fontSize: 16)),
-                onPressed: onAddExercisePressed,
-                isExtended: true,
-              ),
-            );
-          } else {
-            return Container();
           }
+
+          return Scaffold(
+            key: scaffoldKey,
+            appBar: AppBar(
+              actions: [
+                if (widget.addOrEdit == AddOrEdit.edit)
+                  IconButton(
+                    icon: const Icon(Icons.delete_forever),
+                    onPressed: _showDeleteDialog,
+                  ),
+                IconButton(
+                  icon: const Icon(Icons.done),
+                  onPressed: onDonePressed,
+                ),
+              ],
+            ),
+            body: ReorderableListView(
+              scrollController: scrollController,
+              onReorder: onReorder,
+              header: Form(key: formKey, child: _routineDescriptionEditCard()),
+              padding: const EdgeInsets.only(bottom: 128),
+              children: buildExerciseDetails(),
+            ),
+            floatingActionButton: FloatingActionButton.extended(
+              backgroundColor: Theme.of(context).primaryColor,
+              icon: const Icon(Icons.add, color: Colors.white),
+              label: const Text('ADD', style: TextStyle(color: Colors.white, fontSize: 16)),
+              onPressed: onAddExercisePressed,
+              isExtended: true,
+            ),
+          );
         },
       ),
     );
@@ -202,8 +201,7 @@ class _RoutineEditPageState extends State<RoutineEditPage> {
           ),
         ],
       ),
-    ) ??
-        false;
+    ) ?? false;
   }
 
   void _showDeleteDialog() {

@@ -11,6 +11,7 @@ import 'package:workout/resource/firebase_provider.dart';
 import 'package:workout/resource/shared_prefs_provider.dart';
 import '../models/routine.dart';
 
+
 class SettingPage extends StatefulWidget {
   final VoidCallback signInCallback;
 
@@ -39,7 +40,8 @@ class _SettingPageState extends State<SettingPage> {
   @override
   void initState() {
     super.initState();
-    selectedRadioValue = firebaseProvider.weeklyAmount ?? 0;
+    selectedRadioValue = (firebaseProvider.weeklyAmount ?? 0).toInt();
+
   }
 
   @override
@@ -52,7 +54,8 @@ class _SettingPageState extends State<SettingPage> {
           stream: routinesBloc.allRecRoutines,
           builder: (_, AsyncSnapshot<List<Routine>> snapshot) {
             return StreamBuilder<User?>(
-              stream: firebaseProvider.firebaseAuth.authStateChanges(),
+              stream: firebaseProvider.auth.authStateChanges(),
+
               builder: (_, sp) {
                 var firebaseUser = sp.data;
                 if (firebaseUser != null) firebaseProvider.firebaseUser = firebaseUser;
