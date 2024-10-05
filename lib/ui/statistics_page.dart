@@ -3,8 +3,14 @@ import 'package:percent_indicator/circular_percent_indicator.dart';
 import 'package:workout/resource/firebase_provider.dart';
 import 'package:workout/ui/components/chart.dart';
 import 'package:workout/bloc/routines_bloc.dart';
+import 'package:workout/ui/routine_edit_page.dart';
 import '../models/routine.dart';
+import '../utils/routine_helpers.dart';
 import 'calender_page.dart';
+import 'components/routine_card.dart';
+
+import 'package:workout/resource/shared_prefs_provider.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class StatisticsPage extends StatefulWidget {
   const StatisticsPage({Key? key}) : super(key: key);
@@ -121,36 +127,54 @@ class _StatisticsPageState extends State<StatisticsPage> {
         color: Theme.of(context).primaryColor,
         child: Padding(
           padding: const EdgeInsets.all(4),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(left: 12, right: 12, top: 4, bottom: 4),
-                child: RichText(
-                  text: TextSpan(
-                    children: [
-                      TextSpan(
-                        text: 'You have been using this app since ${FirebaseProvider().firstRunDate ?? "N/A"}',
-                        style: const TextStyle(fontFamily: 'Staa'),
+          child: FutureBuilder<String?>(
+            future: _getFirstRunDate(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const CircularProgressIndicator();
+              }
+
+              String firstRunDateText = snapshot.data ?? "N/A";
+              String daysSinceFirstRun = "N/A";
+
+              if (snapshot.hasData && snapshot.data != null) {
+                DateTime firstRunDate = DateTime.parse(snapshot.data!);
+                daysSinceFirstRun = DateTime.now().difference(firstRunDate).inDays.toString();
+              }
+
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(left: 12, right: 12, top: 4, bottom: 4),
+                    child: RichText(
+                      text: TextSpan(
+                        children: [
+                          TextSpan(
+                            text: 'You have been using this app since $firstRunDateText',
+                            style: const TextStyle(fontFamily: 'Staa'),
+                          ),
+                          const TextSpan(text: '\n\nIt has been\n', style: TextStyle(fontFamily: 'Staa')),
+                          TextSpan(
+                            text: daysSinceFirstRun,
+                            style: const TextStyle(fontSize: 36, fontFamily: 'Staa'),
+                          ),
+                          const TextSpan(text: '\ndays', style: TextStyle(fontFamily: 'Staa')),
+                        ],
                       ),
-                      const TextSpan(text: '\n\nIt has been\n', style: TextStyle(fontFamily: 'Staa')),
-                      TextSpan(
-                        text: FirebaseProvider().firstRunDate != null
-                            ? DateTime.now().difference(DateTime.parse(FirebaseProvider().firstRunDate!)).inDays.toString()
-                            : "N/A",
-                        style: const TextStyle(fontSize: 36, fontFamily: 'Staa'),
-                      ),
-                      const TextSpan(text: '\ndays', style: TextStyle(fontFamily: 'Staa')),
-                    ],
+                    ),
                   ),
-                ),
-              ),
-            ],
+                ],
+              );
+            },
           ),
         ),
       ),
     );
   }
+
+
+
 
   Widget _buildTotalCompletionCard(int totalCount) {
     return Padding(
@@ -207,46 +231,117 @@ class _StatisticsPageState extends State<StatisticsPage> {
   Widget _buildGoalCard(double ratio) {
     return Padding(
       padding: const EdgeInsets.all(4),
-      child: Card(
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(8))),
-        elevation: 12,
-        color: Theme.of(context).primaryColor,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            double radius = constraints.maxWidth * 0.4; //
-            return Center(
-              child: CircularPercentIndicator(
-                radius: radius,
-                lineWidth: radius * 0.1,
-                animation: true,
-                animateFromLastPercent: true,
-                percent: ratio,
-                center: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    "${(ratio * 100).toStringAsFixed(0)}%",
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20.0, color: Colors.white),
-                  ),
+      child: InkWell(
+        onTap: () {
+          if (_loadedRoutines.isEmpty) {
+            // Eğer rutin yoksa, doğrudan RoutineEditPage'e yönlendir
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => RoutineEditPage(
+                  addOrEdit: AddOrEdit.add,
+                  mainTargetedBodyPart: MainTargetedBodyPart.fullBody, // Varsayılan bir değer
                 ),
-                header: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: const Text(
-                    "Goal of this week",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17.0, color: Colors.white),
-                  ),
-                ),
-                circularStrokeCap: CircularStrokeCap.round,
-                progressColor: Colors.grey,
               ),
             );
-          },
+          } else {
+            // Eğer rutinler varsa, mevcut dialog'u göster
+            showDialog(
+              context: context,
+              builder: (BuildContext context) {
+                return AlertDialog(
+                  title: Text('Select a Routine'),
+                  content: SingleChildScrollView(
+                    child: ListBody(
+                      children: _loadedRoutines.map((routine) {
+                        return ListTile(
+                          title: Text(routine.routineName),
+                          onTap: () {
+                            Navigator.of(context).pop(); // Close the dialog
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => RoutineCard(routine: routine)),
+                            );
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  actions: <Widget>[
+                    TextButton(
+                      child: Text('Create New Routine'),
+                      onPressed: () {
+                        Navigator.of(context).pop(); // Close the dialog
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => RoutineEditPage(
+                              addOrEdit: AddOrEdit.add,
+                              mainTargetedBodyPart: MainTargetedBodyPart.fullBody, // Varsayılan bir değer
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                );
+              },
+            );
+          }
+        },
+
+
+
+        child: Card(
+          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(8))),
+          elevation: 12,
+          color: Theme.of(context).primaryColor,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              double radius = constraints.maxWidth * 0.4;
+              return Center(
+                child: CircularPercentIndicator(
+                  radius: radius,
+                  lineWidth: radius * 0.1,
+                  animation: true,
+                  animateFromLastPercent: true,
+                  percent: ratio,
+                  center: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      "${(ratio * 100).toStringAsFixed(0)}%",
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20.0, color: Colors.white),
+                    ),
+                  ),
+                  header: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: const Text(
+                      "Goal of this week",
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17.0, color: Colors.white),
+                    ),
+                  ),
+                  circularStrokeCap: CircularStrokeCap.round,
+                  progressColor: Colors.grey,
+                ),
+              );
+            },
+          ),
         ),
       ),
     );
   }
 
 
+
 }
+
+
+Future<String?> _getFirstRunDate() async {
+  return await _getFirstRunDate();
+}
+
+
+
 
 
   int _getTotalWorkoutCount(List<Routine> routines) {

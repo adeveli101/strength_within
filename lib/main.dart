@@ -45,7 +45,7 @@ class App extends StatelessWidget {
         ),
       ),
       debugShowCheckedModeBanner: false,
-      title: 'Dumbbell',
+      title: 'workout',
       routes: {
         '/home_page': (context) => HomePage(
           id: DBProvider.db.generateId(),
@@ -119,7 +119,7 @@ class MainPageState extends State<MainPage> {
             color: Colors.transparent,
             child: Container(
               width: MediaQuery.of(context).size.width * 0.6,
-              height: MediaQuery.of(context).size.height * 0.3,
+              height: MediaQuery.of(context).size.height * 0.33,
               margin: EdgeInsets.only(top: position.top, right: 9),
               decoration: BoxDecoration(
                 color: Theme.of(context).scaffoldBackgroundColor,
@@ -161,7 +161,7 @@ class MainPageState extends State<MainPage> {
       length: 2,
       child: Scaffold(
         appBar: GFAppBar(
-          title: const Text('Dumbbell'),
+          title: const Text('workout'),
           centerTitle: false,
           actions: [
             IconButton(

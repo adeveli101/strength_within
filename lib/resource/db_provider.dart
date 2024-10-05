@@ -1,11 +1,10 @@
 import 'dart:async';
 import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_sqlcipher/sqflite.dart'; //
 import 'package:uuid/uuid.dart';
 import 'package:workout/models/routine.dart';
 
@@ -15,6 +14,7 @@ class DBProvider {
   static final DBProvider db = DBProvider._();
 
   Database? _database;
+  static const String _dbPassword = '9003'; // EKLENEN: Veritabanı şifresi
 
   Future<Database> get database async {
     return _database ??= await initDB();
@@ -24,6 +24,13 @@ class DBProvider {
     return const Uuid().v4();
   }
 
+  // EKLENEN: Güvenli loglama fonksiyonu
+  void _log(String message) {
+    if (kDebugMode) {
+      print(message);
+    }
+  }
+
   Future<Database> initDB({bool refresh = false}) async {
     Directory appDocDir = await getApplicationDocumentsDirectory();
     String path = join(appDocDir.path, "data.db");
@@ -31,14 +38,12 @@ class DBProvider {
     if (await File(path).exists() && !refresh) {
       return openDatabase(
         path,
-        version: 1,
+        password: _dbPassword, // EKLENEN: Şifre kullanımı
+        version: 2, // EKLENEN: Sürüm yükseltildi
         onOpen: (db) async {
-          if (kDebugMode) {
-            if (kDebugMode) {
-              print(await db.query("sqlite_master"));
-            }
-          }
+          _log(await db.query("sqlite_master").toString());
         },
+        onUpgrade: _onUpgrade, // EKLENEN: Sürüm yükseltme işlevi
       );
     } else {
       ByteData data = await rootBundle.load("database/data.db");
@@ -46,90 +51,162 @@ class DBProvider {
       await File(path).writeAsBytes(bytes);
       return openDatabase(
         path,
-        version: 1,
+        password: _dbPassword, // EKLENEN: Şifre kullanımı
+        version: 2, // EKLENEN: Sürüm yükseltildi
+        onCreate: _onCreate, // EKLENEN: Veritabanı oluşturma işlevi
         onOpen: (db) async {
-          if (kDebugMode) {
-            print(await db.query("sqlite_master"));
-          }
+          _log(await db.query("sqlite_master").toString());
         },
       );
     }
   }
 
+  // EKLENEN: Veritabanı oluşturma işlevi
+  Future<void> _onCreate(Database db, int version) async {
+    await db.execute('''
+      CREATE TABLE Routines (
+        Id INTEGER PRIMARY KEY,
+        RoutineName TEXT,
+        MainPart TEXT,
+        Parts TEXT,
+        LastCompletedDate TEXT,
+        CreatedDate TEXT,
+        Count INTEGER,
+        RoutineHistory TEXT,
+        Weekdays TEXT
+      )
+    ''');
+  }
+
+  // EKLENEN: Veritabanı yükseltme işlevi
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      // Sürüm yükseltme.
+    }
+  }
+
   Future<int> getLastId() async {
     final db = await database;
-    var table = await db.rawQuery('SELECT MAX(Id)+1 as Id FROM Routines');
-    return table.first['Id'] as int? ?? 0;
+    try {
+      var table = await db.rawQuery('SELECT MAX(Id)+1 as Id FROM Routines');
+      return table.first['Id'] as int? ?? 0;
+    } catch (e) {
+      _log('Hata: $e');
+      return 0;
+    }
+  }
+
+  // EKLENEN: Girdi doğrulama fonksiyonu
+  bool _isValidRoutine(Routine routine) {
+    return routine.routineName.isNotEmpty;
+  }
+
+  // EKLENEN: Veri sanitizasyon fonksiyonu
+  String _sanitizeInput(String input) {
+    return input.replaceAll(RegExp(r'[^\w\s]+'), '');
   }
 
   Future<int> newRoutine(Routine routine) async {
+    if (!_isValidRoutine(routine)) {
+      throw ArgumentError('Geçersiz rutin');
+    }
+
     final db = await database;
-    int id = await getLastId();
-    var map = routine.toMap();
-    await db.rawInsert(
-        'INSERT Into Routines (Id, RoutineName, MainPart, Parts, LastCompletedDate, CreatedDate, Count, RoutineHistory, Weekdays) VALUES (?,?,?,?,?,?,?,?,?)',
-        [
-          id,
-          map['RoutineName'],
-          map['MainPart'],
-          map['Parts'],
-          map['LastCompletedDate'],
-          map['CreatedDate'],
-          map['Count'],
-          map['RoutineHistory'],
-          map['Weekdays'],
-        ]);
-    return id;
+    try {
+      int id = await getLastId();
+      var map = routine.toMap();
+      return await db.insert('Routines', {
+        'Id': id,
+        'RoutineName': _sanitizeInput(map['RoutineName']),
+        'MainPart': _sanitizeInput(map['MainPart']),
+        'Parts': _sanitizeInput(map['Parts']),
+        'LastCompletedDate': map['LastCompletedDate'],
+        'CreatedDate': map['CreatedDate'],
+        'Count': map['Count'],
+        'RoutineHistory': _sanitizeInput(map['RoutineHistory']),
+        'Weekdays': _sanitizeInput(map['Weekdays']),
+      });
+    } catch (e) {
+      _log('Hata: $e');
+      return -1;
+    }
   }
 
   Future<int> updateRoutine(Routine routine) async {
     final db = await database;
-    return await db.update("Routines", routine.toMap(), where: "id = ?", whereArgs: [routine.id]);
+    try {
+      return await db.update("Routines", routine.toMap(), where: "id = ?", whereArgs: [routine.id]);
+    } catch (e) {
+      _log('Hata: $e');
+      return -1;
+    }
   }
 
   Future<int> deleteRoutine(Routine routine) async {
     final db = await database;
-    return await db.delete("Routines", where: "id = ?", whereArgs: [routine.id]);
+    try {
+      return await db.delete("Routines", where: "id = ?", whereArgs: [routine.id]);
+    } catch (e) {
+      _log('Hata: $e');
+      return -1;
+    }
   }
 
   Future<int> deleteAllRoutines() async {
     final db = await database;
-    return await db.delete("Routines");
+    try {
+      return await db.delete("Routines");
+    } catch (e) {
+      _log('Hata: $e');
+      return -1;
+    }
   }
 
   Future<void> addAllRoutines(List<Routine> routines) async {
     final db = await database;
-
-    for (var routine in routines) {
-      int id = await getLastId();
-      var map = routine.toMap();
-      await db.rawInsert(
-          'INSERT Into Routines (Id, RoutineName, MainPart, Parts, LastCompletedDate, CreatedDate, Count, RoutineHistory, Weekdays) VALUES (?,?,?,?,?,?,?,?,?)',
-          [
-            id,
-            map['RoutineName'],
-            map['MainPart'],
-            map['Parts'],
-            map['LastCompletedDate'],
-            map['CreatedDate'],
-            map['Count'],
-            map['RoutineHistory'],
-            map['Weekdays'],
-          ]);
+    try {
+      await db.transaction((txn) async {
+        for (var routine in routines) {
+          if (!_isValidRoutine(routine)) continue;
+          int id = await getLastId();
+          var map = routine.toMap();
+          await txn.insert('Routines', {
+            'Id': id,
+            'RoutineName': _sanitizeInput(map['RoutineName']),
+            'MainPart': _sanitizeInput(map['MainPart']),
+            'Parts': _sanitizeInput(map['Parts']),
+            'LastCompletedDate': map['LastCompletedDate'],
+            'CreatedDate': map['CreatedDate'],
+            'Count': map['Count'],
+            'RoutineHistory': _sanitizeInput(map['RoutineHistory']),
+            'Weekdays': _sanitizeInput(map['Weekdays']),
+          });
+        }
+      });
+    } catch (e) {
+      _log('Hata: $e');
     }
   }
 
   Future<List<Routine>> getAllRoutines() async {
     final db = await database;
-    var res = await db.query('Routines');
-
-    return res.map((r) => Routine.fromMap(r.cast<String, dynamic>())).toList();
+    try {
+      var res = await db.query('Routines');
+      return res.map((r) => Routine.fromMap(r.cast<String, dynamic>())).toList();
+    } catch (e) {
+      _log('Hata: $e');
+      return [];
+    }
   }
 
   Future<List<Routine>> getAllRecRoutines() async {
     final db = await database;
-    var res = await db.query('RecommendedRoutines');
-
-    return res.map((r) => Routine.fromMap(r.cast<String, dynamic>())).toList();
+    try {
+      var res = await db.query('RecommendedRoutines');
+      return res.map((r) => Routine.fromMap(r.cast<String, dynamic>())).toList();
+    } catch (e) {
+      _log('Hata: $e');
+      return [];
+    }
   }
 }
