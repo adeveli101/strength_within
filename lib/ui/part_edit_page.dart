@@ -1,486 +1,604 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:workout/utils/routine_helpers.dart';
-import 'package:workout/models/routine.dart';
+import  'package:keyboard_actions/keyboard_actions.dart';
+
 import '../models/exercise.dart';
 import '../models/part.dart';
-import 'components/part_edit_card.dart';
+import '../models/routine.dart';
+import '../utils/routine_helpers.dart';
 
 class PartEditPage extends StatefulWidget {
   final Part part;
   final AddOrEdit addOrEdit;
   final Routine curRoutine;
 
-  const PartEditPage({
-    super.key,
-    required this.addOrEdit,
-    required this.part,
-    required this.curRoutine,
-  });
+  PartEditPage({required this.addOrEdit, required this.part, required this.curRoutine});
 
   @override
-  State<PartEditPage> createState() => _PartEditPageState();
+  State<StatefulWidget> createState() => _PartEditPageState();
 }
+
+typedef Widget MaterialCallback();
 
 class Item {
   bool isExpanded;
   final String header;
-  final Widget Function() callback;
+  final Widget body;
   final Icon iconpic;
-
-  Item({
-    required this.isExpanded,
-    required this.header,
-    required this.callback,
-    required this.iconpic,
-  });
+  final MaterialCallback callback;
+  Item({required this.isExpanded, required this.header, required this.body, required this.iconpic, required this.callback});
 }
 
 class _PartEditPageState extends State<PartEditPage> {
   final additionalNotesTextEditingController = TextEditingController();
   final formKey = GlobalKey<FormState>();
   final scaffoldKey = GlobalKey<ScaffoldState>();
-
-  late List<TextEditingController> textControllers;
-  late List<FocusNode> focusNodes;
+  late Routine curRoutine;
+  List<TextEditingController> textControllers = <TextEditingController>[];
+  List<FocusNode> focusNodes = <FocusNode>[];
   int radioValueTargetedBodyPart = 0;
-  late SetType setType;
-  bool additionalNotesIsExpanded = false;
+  int radioValueSetType = 0;
+  late bool additionalNotesIsExpanded;
   bool isNewlyCreated = false;
   late List<Item> items;
-  List<Exercise> tempExs = [];
-  List<bool> enabledList = List.filled(4, false);
+  List<Exercise> tempExs = <Exercise>[];
+  late SetType setType;
+
+  ///the widgets that are gonna be displayed in the expansionPanel of exercise detail
+  List<bool> enabledList = <bool>[true, false, false, false];
 
   @override
   void initState() {
-    super.initState();
-    additionalNotesTextEditingController.text = widget.part.additionalNotes;
-    initializeExercises();
-    initializeControllers();
-    initializeItems();
-  }
+    ///copy the content of exercises of the Part
+    additionalNotesIsExpanded = false;
 
-  void initializeExercises() {
-    if (widget.part.exercises.isEmpty) {
+    additionalNotesTextEditingController.text = widget.part.additionalNotes;
+
+    //Determine whether or not the exercise is newly created.
+    if (widget.part.exercises.length == 0) {
       for (int i = 0; i < 4; i++) {
-        tempExs.add(Exercise(name: '', weight: 0, sets: 0, reps: '', exHistory: {}));
+        var exCopy = Exercise(
+          name: 'Default Name', // Provide a default string
+          weight: 0.0,          // Provide a default double
+          sets: 1,              // Provide a default integer
+          reps: '0',            // Provide a default string
+          exHistory: {},
+        );
+        tempExs.add(exCopy);
       }
       isNewlyCreated = true;
-      setType = SetType.regular;
     } else {
+      //if the part is an existing part that's been editing, then copy the whole thing to _tempExs
       for (int i = 0; i < 4; i++) {
         if (i < widget.part.exercises.length) {
           var ex = widget.part.exercises[i];
-          tempExs.add(Exercise(
+          var exCopy = Exercise(
             name: ex.name,
             weight: ex.weight,
             sets: ex.sets,
             reps: ex.reps,
             workoutType: ex.workoutType,
-            exHistory: ex.exHistory,
-          ));
+            exHistory: Map.from(ex.exHistory), // Ensure deep copy if needed
+          );
+          tempExs.add(exCopy);
         } else {
-          tempExs.add(Exercise(name: '', weight: 0, sets: 0, reps: '', exHistory: {}));
+          tempExs.add(Exercise(
+            name: 'Default Name',
+            weight: 0.0,
+            sets: 1,
+            reps: '0',
+            exHistory: {},
+          ));
         }
       }
       isNewlyCreated = false;
-      setType = widget.part.setType;
     }
-    radioValueTargetedBodyPart = getRadioValueForTargetedBodyPart(widget.part.targetedBodyPart);
-  }
 
-  void initializeControllers() {
-    textControllers = List.generate(16, (_) => TextEditingController());
-    focusNodes = List.generate(16, (_) => FocusNode());
+    setType = isNewlyCreated ? SetType.regular : widget.part.setType;
 
-    for (int i = 0, j = 0; i < 4; i++, j += 4) {
-      if (i < widget.part.exercises.length) {
-        textControllers[j].text = widget.part.exercises[i].name;
-        textControllers[j + 1].text = widget.part.exercises[i].weight.toString();
-        textControllers[j + 2].text = widget.part.exercises[i].sets.toString();
-        textControllers[j + 3].text = widget.part.exercises[i].reps;
-      }
-    }
-  }
-
-  void initializeItems() {
-    items = [
-      Item(
-        isExpanded: true,
-        header: 'Targeted Muscle Group',
-        callback: buildTargetedBodyPartRadioList,
-        iconpic: const Icon(Icons.accessibility_new),
-      ),
-      Item(
-        isExpanded: false,
-        header: 'Set Type',
-        callback: buildSetTypeList,
-        iconpic: const Icon(Icons.blur_linear),
-      ),
-      Item(
-        isExpanded: true,
-        header: 'Set Details',
-        callback: buildSetDetailsList,
-        iconpic: const Icon(Icons.fitness_center),
-      ),
-    ];
-  }
-
-  int getRadioValueForTargetedBodyPart(TargetedBodyPart targetedBodyPart) {
-    switch (targetedBodyPart) {
+    switch (widget.part.targetedBodyPart) {
       case TargetedBodyPart.abs:
-        return 0;
+        radioValueTargetedBodyPart = 0;
+        break;
       case TargetedBodyPart.arm:
-        return 1;
+        radioValueTargetedBodyPart = 1;
+        break;
       case TargetedBodyPart.back:
-        return 2;
+        radioValueTargetedBodyPart = 2;
+        break;
       case TargetedBodyPart.chest:
-        return 3;
+        radioValueTargetedBodyPart = 3;
+        break;
       case TargetedBodyPart.leg:
-        return 4;
+        radioValueTargetedBodyPart = 4;
+        break;
       case TargetedBodyPart.shoulder:
-        return 5;
+        radioValueTargetedBodyPart = 5;
+        break;
       case TargetedBodyPart.bicep:
-        return 6;
+        radioValueTargetedBodyPart = 6;
+        break;
       case TargetedBodyPart.tricep:
-        return 7;
+        radioValueTargetedBodyPart = 7;
+        break;
       case TargetedBodyPart.fullBody:
-        return 8;
-      default:
-        return 0;
+        radioValueTargetedBodyPart = 8;
+        break;
     }
+
+    switch (widget.part.setType) {
+      case SetType.regular:
+        radioValueSetType = 0;
+        break;
+      case SetType.drop:
+        radioValueSetType = 1;
+        break;
+      case SetType.super_:
+        radioValueSetType = 2;
+        break;
+      case SetType.tri:
+        radioValueSetType = 3;
+        break;
+      case SetType.giant:
+        radioValueSetType = 4;
+        break;
+      case SetType.normal:break;
+    }
+
+    for (int i = 0; i < 16; i++) {
+      textControllers.add(TextEditingController());
+    }
+
+    for (int i = 0, j = 0; i < widget.part.exercises.length && j < textControllers.length; i++, j += 4) {
+      textControllers[j].text = widget.part.exercises[i].name;
+      textControllers[j + 1].text = widget.part.exercises[i].weight.toString();
+      textControllers[j + 2].text = widget.part.exercises[i].sets.toString();
+      textControllers[j + 3].text = widget.part.exercises[i].reps;
+    }
+
+    textControllers.forEach((_) {
+      focusNodes.add(FocusNode());
+    });
+
+    items = <Item>[
+      Item(
+          isExpanded: true,
+          header: 'Targeted Muscle Group',
+          callback: buildTargetedBodyPartRadioList,
+          iconpic: Icon(Icons.accessibility_new), body: Container()),
+      Item(isExpanded: false, header: 'Set Type', callback: buildSetTypeList, iconpic: Icon(Icons.blur_linear), body: Container()), // Provide an empty Container() if body can be null
+
+      Item(isExpanded: true, header: 'Set Details', callback: buildSetDetailsList, iconpic: Icon(Icons.fitness_center), body: Container())
+    ];
+
+    super.initState();
   }
 
-  Future<bool> onWillPop() async {
-    return await showDialog<bool>(
+
+  Future<bool> onWillPop() {
+    return showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Are you sure?'),
-        content: const Text('Your editing will not be saved.'),
-        actions: [
+        title: Text('Are you sure?'),
+        content: Text('Your editing will not be saved.'),
+        actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('No'),
+            child: Text('No'),
           ),
           TextButton(
             onPressed: () {
-              if (widget.addOrEdit == AddOrEdit.add) {
-                widget.curRoutine.parts.removeLast();
-              }
+              if (widget.addOrEdit == AddOrEdit.add) widget.curRoutine.parts.removeLast();
               Navigator.of(context).pop(true);
             },
-            child: const Text('Yes'),
+            child: Text('Yes'),
           ),
         ],
       ),
-    ) ?? false;
+    ).then((value) {
+      if (value == null || value == false) {
+        return false;
+      } else {
+        return true;
+      }
+    });
   }
 
   Widget buildTargetedBodyPartRadioList() {
     return Material(
       color: Colors.transparent,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Column(
-          children: [
-            RadioListTile<int>(
-              value: 0,
-              groupValue: radioValueTargetedBodyPart,
-              onChanged: onRadioValueChanged,
-              title: const Text('Abs'),
-            ),
-            RadioListTile<int>(
-              value: 1,
-              groupValue: radioValueTargetedBodyPart,
-              onChanged: onRadioValueChanged,
-              title: const Text('Arm'),
-            ),
-            // ... Add other RadioListTile widgets for remaining body parts
-          ],
-        ),
-      ),
+          padding: EdgeInsets.symmetric(horizontal: 12),
+          child: Column(children: <Widget>[
+            RadioListTile(value: 0, groupValue: radioValueTargetedBodyPart, onChanged: onRadioValueChanged, title: Text('Abs')),
+            RadioListTile(value: 1, groupValue: radioValueTargetedBodyPart, onChanged: onRadioValueChanged, title: Text('Arm')),
+            RadioListTile(value: 2, groupValue: radioValueTargetedBodyPart, onChanged: onRadioValueChanged, title: Text('Back')),
+            RadioListTile(value: 3, groupValue: radioValueTargetedBodyPart, onChanged: onRadioValueChanged, title: Text('Chest')),
+            RadioListTile(value: 4, groupValue: radioValueTargetedBodyPart, onChanged: onRadioValueChanged, title: Text('Leg')),
+            RadioListTile(value: 5, groupValue: radioValueTargetedBodyPart, onChanged: onRadioValueChanged, title: Text('Shoulder')),
+            RadioListTile(value: 6, groupValue: radioValueTargetedBodyPart, onChanged: onRadioValueChanged, title: Text('Bicep')),
+            RadioListTile(value: 7, groupValue: radioValueTargetedBodyPart, onChanged: onRadioValueChanged, title: Text('Tricep')),
+            RadioListTile(value: 8, groupValue: radioValueTargetedBodyPart, onChanged: onRadioValueChanged, title: Text('Full Body')),
+          ])),
     );
   }
 
   Widget buildSetTypeList() {
-    var selectedTextStyle = const TextStyle(fontSize: 16);
-    var unselectedTextStyle = const TextStyle(fontSize: 14);
+    var selectedTextStyle = TextStyle(fontSize: 16);
+    var unselectedTextStyle = TextStyle(fontSize: 14);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: SizedBox(
+      padding: EdgeInsets.symmetric(horizontal: 12),
+      child: Container(
         width: double.infinity,
         child: CupertinoSlidingSegmentedControl<SetType>(
           children: {
-            SetType.regular: Text('Regular', style: setType == SetType.regular ? selectedTextStyle : unselectedTextStyle),
-            SetType.super_: Text('Super', style: setType == SetType.super_ ? selectedTextStyle : unselectedTextStyle),
-            SetType.tri: Text('Tri', style: setType == SetType.tri ? selectedTextStyle : unselectedTextStyle),
-            SetType.giant: Text('Giant', style: setType == SetType.giant ? selectedTextStyle : unselectedTextStyle),
-            SetType.drop: Text('Drop', style: setType == SetType.drop ? selectedTextStyle : unselectedTextStyle),
+            SetType.regular: Text('Regular', style: this.setType == SetType.regular ? selectedTextStyle : unselectedTextStyle),
+            SetType.super_: Text('Super', style: this.setType == SetType.super_ ? selectedTextStyle : unselectedTextStyle),
+            SetType.tri: Text('Tri', style: this.setType == SetType.tri ? selectedTextStyle : unselectedTextStyle),
+            SetType.giant: Text('Giant', style: this.setType == SetType.giant ? selectedTextStyle : unselectedTextStyle),
+            SetType.drop: Text('Drop', style: this.setType == SetType.drop ? selectedTextStyle : unselectedTextStyle)
           },
-          onValueChanged: (SetType? value) {
-            if (value != null) {
-              setState(() {
-                setType = value;
-              });
-            }
+          onValueChanged: (setType) {
+            setState(() {
+              this.setType = setType!;
+            });
           },
-          thumbColor: setTypeToColorConverter(setType),
+          thumbColor: setTypeToColorConverter(this.setType),
           groupValue: setType,
         ),
       ),
     );
   }
 
+  ///Build the expansion panel for detailed information on exercises
   Widget buildSetDetailsList() {
     return Material(
-      color: Colors.transparent,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(children: buildSetDetails()),
-      ),
-    );
+        color: Colors.transparent,
+        child: Padding(
+          padding: EdgeInsets.all(16.0),
+          child: Column(children: buildSetDetails()),
+        ));
   }
 
-// KeyboardActionsConfig _buildConfig(BuildContext context) fonksiyonunu kaldırın
-
-  @override
-  Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (bool didPop, dynamic result) async {
-        if (didPop) {
-          return;
-        }
-        final shouldPop = await onWillPop();
-        if (shouldPop && context.mounted) {
-          Navigator.of(context).pop();
-        }
-      },
-      child: Scaffold(
-        key: scaffoldKey,
-        appBar: AppBar(
-          title: const Text("Criteria Selection"),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.done),
-              onPressed: () async {
-                if (formKey.currentState!.validate()) {
-                  savePartData();
-                  if (context.mounted) {
-                    Navigator.pop(context, widget.part);
-                  }
-                }
-              },
-            ),
-          ],
-        ),
-        body: Form(
-          key: formKey,
-          child: ListView(
-            children: items.expand((item) => [
-              ListTile(
-                leading: item.iconpic,
-                title: Text(
-                  item.header,
-                  style: const TextStyle(fontSize: 18.0, fontWeight: FontWeight.w400),
-                ),
-              ),
-              item.callback(),
-            ]).toList(),
-          ),
-        ),
-      ),
-    );
+  KeyboardActionsConfig _buildConfig(BuildContext context) {
+    return KeyboardActionsConfig(
+        keyboardActionsPlatform: KeyboardActionsPlatform.ALL,
+        keyboardBarColor: Colors.grey[200],
+        nextFocus: true,
+        actions: focusNodes.map((node) {
+          return KeyboardActionsItem(
+            focusNode: node,
+            onTapAction: () {},
+          );
+        }).toList());
   }
 
   List<Widget> buildSetDetails() {
-    List<Widget> widgets = [];
+    const count = 4;
+
+    List<Widget> widgets = <Widget>[];
+
     int exCount = setTypeToExerciseCountConverter(setType);
 
     for (int i = 0; i < 4; i++) {
-      enabledList[i] = i < exCount;
-      if (enabledList[i]) {
-        widgets.addAll([
-          Text('Exercise ${i + 1}'),
-          buildExerciseTypeSwitch(i),
-          buildExerciseNameField(i),
-          buildExerciseDetailsRow(i),
-          const SizedBox(height: 24),
-        ]);
+      if (i < exCount) {
+        enabledList[i] = true;
+      } else {
+        enabledList[i] = false;
       }
     }
 
+    //setType will not be passed in when initializing this page
+    for (int i = 0, j = 0; i < count; i++, j += 4) {
+      if (enabledList[i]) {
+        widgets.add(Text('Exercise ' + (i + 1).toString()));
+        widgets.add(Center(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: <Widget>[
+              Expanded(
+                  child: Text(
+                    'Rep',
+                    textAlign: TextAlign.center,
+                  )),
+              Expanded(
+                child: Switch(
+                  value: tempExs[i].workoutType == WorkoutType.cardio,
+                  onChanged: (res) {
+                    setState(() {
+                      tempExs[i].workoutType = res ? WorkoutType.cardio : WorkoutType.weight;
+                    });
+                  },
+                  inactiveThumbColor: Colors.red,
+                  inactiveTrackColor: Colors.redAccent,
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  'Sec',
+                  textAlign: TextAlign.center,
+                ),
+              )
+            ],
+          ),
+        ));
+        widgets.add(Builder(
+          builder: (context) => TextFormField(
+            controller: textControllers[j],
+            focusNode: focusNodes[j],
+            style: TextStyle(fontSize: 18),
+            onFieldSubmitted: (str) {
+              setState(() {
+                //widget.part.exercises[i].name = str;
+              });
+            },
+            decoration: InputDecoration(labelText: 'Name'),
+            validator: (str) {
+              if (str!.isEmpty) {
+                return 'Please enter the name of exercise';
+              } else {
+                tempExs[i].name = textControllers[j].text;
+                return null;
+              }
+            },
+          ),
+        ));
+        widgets.add(Row(
+          children: <Widget>[
+            Flexible(
+              child: Builder(
+                  builder: (context) => TextFormField(
+                    controller: textControllers[j + 1],
+                    focusNode: focusNodes[j + 1],
+                    onFieldSubmitted: (str) {},
+                    keyboardType: TextInputType.numberWithOptions(signed: false, decimal: false),
+                    textInputAction: TextInputAction.done,
+                    decoration: InputDecoration(labelText: 'Weight'),
+                    style: TextStyle(fontSize: 20),
+                    validator: (str) {
+                      if (str!.isEmpty) {
+                        tempExs[i].weight = 0;
+                        return null;
+                      } else if (str.contains(RegExp(r"([,\-])"))) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          backgroundColor: Colors.red,
+                          content: Row(
+                            children: <Widget>[
+                              Padding(
+                                padding: EdgeInsets.only(right: 4),
+                                child: Icon(Icons.report),
+                              ),
+                              Text("Weight can only contain numbers.")
+                            ],
+                          ),
+                        ));
+                        return "Numbers only";
+                      } else {
+                        try {
+                          double tempWeight = double.parse(textControllers[j + 1].text);
+                          //the weight below 20 doesn't need floating point, it's just unnecessary
+                          if (tempWeight < 20) {
+                            tempExs[i].weight = tempWeight;
+                          } else {
+                            tempExs[i].weight = tempWeight.floorToDouble();
+                          }
+
+                          return null;
+                        } catch (Exception) {}
+                      }
+                      return null;
+                    },
+                  )),
+            ),
+            Flexible(
+              child: TextFormField(
+                controller: textControllers[2],
+                focusNode: focusNodes[j + 2],
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (str) {},
+                keyboardType: TextInputType.numberWithOptions(signed: false, decimal: false),
+                decoration: InputDecoration(labelText: 'Sets'),
+                style: TextStyle(fontSize: 20),
+                validator: (str) {
+                  if (str!.isEmpty) {
+                    tempExs[i].sets = 1; //number of sets must be none zero
+                    return null;
+                  } else if (str.contains(RegExp(r"([,.\-])"))) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text("Sets can only contain numbers."),
+                    ));
+                    return "Numbers only";
+                  } else {
+                    tempExs[i].sets = int.parse(textControllers[2].text); //before: _textControllers[j + 2],
+                    return null;
+                  }
+                },
+              ),
+            ),
+            Flexible(
+              child: TextFormField(
+                controller: textControllers[j + 3],
+                focusNode: focusNodes[j + 3],
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (str) {},
+                keyboardType: TextInputType.numberWithOptions(signed: false, decimal: false),
+                decoration: InputDecoration(labelText: tempExs[i].workoutType == WorkoutType.weight ? 'Reps' : 'Seconds'),
+                style: TextStyle(fontSize: 20),
+                validator: (str) {
+                  if (str!.isEmpty) {
+                    return 'Cannot be empty';
+                  } else
+                    tempExs[i].reps = textControllers[j + 3].text;
+                  return null;
+                },
+              ),
+            )
+          ],
+        ));
+        widgets.add(Container(
+          //serve as divider
+          height: 24,
+        ));
+      }
+    }
     return widgets;
   }
 
-  Widget buildExerciseTypeSwitch(int index) {
-    return Center(
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+  late ScrollController scrollController;
+
+  @override
+  Widget build(BuildContext context) {
+    var children = <Widget>[];
+    items.forEach((Item item) {
+      children.add(ListTile(
+          leading: item.iconpic,
+          title: Text(item.header,
+              textAlign: TextAlign.left,
+              style: TextStyle(
+                fontSize: 18.0,
+                fontWeight: FontWeight.w400,
+              ))));
+      children.add(item.callback());
+    });
+
+    var listView = KeyboardActions(
+      config: _buildConfig(context),
+      child: Column(
         children: [
-          const Expanded(child: Text('Rep', textAlign: TextAlign.center)),
-          Expanded(
-            child: Switch(
-              value: tempExs[index].workoutType == WorkoutType.cardio,
-              onChanged: (bool value) {
-                setState(() {
-                  tempExs[index].workoutType = value ? WorkoutType.cardio : WorkoutType.weight;
-                });
-              },
-              inactiveThumbColor: Colors.red,
-              inactiveTrackColor: Colors.redAccent,
-            ),
-          ),
-          const Expanded(child: Text('Sec', textAlign: TextAlign.center)),
+          Form(
+              key: formKey,
+              child: Padding(
+                //Targeted Body Part, Type of set, Details
+                  padding: EdgeInsets.all(0),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: Column(
+                      children: children,
+                    ),
+                  ))),
         ],
       ),
     );
-  }
 
-  Widget buildExerciseNameField(int index) {
-    return TextFormField(
-      controller: textControllers[index * 4],
-      focusNode: focusNodes[index * 4],
-      style: const TextStyle(fontSize: 18),
-      decoration: const InputDecoration(labelText: 'Name'),
-      validator: (value) {
-        if (value == null || value.isEmpty) {
-          return 'Please enter the name of exercise';
-        }
-        tempExs[index].name = value;
-        return null;
-      },
+    var scaffold = Scaffold(
+      key: scaffoldKey,
+      appBar: AppBar(title: Text("Criteria Selection"), actions: <Widget>[
+        Builder(
+          builder: (context) {
+            return IconButton(
+              icon: Icon(Icons.done),
+              onPressed: () {
+                if (formKey.currentState!.validate()) {
+                  widget.part.targetedBodyPart = PartEditPageHelper.radioValueToTargetedBodyPartConverter(radioValueTargetedBodyPart);
+                  widget.part.setType = setType;
+                  widget.part.exercises = <Exercise>[];
+                  for (int i = 0; i < enabledList.where((res) => res).length; i++) {
+                    widget.part.exercises.add(Exercise(
+                        name: tempExs[i].name,
+                        weight: tempExs[i].weight,
+                        sets: tempExs[i].sets,
+                        reps: tempExs[i].reps,
+                        workoutType: tempExs[i].workoutType,
+                        exHistory: tempExs[i].exHistory));
+                  }
+                  widget.part.additionalNotes = additionalNotesTextEditingController.text;
+                  Navigator.pop(context, widget.part);
+                }
+              },
+            );
+          },
+        )
+      ]),
+      body: listView,
     );
-  }
-
-  Widget buildExerciseDetailsRow(int index) {
-    return Row(
-      children: [
-        Flexible(
-          child: TextFormField(
-            controller: textControllers[index * 4 + 1],
-            focusNode: focusNodes[index * 4 + 1],
-            keyboardType: const TextInputType.numberWithOptions(signed: false, decimal: true),
-            decoration: const InputDecoration(labelText: 'Weight'),
-            style: const TextStyle(fontSize: 20),
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                tempExs[index].weight = 0;
-                return null;
-              }
-              if (value.contains(RegExp(r'[,\-]'))) {
-                return "Weight can only contain numbers and decimal point";
-              }
-              try {
-                double tempWeight = double.parse(value);
-                tempExs[index].weight = tempWeight < 20 ? tempWeight : tempWeight.floorToDouble();
-              } catch (e) {
-                return "Invalid number";
-              }
-              return null;
-            },
-          ),
-        ),
-        Flexible(
-          child: TextFormField(
-            controller: textControllers[index * 4 + 2],
-            focusNode: focusNodes[index * 4 + 2],
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Sets'),
-            style: const TextStyle(fontSize: 20),
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                tempExs[index].sets = 1;
-                return null;
-              }
-              if (value.contains(RegExp(r'[,.\-]'))) {
-                return "Sets can only contain whole numbers";
-              }
-              tempExs[index].sets = int.tryParse(value) ?? 1;
-              return null;
-            },
-          ),
-        ),
-        Flexible(
-          child: TextFormField(
-            controller: textControllers[index * 4 + 3],
-            focusNode: focusNodes[index * 4 + 3],
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              labelText: tempExs[index].workoutType == WorkoutType.weight ? 'Reps' : 'Seconds',
+    return PopScope(
+      onPopInvokedWithResult: (bool didPop, dynamic result) {
+        if (!didPop) {
+          // t0d0 : Handle the case where pop was not successful
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text('Action Required'),
+              content: Text('Unable to exit. Please ensure all changes are saved or canceled.'),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text('OK'),
+                ),
+              ],
             ),
-            style: const TextStyle(fontSize: 20),
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Cannot be empty';
-              }
-              tempExs[index].reps = value;
-              return null;
-            },
-          ),
-        ),
-      ],
+          );
+        } else {
+          // Optionally handle the result if needed
+          if (result != null) {
+            // Process the result if there's any specific logic needed
+            print('Result from pop: $result');
+          }
+        }
+      },
+      child: scaffold,
     );
-  }
 
 
-  void savePartData() {
-    widget.part.targetedBodyPart = PartEditPageHelper.radioValueToTargetedBodyPartConverter(radioValueTargetedBodyPart);
-    widget.part.setType = setType;
-    widget.part.exercises = tempExs.where((ex) => ex.name.isNotEmpty).toList();
-    widget.part.additionalNotes = additionalNotesTextEditingController.text;
+
   }
 
   void onRadioValueChanged(int? value) {
-    if (value != null) {
-      setState(() {
-        radioValueTargetedBodyPart = value;
-      });
-    }
+    setState(() {
+      radioValueTargetedBodyPart = value ?? 0; // Provide a default value if null
+    });
   }
 
-  @override
-  void dispose() {
-    additionalNotesTextEditingController.dispose();
-    for (var controller in textControllers) {
-      controller.dispose();
-    }
-    for (var node in focusNodes) {
-      node.dispose();
-    }
-    super.dispose();
-  }
 
-  Color setTypeToColorConverter(SetType setType) {
-    switch (setType) {
-      case SetType.regular:
-        return Colors.blue;
-      case SetType.super_:
-        return Colors.green;
-      case SetType.tri:
-        return Colors.orange;
-      case SetType.giant:
-        return Colors.purple;
-      case SetType.drop:
-        return Colors.red;
+  void onRadioSetTypeValueChanged(int value) {
+    setState(() {
+      radioValueSetType = value;
+      setType = PartEditPageHelper.radioValueToSetTypeConverter(value);
+    });
+  }
+}
+
+class PartEditPageHelper {
+  static SetType radioValueToSetTypeConverter(int radioValue) {
+    switch (radioValue) {
+      case 0:
+        return SetType.regular;
+      case 1:
+        return SetType.drop;
+      case 2:
+        return SetType.super_;
+      case 3:
+        return SetType.tri;
+      case 4:
+        return SetType.giant;
       default:
-        return Colors.grey;
+        throw Exception('Inside _radioValueToSetTypeConverter');
     }
   }
 
-  int setTypeToExerciseCountConverter(SetType setType) {
-    switch (setType) {
-      case SetType.regular:
-      case SetType.drop:
-        return 1;
-      case SetType.super_:
-        return 2;
-      case SetType.tri:
-        return 3;
-      case SetType.giant:
-        return 4;
+  static TargetedBodyPart radioValueToTargetedBodyPartConverter(int radioValue) {
+    switch (radioValue) {
+      case 0:
+        return TargetedBodyPart.abs;
+      case 1:
+        return TargetedBodyPart.arm;
+      case 2:
+        return TargetedBodyPart.back;
+      case 3:
+        return TargetedBodyPart.chest;
+      case 4:
+        return TargetedBodyPart.leg;
+      case 5:
+        return TargetedBodyPart.shoulder;
+      case 6:
+        return TargetedBodyPart.bicep;
+      case 7:
+        return TargetedBodyPart.tricep;
+      case 8:
+        return TargetedBodyPart.fullBody;
       default:
-        return 1;
+        throw Exception('Inside _radioValueToTargetedBodyPartConverter, radioValue: ${radioValue.toString()}');
     }
-  }}
+  }
+}

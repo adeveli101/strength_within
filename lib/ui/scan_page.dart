@@ -1,255 +1,149 @@
 import 'dart:async';
+import 'dart:convert';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
-import 'package:workout/utils/routine_helpers.dart';
-import 'package:workout/ui/components/part_edit_card.dart';
-import 'package:workout/ui/part_edit_page.dart';
-import 'package:workout/bloc/routines_bloc.dart';
+import 'package:workout/ui/routine_detail_page.dart';
 import '../models/routine.dart';
-import '../models/part.dart';
-import 'components/spring_curve.dart';
+import '../resource/db_provider.dart';
+import 'components/custom_snack_bars.dart';
 
-class RoutineEditPage extends StatefulWidget {
-  final AddOrEdit addOrEdit;
-  final MainTargetedBodyPart mainTargetedBodyPart;
-
-  const RoutineEditPage({
-    super.key,
-    required this.addOrEdit,
-    required this.mainTargetedBodyPart,
-  });
-
+class ScanPage extends StatefulWidget {
   @override
-  State<RoutineEditPage> createState() => _RoutineEditPageState();
+  State<StatefulWidget> createState() => _ScanPageState();
 }
 
-
-class _RoutineEditPageState extends State<RoutineEditPage> {
+class _ScanPageState extends State<ScanPage> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
-  final formKey = GlobalKey<FormState>();
-  final TextEditingController textEditingController = TextEditingController();
-  ScrollController scrollController = ScrollController();
-  bool _initialized = false;
-  late Routine routineCopy;
+  final textEditingController = TextEditingController();
+  String routineId = "";
   late Routine routine;
 
   @override
   void initState() {
     super.initState();
-    Timer(const Duration(milliseconds: 500), () {
-      if (scrollController.hasClients) {
-        scrollController.animateTo(
-          scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 500),
-          curve: SpringCurve.underDamped,
-        );
-      }
-    });
+    textEditingController.addListener(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (bool didPop, dynamic result) async {
-        if (didPop) return;
-        final shouldPop = await _onWillPop();
-        if (shouldPop) {
-          if (context.mounted) {  // Use context.mounted here
-            Navigator.of(context).pop();
-          }
-        }
-      },
-      child: StreamBuilder<Routine>(
-        stream: routinesBloc.currentRoutine,
-        builder: (_, AsyncSnapshot<Routine> snapshot) {
-          if (snapshot.hasData) {
-            routine = snapshot.data!;
-            if (!_initialized) {
-              routineCopy = Routine.fromMap(routine.toMap());
-              _initialized = true;
-            }
-
-            if (widget.addOrEdit == AddOrEdit.edit) {
-              textEditingController.text = routineCopy.routineName;
-            }
-
-            return Scaffold(
-              key: scaffoldKey,
-              appBar: AppBar(
-                actions: [
-                  if (widget.addOrEdit == AddOrEdit.edit)
-                    IconButton(
-                      icon: const Icon(Icons.delete_forever),
-                      onPressed: _showDeleteDialog,
-                    ),
-                  IconButton(
-                    icon: const Icon(Icons.done),
-                    onPressed: onDonePressed,
-                  ),
-                ],
-              ),
-              body: ReorderableListView(
-                scrollController: scrollController,
-                onReorder: onReorder,
-                header: Form(key: formKey, child: _routineDescriptionEditCard()),
-                padding: const EdgeInsets.only(bottom: 128),
-                children: buildExerciseDetails(),
-              ),
-              floatingActionButton: FloatingActionButton.extended(
-                backgroundColor: Theme.of(context).primaryColor,
-                icon: const Icon(Icons.add, color: Colors.white),
-                label: const Text('ADD', style: TextStyle(color: Colors.white, fontSize: 16)),
-                onPressed: onAddExercisePressed,
-                isExtended: true,
-              ),
-            );
-          } else {
-            return Container();
-          }
-        },
+    return Scaffold(
+      key: scaffoldKey,
+      appBar: AppBar(
+        iconTheme: IconThemeData(color: Colors.white),
+        title: Text('Enter Routine'),
       ),
-    );
-  }
-
-
-
-  void onDonePressed() {
-    if (widget.addOrEdit == AddOrEdit.add && routineCopy.parts.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Routine is empty.')));
-      return;
-    }
-
-    formKey.currentState?.save();
-    if (widget.addOrEdit == AddOrEdit.add) {
-      routineCopy.mainTargetedBodyPart = widget.mainTargetedBodyPart;
-      routinesBloc.addRoutine(routineCopy);
-    } else {
-      routinesBloc.updateRoutine(routineCopy);
-    }
-
-    Navigator.pop(context);
-  }
-
-  void onAddExercisePressed() {
-    setState(() {
-      routineCopy.parts.add(Part(setType: SetType.regular, targetedBodyPart: TargetedBodyPart.chest, exercises: [], partName: ''));
-      _startTimeout(300);
-    });
-  }
-
-  void onReorder(int oldIndex, int newIndex) {
-    setState(() {
-      if (newIndex > oldIndex) {
-        newIndex -= 1;
-      }
-      final Part item = routineCopy.parts.removeAt(oldIndex);
-      routineCopy.parts.insert(newIndex, item);
-    });
-  }
-
-  List<Widget> buildExerciseDetails() {
-    return routineCopy.parts.map((part) {
-      return PartEditCard(
-        key: ValueKey(part),
-        onDelete: () {
-          setState(() {
-            routineCopy.parts.remove(part);
-          });
-        },
-        part: part,
-        curRoutine: routineCopy,
-      );
-    }).toList();
-  }
-
-  Widget _routineDescriptionEditCard() {
-    return Padding(
-      padding: const EdgeInsets.all(8),
-      child: Card(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-        elevation: 12,
-        child: Padding(
-          padding: const EdgeInsets.all(8),
-          child: TextFormField(
-            textInputAction: TextInputAction.done,
-            controller: textEditingController,
-            style: const TextStyle(color: Colors.black, fontSize: 22),
-            decoration: const InputDecoration(
-              labelText: 'Routine Title',
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: ElevatedButton(
+                onPressed: inputRoutineId,
+                child: Text('Enter routine ID'),
+              ),
             ),
-            onSaved: (str) {
-              routineCopy.routineName = str?.isNotEmpty == true
-                  ? str!
-                  : '${mainTargetedBodyPartToStringConverter(routineCopy.mainTargetedBodyPart)} Workout';
-            },
-          ),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 0, vertical: 8.0),
+              child: isValidRoutineId(routineId)
+                  ? FutureBuilder(
+                future: getRoutineOverview(routineId),
+                builder: (_, snapshot) {
+                  if (snapshot.hasData) {
+                    return snapshot.data as RoutineDetailPage;
+                  } else {
+                    return Center(
+                      child: CircularProgressIndicator(),
+                    );
+                  }
+                },
+              )
+                  : Container(),
+            ),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8.0),
+              child: isValidRoutineId(routineId)
+                  ? ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blueGrey,
+                ),
+                onPressed: () {
+                  addRoutineToDatabase();
+                },
+                child: const Text('Add to my routines'),
+              )
+                  : Container(),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Future<bool> _onWillPop() async {
-    return await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Are you sure?'),
-        content: const Text('Your editing will not be saved.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('No'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Yes', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    ) ?? false;
+  Future<void> inputRoutineId() async {
+    if (await Connectivity().checkConnectivity() == ConnectivityResult.none) {
+      ScaffoldMessenger.of(context).showSnackBar(noNetworkSnackBar);
+    } else {
+      showDialog(
+        context: context,
+        builder: (_) {
+          return AlertDialog(
+            title: Text('Enter Routine ID'),
+            content: TextField(
+              controller: textEditingController,
+              decoration: InputDecoration(hintText: 'Routine ID'),
+            ),
+            actions: [
+              TextButton(
+                child: Text('Cancel'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+              ),
+              TextButton(
+                child: Text('Submit'),
+                onPressed: () {
+                  setState(() {
+                    routineId = textEditingController.text;
+                  });
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          );
+        },
+      );
+    }
   }
 
-  void _showDeleteDialog() {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Delete this routine'),
-        content: const Text("Are you sure? You cannot undo this."),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('No')),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.popUntil(context, (Route r) => r.isFirst);
-              if (widget.addOrEdit == AddOrEdit.edit) {
-                routinesBloc.deleteRoutine(routineCopy.id);
-              }
-            },
-            child: const Text('Yes'),
-          ),
-        ],
+  bool isValidRoutineId(String id) {
+    return id.isNotEmpty;
+  }
+
+  Future<RoutineDetailPage> getRoutineOverview(String id) async {
+    var snapshot = await FirebaseFirestore.instance.collection("userShares").doc(id).get();
+    String routineStr = snapshot.data()!['routine'];
+    routine = Routine.fromMap(jsonDecode(routineStr));
+    return RoutineDetailPage(routine: routine);
+  }
+
+  void addRoutineToDatabase() {
+    DBProvider.db.newRoutine(routine);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: <Widget>[
+            Padding(
+              padding: EdgeInsets.only(right: 4),
+              child: Icon(Icons.done),
+            ),
+            Text('Added to my routines.'),
+          ],
+        ),
       ),
     );
-  }
-
-  void _startTimeout([int? milliseconds]) {
-    var duration = milliseconds != null ? Duration(milliseconds: milliseconds) : const Duration(seconds: 1);
-    Timer(duration, () {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => PartEditPage(
-            addOrEdit: AddOrEdit.add,
-            part: routineCopy.parts.last,
-            curRoutine: routineCopy,
-          ),
-        ),
-      ).then((value) {
-        if (value != null) {
-          setState(() {
-            routineCopy.parts.last = value;
-          });
-        }
-      });
-    });
   }
 }

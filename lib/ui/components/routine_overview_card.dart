@@ -1,37 +1,144 @@
-import 'package:flutter/material.dart';
-import 'package:workout/models/routine.dart';
-import 'package:workout/ui/routine_detail_page.dart';
-import 'package:workout/bloc/routines_bloc.dart';
+// Copyright 2018 The Chromium Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
 
-class RoutineOverviewCard extends StatelessWidget {
+// To keep your imports tidy, follow the ordering guidelines at
+// https://www.dartlang.org/guides/language/effective-dart/style#ordering
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+
+import '../../controllers/routines_bloc.dart';
+import '../../models/part.dart';
+import '../../models/routine.dart';
+import '../../utils/routine_helpers.dart';
+import '../routine_detail_page.dart';
+
+// @required is defined in the meta.dart package
+
+// We use an underscore to indicate that these variables are private.
+// See https://www.dartlang.org/guides/language/effective-dart/design#libraries
+final _rowHeight = 300.0;
+//final _borderRadius = BorderRadius.circular(_rowHeight / 10);
+//final _borderRadius = BorderRadius.circular(10);
+
+/// A custom [RoutineOverview] widget.
+///
+/// The widget is composed on an [Icon] and [Text]. Tapping on the widget shows
+/// a colored [InkWell] animation.
+///
+///
+class RoutineOverview extends StatelessWidget {
   final Routine routine;
   final bool isRecRoutine;
 
-  const RoutineOverviewCard({
-    super.key,
-    required this.routine,
-    this.isRecRoutine = false,
-  });
+  /// Creates a [RoutineOverview].
+  ///
+  /// A [RoutineOverview] saves the name of the Category (e.g. 'Length'), its color for
+  /// the UI, and the icon that represents it (e.g. a ruler).
+  // While the @required checks for whether a named parameter is passed in,
+  // it doesn't check whether the object passed in is null. We check that
+  // in the assert statement.
+  RoutineOverview({required Key key, required this.routine, this.isRecRoutine = false})
+      : super(key: key);
 
+  /// Builds a custom widget that shows [RoutineOverview] information.
+  /// This information includes the icon, name, and color for the [RoutineOverview].
   @override
   Widget build(BuildContext context) {
+    return _mainLayout(context);
+  }
+
+  Widget _mainLayout(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: EdgeInsets.all(8),
       child: Material(
-        color: Theme.of(context).primaryColor,
-        borderRadius: BorderRadius.circular(6),
-        elevation: 4,
-        child: InkWell(
-          splashColor: Colors.grey,
-          borderRadius: BorderRadius.circular(6),
-          onTap: () => _navigateToDetailPage(context),
-          child: SizedBox(
-            height: 72,
-            child: Stack(
-              children: [
-                _buildRoutineInfo(),
-                _buildWeekdayIndicators(),
-              ],
+        shape: RoundedRectangleBorder(side: BorderSide(color: Colors.transparent), borderRadius: BorderRadius.circular(24)),
+        color: Colors.orangeAccent,
+        elevation: 3,
+        child: Ink(
+          color: Colors.transparent,
+          height: _rowHeight,
+          child: Padding(
+            padding: EdgeInsets.all(0),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(24),
+              highlightColor: Colors.orange,
+              splashColor: Colors.orange,
+              // We can use either the () => function() or the () { function(); }
+              // syntax.
+              onTap: () {
+                //RoutinesContext.of(context).curRoutine = routine;
+                routinesBloc.setCurrentRoutine(routine);
+                Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => RoutineDetailPage(
+                          isRecRoutine: isRecRoutine, routine: routine,
+                        )));
+              },
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                //mainAxisAlignment: MainAxisAlignment.end,
+                children: <Widget>[
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: EdgeInsets.only(left: 20, top: 16),
+                      child: Text(
+                        mainTargetedBodyPartToStringConverter(routine.mainTargetedBodyPart),
+                        style: TextStyle(color: Colors.black54),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                      padding: EdgeInsets.only(left: 20, top: 8, bottom: 16),
+                      child: Text(routine.routineName,
+                          style: TextStyle(
+                            color: Colors.black,
+                            fontFamily: 'Staa',
+                            fontSize: _getFontSize(routine.routineName),
+                          )
+                      )),
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      //direction: Axis.horizontal,
+                      //mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: <Widget>[
+                        Expanded(
+                          child: Image(
+                            image: AssetImage(_getIconPath(routine.mainTargetedBodyPart)),
+                            fit: BoxFit.scaleDown,
+                          ),
+                        ),
+                        Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              mainAxisSize: MainAxisSize.max,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              //direction: Axis.vertical,
+                              children: <Widget>[
+                                Expanded(
+                                    child: Container(
+                                        child: Padding(
+                                          padding: EdgeInsets.only(top: 24, right: 8),
+                                          child: Material(
+                                            shape: RoundedRectangleBorder(
+                                                side: new BorderSide(color: Colors.transparent),
+                                                borderRadius: new BorderRadius.only(bottomRight: Radius.circular(10))),
+                                            color: Colors.transparent,
+                                            child: ExerciseNameListView(exNames: _getFirstThreeExerciseName(routine.parts)),
+                                          ),
+                                        )))
+                              ],
+                            )),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -39,66 +146,108 @@ class RoutineOverviewCard extends StatelessWidget {
     );
   }
 
-  Widget _buildRoutineInfo() {
-    return Positioned(
-      top: 6,
-      left: 0,
-      right: 0,
-      child: Padding(
-        padding: const EdgeInsets.only(left: 12, top: 12),
-        child: Text(
-          routine.routineName,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 26, color: Colors.white),
-        ),
-      ),
+  double _getFontSize(String str) {
+    if (str.length > 56) {
+      return 18;
+    } else if (str.length > 17) {
+      return 24;
+    } else {
+      return 32;
+    }
+  }
+
+  String _getIconPath(MainTargetedBodyPart mainTB) {
+    switch (mainTB) {
+      case MainTargetedBodyPart.abs:
+        return 'assets/abs-96.png';
+      case MainTargetedBodyPart.arm:
+        return 'assets/muscle-96.png';
+      case MainTargetedBodyPart.back:
+        return 'assets/back-96.png';
+      case MainTargetedBodyPart.chest:
+        return 'assets/chest-96.png';
+      case MainTargetedBodyPart.leg:
+        return 'assets/leg-96.png';
+      case MainTargetedBodyPart.shoulder:
+        return 'assets/muscle-96.png';
+      case MainTargetedBodyPart.fullBody:
+        return 'assets/muscle-96.png';
+      default:
+        throw Exception('Inside of _getIconPath');
+    }
+  }
+
+  List<String> _getFirstThreeExerciseName(List<Part> parts) {
+    List<String> exNames = <String>[];
+
+    for (int i = 0; i < parts.length; i++) {
+      for (int j = 0; j < parts[i].exercises.length; j++) {
+        exNames.add(parts[i].exercises[j].name);
+        if (exNames.length == 3) {
+          i = parts.length;
+          break;
+        }
+      }
+    }
+    return exNames;
+  }
+}
+
+class ExerciseNameListViewState extends State<ExerciseNameListView> {
+  @override
+  Widget build(BuildContext context) {
+    return _buildMoves();
+  }
+
+  Widget _buildMoves() {
+    List<Widget> children = [];
+
+    if (widget.exNames.isNotEmpty) {
+      for (var exName in widget.exNames) {
+        children..add(_buildRow(exName))..add(Divider());
+      }
+
+      children.removeLast();
+    }
+
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: children,
     );
   }
 
-  Widget _buildWeekdayIndicators() {
-    return Positioned(
-      top: 8,
-      right: 12,
-      child: Row(
-        children: List.generate(7, (index) => _weekdayIndicator(index + 1)),
-      ),
-    );
-  }
-
-  Widget _weekdayIndicator(int weekday) {
-    final bool isSelected = routine.weekdays.contains(weekday);
-    return Padding(
-      padding: const EdgeInsets.only(right: 4),
-      child: Container(
-        height: 16,
-        width: 16,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(6),
-          color: isSelected ? Colors.deepOrange : Colors.transparent,
-        ),
-        child: Center(
-          child: Text(
-            ['M', 'T', 'W', 'T', 'F', 'S', 'S'][weekday - 1],
+  Widget _buildRow(String move) {
+    return RichText(
+        textAlign: TextAlign.left,
+        maxLines: 2,
+        overflow: TextOverflow.clip,
+        text: TextSpan(
             style: TextStyle(
-              color: isSelected ? Colors.white : Colors.black,
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
+              fontFamily: 'Staa',
+              color: Colors.black,
+              fontSize: 18,
+              shadows: Platform.isAndroid
+                  ? <Shadow>[
+                Shadow(
+                  offset: Offset(2.0, 2.0),
+                  blurRadius: 24,
+                  color: Colors.black,
+                ),
+              ]
+                  : null,
             ),
-            textAlign: TextAlign.center,
-          ),
-        ),
-      ),
-    );
+            children: <TextSpan>[
+              TextSpan(text: move),
+            ]));
   }
+}
 
-  void _navigateToDetailPage(BuildContext context) {
-    routinesBloc.setCurrentRoutine(routine);
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => RoutineDetailPage(isRecRoutine: isRecRoutine, routine: routine),
-      ),
-    );
-  }
+class ExerciseNameListView extends StatefulWidget {
+  final List<String> exNames;
+
+  ExerciseNameListView({required this.exNames});
+
+  @override
+  ExerciseNameListViewState createState() => new ExerciseNameListViewState();
 }

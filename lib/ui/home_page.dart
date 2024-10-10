@@ -1,57 +1,171 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_ui_firestore/firebase_ui_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:workout/ui/recommend_page.dart';
+import 'package:workout/ui/routine_edit_page.dart';
 
-class HomePage extends StatelessWidget {
-  final String id;
-  final String? optionalParam;
-  final DateTime createdAt;
-  final List<Part> parts;
+import '../controllers/routines_bloc.dart';
+import '../models/part.dart';
+import '../models/routine.dart';
+import '../utils/routine_helpers.dart';
+import 'components/routine_card.dart';
 
-  const HomePage({super.key,
-    required this.id,
-    this.optionalParam,
-    required this.createdAt,
-    required this.parts,
-  });
+class HomePage extends StatefulWidget {
+  @override
+  _HomePageState createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  final scrollController = ScrollController();
+  bool showShadow = false;
+
+  @override
+  void initState() {
+    scrollController.addListener(() {
+      if (this.mounted) {
+        if (scrollController.offset <= 0) {
+          setState(() {
+            showShadow = false;
+          });
+        } else if (showShadow == false) {
+          setState(() {
+            showShadow = true;
+          });
+        }
+      }
+    });
+
+    super.initState();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text('ID: $id'),
-        if (optionalParam != null) Text('Optional: $optionalParam'),
-        Text('Created: ${createdAt.toIso8601String()}'),
-        Expanded(
-          child: FirestoreListView<Map<String, dynamic>>(
-            query: FirebaseFirestore.instance.collection('routines').orderBy('createdAt', descending: true),
-            itemBuilder: (context, snapshot) {
-              Map<String, dynamic> data = snapshot.data();
-              return ListTile(
-                title: Text(data['name'] ?? ''),
-                subtitle: Text(data['createdAt'].toDate().toString()),
+    return Scaffold(
+      body: Container(
+        height: MediaQuery.of(context).size.height,
+        child: StreamBuilder<List<Routine>>(
+          stream: routinesBloc.allRoutines,
+          builder: (_, AsyncSnapshot<List<Routine>> snapshot) {
+            if (snapshot.hasData) {
+              var routines = snapshot.data ?? [];
+
+              return ListView(
+                controller: scrollController,
+                children: buildChildren(routines),
+              );
+            }
+            return Center(child: CircularProgressIndicator());
+          },
+        ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Theme.of(context).primaryColor,
+        child: Icon(Icons.add, color: Colors.white),
+        onPressed: () {
+          showModalBottomSheet(
+            context: context,
+            builder: (context) {
+              return Container(
+                child: Column(
+                  children: [
+                    ...MainTargetedBodyPart.values.map((val) {
+                      var title = mainTargetedBodyPartToStringConverter(val);
+                      return ListTile(
+                        title: Text(title),
+                        onTap: () {
+                          Navigator.pop(context);
+                          var tempRoutine = Routine(
+                            id: DateTime.now().millisecondsSinceEpoch, // Benzersiz bir ID için zaman damgası kullanılıyor
+                            mainTargetedBodyPart: val,
+                            routineName: 'New Routine', // Varsayılan isim
+                            parts: <Part>[],
+                            createdDate: DateTime.now(), // Varsayılan tarih
+                          );
+                          routinesBloc.setCurrentRoutine(tempRoutine);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => RoutineEditPage(
+                                addOrEdit: AddOrEdit.add,
+                                mainTargetedBodyPart: val,
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    }).toList(),
+                    ListTile(
+                      title: Text(
+                        'Template',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => RecommendPage(),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               );
             },
-          ),
-        ),
-      ],
+          );
+        },
+      ),
+
     );
   }
-}
 
-class Part {
-  final String name;
-  Part(this.name);
-}
+  List<Widget> buildChildren(List<Routine> routines) {
+    var map = <MainTargetedBodyPart, List<Routine>>{};
+    var todayRoutines = <Routine>[];
+    int weekday = DateTime.now().weekday;
+    var children = <Widget>[];
 
-void main() {
-  runApp(MaterialApp(
-    home: Scaffold(
-      body: HomePage(
-        id: 'unique_id_1',
-        createdAt: DateTime.now(),
-        parts: [Part('Part 1'), Part('Part 2')],
-      ),
-    ),
-  ));
+    var textColor = Colors.black;
+    var todayTextStyle = TextStyle(fontWeight: FontWeight.bold, fontSize: 36, color: Colors.orangeAccent);
+    var routineTitleTextStyle = TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: textColor);
+
+    for (var routine in routines) {
+      if (routine != null && routine.weekdays.contains(weekday)) {
+        todayRoutines.add(routine);
+      }
+    }
+
+    children.add(Padding(
+        padding: EdgeInsets.only(left: 16),
+        child: Row(
+          children: <Widget>[
+            Text(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][weekday - 1], style: todayTextStyle),
+          ],
+        )));
+    children.addAll(todayRoutines.map((routine) => RoutineCard(isActive: true, routine: routine)));
+
+    routines.forEach((routine) {
+      if (routine != null) {
+        if (!map.containsKey(routine.mainTargetedBodyPart)) {
+          map[routine.mainTargetedBodyPart] = [];
+        }
+        map[routine.mainTargetedBodyPart]!.add(routine);
+      }
+    });
+
+    map.keys.forEach((bodyPart) {
+      children.add(Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Container(
+            width: MediaQuery.of(context).size.width,
+            child: Flex(
+              direction: Axis.horizontal,
+              children: [
+                Text(mainTargetedBodyPartToStringConverter(bodyPart), style: routineTitleTextStyle),
+                SizedBox(width: 16),
+                Expanded(child: Divider()),
+              ],
+            ),
+          )));
+      children.addAll(map[bodyPart]!.map((routine) => RoutineCard(routine: routine)));
+    });
+
+    return children;
+  }
 }

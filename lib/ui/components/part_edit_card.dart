@@ -41,8 +41,6 @@ class PartEditPageHelper {
       default: throw Exception('Invalid radio value for TargetedBodyPart');
     }
   }
-
-// Diğer yardımcı metodlar...
 }
 
 class PartEditCardState extends State<PartEditCard> {

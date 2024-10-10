@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:workout/ui/components/chart.dart';
-import 'package:workout/ui/components/custom_expansion_tile.dart' as custom;
-import 'package:workout/ui/theme.dart';
 import '../models/exercise.dart';
 import '../models/part.dart';
+import 'components/chart.dart';
 
 class PartHistoryPage extends StatelessWidget {
   final Part part;
 
-  const PartHistoryPage(this.part, {super.key});
+  PartHistoryPage(this.part);
 
   @override
   Widget build(BuildContext context) {
@@ -17,61 +15,69 @@ class PartHistoryPage extends StatelessWidget {
       child: Scaffold(
         appBar: AppBar(
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios),
-            onPressed: () => Navigator.pop(context),
+            icon: Icon(Icons.arrow_back_ios, color: Theme.of(context).iconTheme.color),
+            onPressed: () {
+              Navigator.pop(context);
+            },
           ),
           bottom: TabBar(
-            indicator: const CircleTabIndicator(color: Colors.grey, radius: 3),
-            indicatorColor: Colors.grey,
+            indicator: CircleTabIndicator(color: Theme.of(context).colorScheme.secondary, radius: 3),
             isScrollable: true,
-            tabs: part.exercises.map((ex) => Tab(text: ex.name)).toList(),
+            tabs: _getTabs(part),
           ),
-          title: const Text("History"),
+          title: Text("History", style: Theme.of(context).textTheme.titleLarge),
         ),
         body: TabBarView(
-          children: part.exercises.map((ex) => TabChild(ex, setTypeToThemeColorConverter(part.setType))).toList(),
+          children: _getTabChildren(part),
         ),
       ),
     );
   }
 
-  Color? setTypeToThemeColorConverter(SetType setType) {
+  List<Widget> _getTabs(Part part) {
+    return part.exercises.map((ex) => Tab(text: ex.name)).toList();
+  }
+
+  List<Widget> _getTabChildren(Part part) {
+    return part.exercises.map((ex) => TabChild(ex, setTypeToThemeColorConverter(part.setType))).toList();
+  }
+
+  Color setTypeToThemeColorConverter(SetType setType) {
     switch (setType) {
       case SetType.regular:
-        return ThemeRegular.accentColor;
+        return Colors.blueAccent;
       case SetType.drop:
-        return ThemeDrop.accentColor;
+        return Colors.redAccent;
       case SetType.super_:
-        return ThemeSuper.accentColor;
+        return Colors.greenAccent;
       case SetType.tri:
-        return ThemeTri.accentColor;
+        return Colors.orangeAccent;
       case SetType.giant:
-        return ThemeGiant.accentColor;
+        return Colors.purpleAccent;
       default:
-        return null; //
+        throw Exception('Inside setTypeToThemeConverter');
     }
   }
 }
 
 class TabChild extends StatelessWidget {
   final Exercise exercise;
-  final Color? foregroundColor;
+  final Color foregroundColor;
 
-  const TabChild(this.exercise, this.foregroundColor, {super.key});
+  TabChild(this.exercise, this.foregroundColor);
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: <Widget>[
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-          child: SizedBox(
-            height: 200,
-            child: StackedAreaLineChart(exercise, animate: true),
+    return Scaffold(
+      body: Column(
+        children: <Widget>[
+          Padding(
+            padding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+            child: Container(height: 200, child: StackedAreaLineChart(exercise, animate: false)),
           ),
-        ),
-        Expanded(child: HistoryExpansionTile(exercise.exHistory, foregroundColor)),
-      ],
+          Expanded(child: HistoryExpansionTile(exercise.exHistory, foregroundColor)),
+        ],
+      ),
     );
   }
 }
@@ -80,22 +86,23 @@ class Year {
   final String year;
   final List<String> dates = <String>[];
 
-  Year(this.year) : assert(year.length == 4 && year.startsWith('20'));
+  Year(this.year) : assert(year.length == 4 && year[0] == '2' && year[1] == '0');
 }
 
 class HistoryExpansionTile extends StatelessWidget {
   final Map exHistory;
-  final Color? foregroundColor;
+  final Color foregroundColor;
 
-  const HistoryExpansionTile(this.exHistory, this.foregroundColor, {super.key});
+  HistoryExpansionTile(this.exHistory, this.foregroundColor)
+      : assert(exHistory != null),
+        assert(foregroundColor != null);
 
   @override
   Widget build(BuildContext context) {
     var years = <Year>[];
     for (var date in exHistory.keys) {
-      var yearStr = date.toString().split('-').first;
-      if (years.isEmpty || yearStr != years.last.year) {
-        years.add(Year(yearStr));
+      if (years.isEmpty || date.toString().substring(0, 4) != years.last.year) {
+        years.add(Year(date.toString().split('-').first));
       }
       years.last.dates.add(date);
     }
@@ -103,9 +110,10 @@ class HistoryExpansionTile extends StatelessWidget {
     return ListView.builder(
       itemCount: years.length + 1,
       itemBuilder: (context, i) {
-        if (i == years.length) return const SizedBox(height: 48);
-        return custom.ExpansionTile(
-          foregroundColor: foregroundColor,
+        if (i == years.length) return SizedBox(height: 48);
+
+        return ExpansionTile(
+          collapsedIconColor: foregroundColor,
           title: Text(years[i].year),
           children: _listViewBuilder(years[i].dates, exHistory),
         );
@@ -114,54 +122,37 @@ class HistoryExpansionTile extends StatelessWidget {
   }
 
   List<Widget> _listViewBuilder(List<String> dates, Map exHistory) {
-    return dates.asMap().entries.map((entry) {
-      int index = entry.key;
-      String date = entry.value;
-      return Column(
-        children: [
-          ListTile(
-            leading: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.grey[340],
-              ),
-              child: Center(
-                child: Text(
-                  (index + 1).toString(),
-                  style: const TextStyle(fontSize: 16),
-                ),
-              ),
-            ),
-            title: Text(date),
-            subtitle: Text(exHistory[date].toString()),
+    return dates.map((date) => Column(
+      children: [
+        ListTile(
+          leading: CircleAvatar(
+            backgroundColor: Colors.grey[350],
+            child: Text((dates.indexOf(date) + 1).toString(), style: TextStyle(fontSize: 16)),
           ),
-          const Divider(),
-        ],
-      );
-    }).toList();
+          title: Text(date),
+          subtitle: Text(exHistory[date]),
+        ),
+        Divider(),
+      ],
+    )).toList();
   }
 }
 
 class CircleTabIndicator extends Decoration {
-  final Color color;
-  final double radius;
+  final BoxPainter _painter;
 
-  const CircleTabIndicator({
-    required this.color,
-    required this.radius,
-  });
+  CircleTabIndicator({required Color color, required double radius})
+      : _painter = _CirclePainter(color, radius);
 
   @override
-  BoxPainter createBoxPainter([VoidCallback? onChanged]) => _CirclePainter(color: color, radius: radius);
+  BoxPainter createBoxPainter([VoidCallback? onChanged]) => _painter;
 }
 
 class _CirclePainter extends BoxPainter {
   final Paint _paint;
   final double radius;
 
-  _CirclePainter({required Color color, required this.radius})
+  _CirclePainter(Color color, this.radius)
       : _paint = Paint()
     ..color = color
     ..isAntiAlias = true;

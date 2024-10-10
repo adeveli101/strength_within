@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:sqflite_sqlcipher/sqflite.dart'; //
+import 'package:sqflite_sqlcipher/sqflite.dart';
 import 'package:uuid/uuid.dart';
 import 'package:workout/models/routine.dart';
 
@@ -14,7 +14,7 @@ class DBProvider {
   static final DBProvider db = DBProvider._();
 
   Database? _database;
-  static const String _dbPassword = '9003'; // EKLENEN: Veritabanı şifresi
+  static const String _dbPassword = '9003'; // Database password
 
   Future<Database> get database async {
     return _database ??= await initDB();
@@ -24,7 +24,6 @@ class DBProvider {
     return const Uuid().v4();
   }
 
-  // EKLENEN: Güvenli loglama fonksiyonu
   void _log(String message) {
     if (kDebugMode) {
       print(message);
@@ -38,12 +37,12 @@ class DBProvider {
     if (await File(path).exists() && !refresh) {
       return openDatabase(
         path,
-        password: _dbPassword, // EKLENEN: Şifre kullanımı
-        version: 2, // EKLENEN: Sürüm yükseltildi
+        password: _dbPassword,
+        version: 2,
         onOpen: (db) async {
           _log(await db.query("sqlite_master").toString());
         },
-        onUpgrade: _onUpgrade, // EKLENEN: Sürüm yükseltme işlevi
+        onUpgrade: _onUpgrade,
       );
     } else {
       ByteData data = await rootBundle.load("database/data.db");
@@ -51,9 +50,9 @@ class DBProvider {
       await File(path).writeAsBytes(bytes);
       return openDatabase(
         path,
-        password: _dbPassword, // EKLENEN: Şifre kullanımı
-        version: 2, // EKLENEN: Sürüm yükseltildi
-        onCreate: _onCreate, // EKLENEN: Veritabanı oluşturma işlevi
+        password: _dbPassword,
+        version: 2,
+        onCreate: _onCreate,
         onOpen: (db) async {
           _log(await db.query("sqlite_master").toString());
         },
@@ -61,7 +60,6 @@ class DBProvider {
     }
   }
 
-  // EKLENEN: Veritabanı oluşturma işlevi
   Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
       CREATE TABLE Routines (
@@ -78,10 +76,9 @@ class DBProvider {
     ''');
   }
 
-  // EKLENEN: Veritabanı yükseltme işlevi
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
-      // Sürüm yükseltme.
+      // Handle database upgrade logic if needed
     }
   }
 
@@ -91,24 +88,22 @@ class DBProvider {
       var table = await db.rawQuery('SELECT MAX(Id)+1 as Id FROM Routines');
       return table.first['Id'] as int? ?? 0;
     } catch (e) {
-      _log('Hata: $e');
+      _log('Error: $e');
       return 0;
     }
   }
 
-  // EKLENEN: Girdi doğrulama fonksiyonu
   bool _isValidRoutine(Routine routine) {
     return routine.routineName.isNotEmpty;
   }
 
-  // EKLENEN: Veri sanitizasyon fonksiyonu
   String _sanitizeInput(String input) {
     return input.replaceAll(RegExp(r'[^\w\s]+'), '');
   }
 
   Future<int> newRoutine(Routine routine) async {
     if (!_isValidRoutine(routine)) {
-      throw ArgumentError('Geçersiz rutin');
+      throw ArgumentError('Invalid routine');
     }
 
     final db = await database;
@@ -127,7 +122,7 @@ class DBProvider {
         'Weekdays': _sanitizeInput(map['Weekdays']),
       });
     } catch (e) {
-      _log('Hata: $e');
+      _log('Error: $e');
       return -1;
     }
   }
@@ -137,7 +132,7 @@ class DBProvider {
     try {
       return await db.update("Routines", routine.toMap(), where: "id = ?", whereArgs: [routine.id]);
     } catch (e) {
-      _log('Hata: $e');
+      _log('Error: $e');
       return -1;
     }
   }
@@ -147,7 +142,7 @@ class DBProvider {
     try {
       return await db.delete("Routines", where: "id = ?", whereArgs: [routine.id]);
     } catch (e) {
-      _log('Hata: $e');
+      _log('Error: $e');
       return -1;
     }
   }
@@ -157,7 +152,7 @@ class DBProvider {
     try {
       return await db.delete("Routines");
     } catch (e) {
-      _log('Hata: $e');
+      _log('Error: $e');
       return -1;
     }
   }
@@ -184,7 +179,7 @@ class DBProvider {
         }
       });
     } catch (e) {
-      _log('Hata: $e');
+      _log('Error: $e');
     }
   }
 
@@ -194,9 +189,18 @@ class DBProvider {
       var res = await db.query('Routines');
       return res.map((r) => Routine.fromMap(r.cast<String, dynamic>())).toList();
     } catch (e) {
-      _log('Hata: $e');
+      _log('Error: $e');
       return [];
     }
+  }
+  Future<List<Routine>> getRoutinesPaginated(int page, int pageSize) async {
+    final db = await database;
+    final routines = await db.query(
+      'routines',
+      offset: page * pageSize,
+      limit: pageSize,
+    );
+    return routines.map((json) => Routine.fromMap(json)).toList();
   }
 
   Future<List<Routine>> getAllRecRoutines() async {
@@ -205,7 +209,7 @@ class DBProvider {
       var res = await db.query('RecommendedRoutines');
       return res.map((r) => Routine.fromMap(r.cast<String, dynamic>())).toList();
     } catch (e) {
-      _log('Hata: $e');
+      _log('Error: $e');
       return [];
     }
   }
