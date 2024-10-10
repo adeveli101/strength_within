@@ -31,7 +31,7 @@ class _CalendarPageContentState extends State<CalendarPageContent> {
   @override
   void initState() {
     super.initState();
-    _selectedDate = DateTime.now(); // Başlatma burada
+    _selectedDate = DateTime.now();
     _dateToRoutineMap = _getWorkoutDates(widget.routines);
   }
 

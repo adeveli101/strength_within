@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:workout/bloc/routines_bloc.dart';
-import 'package:workout/utils/routine_helpers.dart';
 
+
+import '../controllers/routines_bloc.dart';
 import '../models/routine.dart';
+import '../utils/routine_helpers.dart';
 import 'components/routine_card.dart';
 
 class RecommendPage extends StatefulWidget {
-  const RecommendPage({super.key});
-
   @override
-  State<RecommendPage> createState() => _RecommendPageState();
+  _RecommendPageState createState() => _RecommendPageState();
 }
 
 class _RecommendPageState extends State<RecommendPage> {
@@ -19,7 +18,7 @@ class _RecommendPageState extends State<RecommendPage> {
   @override
   void initState() {
     scrollController.addListener(() {
-      if (mounted) {
+      if (this.mounted) {
         if (scrollController.offset <= 0) {
           setState(() {
             showShadow = false;
@@ -39,10 +38,10 @@ class _RecommendPageState extends State<RecommendPage> {
   Widget build(BuildContext context) {
     return Scaffold(
         appBar: AppBar(
-          title: const Text("Dev's Favorite"),
+          title: Text("Recomended"),
           elevation: showShadow ? 8 : 0,
         ),
-        body: SizedBox(
+        body: Container(
           height: MediaQuery.of(context).size.height,
           child: StreamBuilder(
             stream: routinesBloc.allRecRoutines,
@@ -54,7 +53,7 @@ class _RecommendPageState extends State<RecommendPage> {
                   children: buildChildren(routines!),
                 );
               }
-              return const Center(child: CircularProgressIndicator());
+              return Center(child: CircularProgressIndicator());
             },
           ),
         ));
@@ -67,19 +66,19 @@ class _RecommendPageState extends State<RecommendPage> {
     var textColor = Colors.black;
     var style = TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: textColor);
 
-    for (var routine in routines) {
+    routines.forEach((routine) {
       if (map.containsKey(routine.mainTargetedBodyPart) == false) map[routine.mainTargetedBodyPart] = [];
       map[routine.mainTargetedBodyPart]?.add(routine);
-    }
+    });
 
-    for (var bodyPart in map.keys) {
+    map.keys.forEach((bodyPart) {
       children.add(Padding(
-        padding: const EdgeInsets.only(left: 16),
+        padding: EdgeInsets.only(left: 16),
         child: Text(mainTargetedBodyPartToStringConverter(bodyPart), style: style),
       ));
-      children.addAll(map[bodyPart]!.map((routine) => RoutineCard(routine: routine, isRecRoutine: true)));
-      children.add(const Divider());
-    }
+      children.addAll(map[bodyPart]?.map((routine) => RoutineCard(routine: routine, isRecRoutine: true)) ?? []);
+      children.add(Divider());
+    });
 
     return children;
   }

@@ -12,7 +12,7 @@ class Routine {
   final List<Part> parts;
   final DateTime lastCompletedDate;
   final DateTime createdDate;
-  final int completionCount;
+  late final int completionCount;
 
   Routine({
     required this.id,
@@ -106,6 +106,20 @@ class Routine {
 
   Routine copyWithoutHistory() {
     return copyWith(routineHistory: [], weekdays: []);
+  }
+
+  static Routine copyFromRoutine(Routine original) {
+    return Routine(
+      id: original.id,
+      mainTargetedBodyPart: original.mainTargetedBodyPart,
+      routineName: original.routineName,
+      parts: original.parts.map((part) => Part.copyFromPart(part)).toList(),
+      createdDate: original.createdDate,
+      lastCompletedDate: original.lastCompletedDate,
+      completionCount: original.completionCount,
+      routineHistory: List.from(original.routineHistory),
+      weekdays: List.from(original.weekdays),
+    );
   }
 
   @override

@@ -1,16 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:percent_indicator/circular_percent_indicator.dart';
-import 'package:workout/resource/firebase_provider.dart';
 import 'package:workout/ui/components/chart.dart';
-import 'package:workout/bloc/routines_bloc.dart';
 import 'package:workout/ui/routine_edit_page.dart';
+import 'package:workout/ui/routine_step_page.dart';
+import '../controllers/routines_bloc.dart';
 import '../models/routine.dart';
 import '../utils/routine_helpers.dart';
 import 'calender_page.dart';
-import 'components/routine_card.dart';
 
-import 'package:workout/resource/shared_prefs_provider.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class StatisticsPage extends StatefulWidget {
   const StatisticsPage({Key? key}) : super(key: key);
@@ -131,35 +128,45 @@ class _StatisticsPageState extends State<StatisticsPage> {
             future: _getFirstRunDate(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const CircularProgressIndicator();
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              if (snapshot.hasError) {
+                return Center(child: Text('Hata: ${snapshot.error}'));
               }
 
               String firstRunDateText = snapshot.data ?? "N/A";
               String daysSinceFirstRun = "N/A";
 
               if (snapshot.hasData && snapshot.data != null) {
-                DateTime firstRunDate = DateTime.parse(snapshot.data!);
-                daysSinceFirstRun = DateTime.now().difference(firstRunDate).inDays.toString();
+                try {
+                  DateTime firstRunDate = DateTime.parse(snapshot.data!);
+                  daysSinceFirstRun = DateTime.now().difference(firstRunDate).inDays.toString();
+                } catch (e) {
+                  print('Tarih ayrıştırma hatası: $e');
+                }
               }
 
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.only(left: 12, right: 12, top: 4, bottom: 4),
+                    padding: const EdgeInsets.all(12),
                     child: RichText(
+                      textAlign: TextAlign.center,
                       text: TextSpan(
+                        style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color),
                         children: [
                           TextSpan(
-                            text: 'You have been using this app since $firstRunDateText',
+                            text: 'Bu uygulamayı kullanmaya başladığınız tarih:\n$firstRunDateText',
                             style: const TextStyle(fontFamily: 'Staa'),
                           ),
-                          const TextSpan(text: '\n\nIt has been\n', style: TextStyle(fontFamily: 'Staa')),
+                          const TextSpan(text: '\n\nKullanım süreniz:\n', style: TextStyle(fontFamily: 'Staa')),
                           TextSpan(
                             text: daysSinceFirstRun,
-                            style: const TextStyle(fontSize: 36, fontFamily: 'Staa'),
+                            style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, fontFamily: 'Staa'),
                           ),
-                          const TextSpan(text: '\ndays', style: TextStyle(fontFamily: 'Staa')),
+                          const TextSpan(text: ' gün', style: TextStyle(fontFamily: 'Staa')),
                         ],
                       ),
                     ),
@@ -172,6 +179,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
       ),
     );
   }
+
 
 
 
@@ -231,71 +239,12 @@ class _StatisticsPageState extends State<StatisticsPage> {
   Widget _buildGoalCard(double ratio) {
     return Padding(
       padding: const EdgeInsets.all(4),
-      child: InkWell(
-        onTap: () {
-          if (_loadedRoutines.isEmpty) {
-            // Eğer rutin yoksa, doğrudan RoutineEditPage'e yönlendir
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => RoutineEditPage(
-                  addOrEdit: AddOrEdit.add,
-                  mainTargetedBodyPart: MainTargetedBodyPart.fullBody, // Varsayılan bir değer
-                ),
-              ),
-            );
-          } else {
-            // Eğer rutinler varsa, mevcut dialog'u göster
-            showDialog(
-              context: context,
-              builder: (BuildContext context) {
-                return AlertDialog(
-                  title: Text('Select a Routine'),
-                  content: SingleChildScrollView(
-                    child: ListBody(
-                      children: _loadedRoutines.map((routine) {
-                        return ListTile(
-                          title: Text(routine.routineName),
-                          onTap: () {
-                            Navigator.of(context).pop(); // Close the dialog
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (context) => RoutineCard(routine: routine)),
-                            );
-                          },
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                  actions: <Widget>[
-                    TextButton(
-                      child: Text('Create New Routine'),
-                      onPressed: () {
-                        Navigator.of(context).pop(); // Close the dialog
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => RoutineEditPage(
-                              addOrEdit: AddOrEdit.add,
-                              mainTargetedBodyPart: MainTargetedBodyPart.fullBody, // Varsayılan bir değer
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                );
-              },
-            );
-          }
-        },
-
-
-
-        child: Card(
-          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(8))),
-          elevation: 12,
-          color: Theme.of(context).primaryColor,
+      child: Card(
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(8))),
+        elevation: 12,
+        color: Theme.of(context).primaryColor,
+        child: InkWell(
+          onTap: _handleCardTap,
           child: LayoutBuilder(
             builder: (context, constraints) {
               double radius = constraints.maxWidth * 0.4;
@@ -313,9 +262,9 @@ class _StatisticsPageState extends State<StatisticsPage> {
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20.0, color: Colors.white),
                     ),
                   ),
-                  header: FittedBox(
+                  header: const FittedBox(
                     fit: BoxFit.scaleDown,
-                    child: const Text(
+                    child: Text(
                       "Goal of this week",
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17.0, color: Colors.white),
                     ),
@@ -332,16 +281,98 @@ class _StatisticsPageState extends State<StatisticsPage> {
   }
 
 
+  void _handleCardTap() {
+    if (_loadedRoutines.isEmpty) {
+      _navigateToRoutineEditPage();
+    } else {
+      _navigateToRoutineStepPage(_loadedRoutines as Routine);
+    }
+  }
 
+  void _navigateToRoutineEditPage() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => RoutineEditPage(
+          addOrEdit: AddOrEdit.add,
+          mainTargetedBodyPart: MainTargetedBodyPart.fullBody,
+        ),
+      ),
+    );
+  }
+
+  void _navigateToRoutineStepPage(Routine selectedRoutine) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => RoutineStepPage(
+          routine: selectedRoutine,
+          celebrateCallback: () {
+            // Celebration logic can be implemented here
+            // For example, you might want to show a congratulatory message or update some stats
+          },
+          onBackPressed: () async {
+            // This function will be called when the back button is pressed
+            bool shouldPop = await showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                backgroundColor: Colors.white,
+                elevation: 4,
+                title: Container(
+                  width: double.infinity,
+                  color: Theme.of(context).primaryColor,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Column(
+                    children: const [
+                      Text(
+                        'Too soon to quit. 😑',
+                        style: TextStyle(color: Colors.white, fontSize: 16),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'Your progress will not be saved.',
+                        style: TextStyle(color: Colors.white, fontSize: 16),
+                      ),
+                    ],
+                  ),
+                ),
+                contentPadding: EdgeInsets.zero,
+                content: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: Text(
+                        'Stay',
+                        style: TextStyle(color: Theme.of(context).primaryColor, fontSize: 16),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      child: Text(
+                        'Quit',
+                        style: TextStyle(color: Theme.of(context).primaryColor, fontSize: 16),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ) ?? false;
+
+            if (shouldPop) {
+              Navigator.of(context).pop();
+            }
+          },
+        ),
+      ),
+    );
+  }
 }
 
 
 Future<String?> _getFirstRunDate() async {
-  return await _getFirstRunDate();
+  return  _getFirstRunDate();
 }
-
-
-
 
 
   int _getTotalWorkoutCount(List<Routine> routines) {
