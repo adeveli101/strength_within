@@ -6,9 +6,7 @@ import 'package:workout/models/routine.dart';
 
 class FirebaseProvider {
   static final FirebaseProvider _instance = FirebaseProvider._internal();
-
   FirebaseProvider._internal();
-
   factory FirebaseProvider() => _instance;
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -36,10 +34,22 @@ class FirebaseProvider {
   Future<void> uploadRoutines(List<Routine> routines) async {
     await checkInternetConnection();
     try {
+      var batch = _firestore.batch();
       var routinesCollection = _firestore.collection("routines");
+
       for (var routine in routines) {
-        await routinesCollection.add(routine.toMap());
+        var routineRef = routinesCollection.doc(routine.id.toString());
+        batch.set(routineRef, routine.toMap());
+
+        // Upload associated parts
+        var partsCollection = routineRef.collection("parts");
+        for (var partId in routine.partIds) {
+          var partRef = partsCollection.doc(partId.toString());
+          batch.set(partRef, {"partId": partId});
+        }
       }
+
+      await batch.commit();
     } catch (e) {
       logError('Error uploading routines', e);
       rethrow;
@@ -68,7 +78,14 @@ class FirebaseProvider {
     await checkInternetConnection();
     try {
       var snapshot = await _firestore.collection("routines").get();
-      return snapshot.docs.map((doc) => Routine.fromMap(doc.data())).toList();
+      List<Routine> routines = [];
+      for (var doc in snapshot.docs) {
+        var routine = Routine.fromMap(doc.data());
+        var partsSnapshot = await doc.reference.collection("parts").get();
+        routine.partIds = partsSnapshot.docs.map((partDoc) => partDoc.data()["partId"] as int).toList();
+        routines.add(routine);
+      }
+      return routines;
     } catch (e) {
       logError('Error restoring routines', e);
       return [];

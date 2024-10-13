@@ -1,128 +1,149 @@
 import 'package:flutter/material.dart';
-import 'package:workout/utils/routine_helpers.dart';
-
 import '../../models/exercise.dart';
 import '../../models/part.dart';
+import '../../resource/db_provider.dart';
 
 typedef PartTapCallback = void Function(Part part);
 typedef StringCallback = void Function(String val);
 
 class PartCard extends StatelessWidget {
+  final Part part;
+  final bool isExpanded;
+  final Function(bool) onExpandToggle;
   final VoidCallback onDelete;
   final VoidCallback? onPartTap;
-  final StringCallback? onTextEdited;
-  final Part part;
 
   const PartCard({
-    super.key,
-    required this.onDelete,
-    required this.onPartTap,
-    this.onTextEdited,
+    Key? key,
     required this.part,
-  });
+    required this.isExpanded,
+    required this.onExpandToggle,
+    required this.onDelete,
+    this.onPartTap,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
-      child: Card(
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(4))),
-        elevation: 12,
-        color: Theme.of(context).primaryColor,
-        child: InkWell(
-          onTap: onPartTap,
-          splashColor: Colors.grey,
-          borderRadius: const BorderRadius.all(Radius.circular(4)),
-          child: Padding(
-            padding: const EdgeInsets.all(8),
-            child: Column(
+    return Card(
+      color: Color(0xFF2C2C2C),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Column(
+        children: [
+          ListTile(
+            title: Text(
+              part.name,
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+            onTap: onPartTap,
+            trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _buildHeader(),
-                const SizedBox(height: 8),
-                _buildExerciseList(),
-                const SizedBox(height: 12),
+                IconButton(
+                  icon: Icon(
+                    isExpanded ? Icons.expand_less : Icons.expand_more,
+                    color: Colors.white70,
+                  ),
+                  onPressed: () => onExpandToggle(!isExpanded),
+                ),
+                IconButton(
+                  icon: Icon(Icons.delete, color: Colors.white70),
+                  onPressed: onDelete,
+                ),
               ],
             ),
           ),
-        ),
+          if (isExpanded) _buildExerciseList(),
+        ],
       ),
     );
   }
-
-  Widget _buildHeader() {
-    return ListTile(
-      leading: targetedBodyPartToImageConverter(part.targetedBodyPart),
-      title: Text(
-        setTypeToStringConverter(part.setType),
-        style: const TextStyle(color: Colors.white70, fontSize: 16),
-      ),
-      subtitle: Text(
-        targetedBodyPartToStringConverter(part.targetedBodyPart),
-        style: const TextStyle(color: Colors.white54, fontSize: 16),
-      ),
-    );
-  }
-
-
 
   Widget _buildExerciseList() {
-    return Column(
-      children: [
-        _buildExerciseHeader(),
-        ...part.exercises.map(_buildExerciseRow).expand((widget) => [widget, const Divider(color: Colors.white38)]),
-      ],
+    return FutureBuilder<List<Exercise>>(
+      future: _getExercises(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return CircularProgressIndicator(color: Color(0xFFE91E63));
+        }
+        if (snapshot.hasError) {
+          return Text('Error: ${snapshot.error}', style: TextStyle(color: Colors.red));
+        }
+        final exercises = snapshot.data ?? [];
+        return Column(
+          children: [
+            _buildExerciseHeader(),
+            ...exercises.map(_buildExerciseRow),
+          ],
+        );
+      },
     );
   }
 
   Widget _buildExerciseHeader() {
-    return const Row(
-      children: [
-        Expanded(flex: 22, child: SizedBox()),
-        Expanded(flex: 5, child: Text('sets', style: TextStyle(color: Colors.white54, fontSize: 14), textAlign: TextAlign.center)),
-        Expanded(flex: 1, child: SizedBox()),
-        Expanded(flex: 5, child: Text('reps', style: TextStyle(color: Colors.white54, fontSize: 14), textAlign: TextAlign.center)),
-      ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          Expanded(flex: 22, child: SizedBox()),
+          Expanded(flex: 5, child: Text('sets', style: TextStyle(color: Colors.white54, fontSize: 14), textAlign: TextAlign.center)),
+          Expanded(flex: 1, child: SizedBox()),
+          Expanded(flex: 5, child: Text('reps', style: TextStyle(color: Colors.white54, fontSize: 14), textAlign: TextAlign.center)),
+        ],
+      ),
     );
   }
 
   Widget _buildExerciseRow(Exercise ex) {
-    return Row(
-      children: [
-        Expanded(
-          flex: 22,
-          child: Text(
-            ex.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.white),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 22,
+            child: Text(
+              ex.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: Colors.white),
+            ),
           ),
-        ),
-        Expanded(
-          flex: 5,
-          child: Text(
-            ex.sets.toString(),
-            style: const TextStyle(color: Colors.white, fontSize: 18),
-            textAlign: TextAlign.center,
+          Expanded(
+            flex: 5,
+            child: Text(
+              ex.defaultSets.toString(),
+              style: TextStyle(color: Colors.white, fontSize: 18),
+              textAlign: TextAlign.center,
+            ),
           ),
-        ),
-        const Expanded(
-          flex: 1,
-          child: Text(
-            'x',
-            style: TextStyle(color: Colors.white70, fontSize: 16),
-            textAlign: TextAlign.center,
+          Expanded(
+            flex: 1,
+            child: Text(
+              'x',
+              style: TextStyle(color: Colors.white70, fontSize: 16),
+              textAlign: TextAlign.center,
+            ),
           ),
-        ),
-        Expanded(
-          flex: 5,
-          child: Text(
-            ex.reps,
-            style: const TextStyle(color: Colors.white, fontSize: 18),
-            textAlign: TextAlign.center,
+          Expanded(
+            flex: 5,
+            child: Text(
+              ex.defaultReps ?? '8',
+              style: TextStyle(color: Colors.white, fontSize: 18),
+              textAlign: TextAlign.center,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
+  }
+
+  Future<List<Exercise>> _getExercises() async {
+    final db = await DBProvider.db.database;
+    final exercises = await Future.wait(
+        part.exerciseIds.map((id) async {
+          var result = await db.query('Exercises', where: 'Id = ?', whereArgs: [id]);
+          return Exercise.fromMap(result.first);
+        })
+    );
+    return exercises;
   }
 }

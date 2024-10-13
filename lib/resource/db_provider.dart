@@ -4,17 +4,20 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:sqflite_sqlcipher/sqflite.dart';
+import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 import 'package:workout/models/routine.dart';
+import 'package:workout/models/part.dart';
+import 'package:workout/models/exercise.dart';
+import '../models/RoutineHistory.dart';
+import '../models/RoutinePart.dart';
+import '../models/RoutineWeekday.dart';
 
 class DBProvider {
   DBProvider._();
-
   static final DBProvider db = DBProvider._();
 
   Database? _database;
-  static const String _dbPassword = '9003'; // Database password
 
   Future<Database> get database async {
     return _database ??= await initDB();
@@ -30,120 +33,39 @@ class DBProvider {
     }
   }
 
-  Future<Database> initDB({bool refresh = false}) async {
+  Future<Database> initDB() async {
     Directory appDocDir = await getApplicationDocumentsDirectory();
-    String path = join(appDocDir.path, "data.db");
-
-    if (await File(path).exists() && !refresh) {
-      return openDatabase(
-        path,
-        password: _dbPassword,
-        version: 2,
-        onOpen: (db) async {
-          _log(await db.query("sqlite_master").toString());
-        },
-        onUpgrade: _onUpgrade,
-      );
+    String path = join(appDocDir.path, "newDB.db");
+    if (await File(path).exists()) {
+      return openDatabase(path);
     } else {
-      ByteData data = await rootBundle.load("database/data.db");
+      ByteData data = await rootBundle.load("database/newDB.db");
       List<int> bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
       await File(path).writeAsBytes(bytes);
-      return openDatabase(
-        path,
-        password: _dbPassword,
-        version: 2,
-        onCreate: _onCreate,
-        onOpen: (db) async {
-          _log(await db.query("sqlite_master").toString());
-        },
-      );
+      return openDatabase(path);
     }
   }
 
-  Future<void> _onCreate(Database db, int version) async {
-    await db.execute('''
-      CREATE TABLE Routines (
-        Id INTEGER PRIMARY KEY,
-        RoutineName TEXT,
-        MainPart TEXT,
-        Parts TEXT,
-        LastCompletedDate TEXT,
-        CreatedDate TEXT,
-        Count INTEGER,
-        RoutineHistory TEXT,
-        Weekdays TEXT
-      )
-    ''');
+  // Routine operations
+  Future<List<Routine>> getRoutinesPaginated(int page, int pageSize) async {
+    final db = await database;
+    final offset = page * pageSize;
+    final routines = await db.query(
+      'Routines',
+      limit: pageSize,
+      offset: offset,
+    );
+    return routines.map((json) => Routine.fromMap(json)).toList();
   }
 
-  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    if (oldVersion < 2) {
-      // Handle database upgrade logic if needed
-    }
-  }
-
-  Future<int> getLastId() async {
+  Future<List<Routine>> getAllRecRoutines() async {
     final db = await database;
     try {
-      var table = await db.rawQuery('SELECT MAX(Id)+1 as Id FROM Routines');
-      return table.first['Id'] as int? ?? 0;
+      var res = await db.query('Routines', where: 'IsRecommended = ?', whereArgs: [1]);
+      return res.map((r) => Routine.fromMap(r)).toList();
     } catch (e) {
       _log('Error: $e');
-      return 0;
-    }
-  }
-
-  bool _isValidRoutine(Routine routine) {
-    return routine.routineName.isNotEmpty;
-  }
-
-  String _sanitizeInput(String input) {
-    return input.replaceAll(RegExp(r'[^\w\s]+'), '');
-  }
-
-  Future<int> newRoutine(Routine routine) async {
-    if (!_isValidRoutine(routine)) {
-      throw ArgumentError('Invalid routine');
-    }
-
-    final db = await database;
-    try {
-      int id = await getLastId();
-      var map = routine.toMap();
-      return await db.insert('Routines', {
-        'Id': id,
-        'RoutineName': _sanitizeInput(map['RoutineName']),
-        'MainPart': _sanitizeInput(map['MainPart']),
-        'Parts': _sanitizeInput(map['Parts']),
-        'LastCompletedDate': map['LastCompletedDate'],
-        'CreatedDate': map['CreatedDate'],
-        'Count': map['Count'],
-        'RoutineHistory': _sanitizeInput(map['RoutineHistory']),
-        'Weekdays': _sanitizeInput(map['Weekdays']),
-      });
-    } catch (e) {
-      _log('Error: $e');
-      return -1;
-    }
-  }
-
-  Future<int> updateRoutine(Routine routine) async {
-    final db = await database;
-    try {
-      return await db.update("Routines", routine.toMap(), where: "id = ?", whereArgs: [routine.id]);
-    } catch (e) {
-      _log('Error: $e');
-      return -1;
-    }
-  }
-
-  Future<int> deleteRoutine(Routine routine) async {
-    final db = await database;
-    try {
-      return await db.delete("Routines", where: "id = ?", whereArgs: [routine.id]);
-    } catch (e) {
-      _log('Error: $e');
-      return -1;
+      return [];
     }
   }
 
@@ -162,20 +84,8 @@ class DBProvider {
     try {
       await db.transaction((txn) async {
         for (var routine in routines) {
-          if (!_isValidRoutine(routine)) continue;
-          int id = await getLastId();
-          var map = routine.toMap();
-          await txn.insert('Routines', {
-            'Id': id,
-            'RoutineName': _sanitizeInput(map['RoutineName']),
-            'MainPart': _sanitizeInput(map['MainPart']),
-            'Parts': _sanitizeInput(map['Parts']),
-            'LastCompletedDate': map['LastCompletedDate'],
-            'CreatedDate': map['CreatedDate'],
-            'Count': map['Count'],
-            'RoutineHistory': _sanitizeInput(map['RoutineHistory']),
-            'Weekdays': _sanitizeInput(map['Weekdays']),
-          });
+          await txn.insert('Routines', routine.toMap(),
+              conflictAlgorithm: ConflictAlgorithm.replace);
         }
       });
     } catch (e) {
@@ -183,34 +93,201 @@ class DBProvider {
     }
   }
 
+  Future<Part?> getPart(int partId) async {
+    final db = await database;
+    try {
+      var res = await db.query('Parts', where: 'Id = ?', whereArgs: [partId]);
+      if (res.isNotEmpty) {
+        var part = Part.fromMap(res.first);
+        var exerciseRes = await db.query(
+            'PartExercises',
+            where: 'PartId = ?',
+            whereArgs: [partId]
+        );
+        part.exerciseIds = exerciseRes.map((e) => e['ExerciseId'] as int).toList();
+        return part;
+      }
+      return null;
+    } catch (e) {
+      _log('Error in getPart: $e');
+      return null;
+    }
+  }
+
+  Future<int> newRoutine(Routine routine) async {
+    final db = await database;
+    return await db.insert('Routines', routine.toMap());
+  }
+
+  Future<int> updateRoutine(Routine routine) async {
+    final db = await database;
+    return await db.update("Routines", routine.toMap(), where: "Id = ?", whereArgs: [routine.id]);
+  }
+
+  Future<int> deleteRoutine(int routineId) async {
+    final db = await database;
+    return await db.delete("Routines", where: "Id = ?", whereArgs: [routineId]);
+  }
+
   Future<List<Routine>> getAllRoutines() async {
     final db = await database;
     try {
       var res = await db.query('Routines');
-      return res.map((r) => Routine.fromMap(r.cast<String, dynamic>())).toList();
+      print('Fetched ${res.length} routines from database');
+      return res.map((r) {
+        try {
+          return Routine.fromMap(r);
+        } catch (e) {
+          print('Error converting routine: $e');
+          print('Problematic routine data: $r');
+          return null;
+        }
+      }).where((r) => r != null).cast<Routine>().toList();
     } catch (e) {
-      _log('Error: $e');
+      print('Error in getAllRoutines: $e');
+      print('Stack trace: ${StackTrace.current}');
       return [];
     }
-  }
-  Future<List<Routine>> getRoutinesPaginated(int page, int pageSize) async {
-    final db = await database;
-    final routines = await db.query(
-      'routines',
-      offset: page * pageSize,
-      limit: pageSize,
-    );
-    return routines.map((json) => Routine.fromMap(json)).toList();
   }
 
-  Future<List<Routine>> getAllRecRoutines() async {
+
+
+  // Part operations
+  Future<int> newPart(Part part) async {
+    final db = await database;
+    return await db.insert('Parts', part.toMap());
+  }
+
+  Future<int> updatePart(Part part) async {
+    final db = await database;
+    return await db.update("Parts", part.toMap(), where: "Id = ?", whereArgs: [part.id]);
+  }
+
+  Future<int> deletePart(int partId) async {
+    final db = await database;
+    return await db.delete("Parts", where: "Id = ?", whereArgs: [partId]);
+  }
+
+  // Exercise operations
+  Future<int> newExercise(Exercise exercise) async {
+    final db = await database;
+    return await db.insert('Exercises', exercise.toMap());
+  }
+
+  Future<int> updateExercise(Exercise exercise) async {
+    final db = await database;
+    return await db.update("Exercises", exercise.toMap(), where: "Id = ?", whereArgs: [exercise.id]);
+  }
+
+  Future<int> deleteExercise(int exerciseId) async {
+    final db = await database;
+    return await db.delete("Exercises", where: "Id = ?", whereArgs: [exerciseId]);
+  }
+
+  Future<Map<String, Exercise>> getExercisesForPart(Part part) async {
+    final db = await database;
+    var exerciseIds = part.exerciseIds;
+    var exercises = await Future.wait(
+        exerciseIds.map((id) async {
+          var result = await db.query('Exercises', where: 'Id = ?', whereArgs: [id]);
+          return result.isNotEmpty ? Exercise.fromMap(result.first) : null;
+        })
+    );
+    return Map.fromIterables(
+        exerciseIds.map((id) => id.toString()),
+        exercises.whereType<Exercise>()
+    );
+  }
+
+
+  // RoutinePart operations
+  Future<void> addRoutinePart(RoutinePart routinePart) async {
+    final db = await database;
+    await db.insert('RoutineParts', routinePart.toMap());
+  }
+
+  Future<void> removeRoutinePart(int routineId, int partId) async {
+    final db = await database;
+    await db.delete('RoutineParts', where: 'RoutineId = ? AND PartId = ?', whereArgs: [routineId, partId]);
+  }
+
+  // RoutineHistory operations
+  Future<int> addRoutineHistory(RoutineHistory history) async {
+    final db = await database;
+    return await db.insert('RoutineHistory', history.toMap());
+  }
+
+  Future<List<RoutineHistory>> getRoutineHistory(int routineId) async {
+    final db = await database;
+    var res = await db.query('RoutineHistory', where: 'RoutineId = ?', whereArgs: [routineId]);
+    return res.map((r) => RoutineHistory.fromMap(r)).toList();
+  }
+
+  Future<List<RoutineHistory>> getAllRoutineHistory() async {
     final db = await database;
     try {
-      var res = await db.query('RecommendedRoutines');
-      return res.map((r) => Routine.fromMap(r.cast<String, dynamic>())).toList();
+      var res = await db.query('RoutineHistory');
+      return res.map((r) => RoutineHistory.fromMap(r)).toList();
     } catch (e) {
-      _log('Error: $e');
-      return [];
+      _log('Error in getAllRoutineHistory: $e');
+      return []; // Boş liste döndür, hata durumunda
     }
   }
+
+
+
+
+
+  // RoutineWeekday operations
+  Future<void> updateRoutineWeekdays(int routineId, List<int> weekdays) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.delete('RoutineWeekdays', where: 'RoutineId = ?', whereArgs: [routineId]);
+      for (var weekday in weekdays) {
+        await txn.insert('RoutineWeekdays', {'RoutineId': routineId, 'Weekday': weekday});
+      }
+    });
+  }
+
+  Future<List<RoutineWeekday>> getRoutineWeekdays(int routineId) async {
+    final db = await database;
+    final maps = await db.query('RoutineWeekdays',
+        where: 'routineId = ?',
+        whereArgs: [routineId]);
+    return List.generate(maps.length, (i) {
+      return RoutineWeekday.fromMap(maps[i]);
+    });
+  }
+
+  Future<void> toggleRoutineFavorite(int routineId) async {
+    final db = await database;
+    var routine = await db.query('Routines', where: 'Id = ?', whereArgs: [routineId]);
+    if (routine.isNotEmpty) {
+      var currentFavorite = routine.first['IsFavorite'] as int;
+      await db.update('Routines', {'IsFavorite': 1 - currentFavorite}, where: 'Id = ?', whereArgs: [routineId]);
+    }
+  }
+
+  Future<void> updateRoutineDifficulty(int routineId, int difficulty) async {
+    final db = await database;
+    await db.update('Routines', {'Difficulty': difficulty}, where: 'Id = ?', whereArgs: [routineId]);
+  }
+
+  Future<void> updateRoutineEstimatedTime(int routineId, int estimatedTime) async {
+    final db = await database;
+    await db.update('Routines', {'EstimatedTime': estimatedTime}, where: 'Id = ?', whereArgs: [routineId]);
+  }
+
+  Future<List<RoutineHistory>> getRoutineHistoryForExercise(int exerciseId) async {
+    final db = await database;
+    var res = await db.rawQuery('''
+      SELECT rh.* FROM RoutineHistory rh
+      JOIN RoutineParts rp ON rh.RoutineId = rp.RoutineId
+      JOIN PartExercises pe ON rp.PartId = pe.PartId
+      WHERE pe.ExerciseId = ?
+    ''', [exerciseId]);
+    return res.map((r) => RoutineHistory.fromMap(r)).toList();
+  }
 }
+
+final dbProvider = DBProvider.db;

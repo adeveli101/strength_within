@@ -1,28 +1,65 @@
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
-import 'package:workout/models/routine.dart';
 import '../../models/exercise.dart';
+import '../../models/RoutineHistory.dart';
+import '../../resource/db_provider.dart';
 
 class StackedAreaLineChart extends StatelessWidget {
   final bool animate;
   final Exercise exercise;
 
-  const StackedAreaLineChart(this.exercise, {super.key, required this.animate});
+  const StackedAreaLineChart(this.exercise, {Key? key, required this.animate}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return SfCartesianChart(
-      primaryXAxis: const NumericAxis(),
-      series: _createData(),
-      enableSideBySideSeriesPlacement: false,
+    return FutureBuilder<List<RoutineHistory>?>(
+      future: _getExerciseHistory(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(child: CircularProgressIndicator(color: Color(0xFFE91E63)));
+        } else if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}', style: TextStyle(color: Colors.white70)));
+        } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return Center(child: Text('No data available', style: TextStyle(color: Colors.white70)));
+        } else {
+          return SfCartesianChart(
+            primaryXAxis: NumericAxis(
+              majorGridLines: MajorGridLines(width: 0),
+              axisLine: AxisLine(width: 0),
+              labelStyle: TextStyle(color: Colors.white70),
+            ),
+            primaryYAxis: NumericAxis(
+              majorGridLines: MajorGridLines(width: 0.5, color: Colors.grey[800]),
+              axisLine: AxisLine(width: 0),
+              labelStyle: TextStyle(color: Colors.white70),
+            ),
+            plotAreaBorderWidth: 0,
+            series: _createData(snapshot.data!),
+            enableSideBySideSeriesPlacement: false,
+            backgroundColor: Color(0xFF121212),
+            legend: Legend(isVisible: false),
+            tooltipBehavior: TooltipBehavior(enable: true, color: Color(0xFF2C2C2C)),
+          );
+        }
+      },
     );
   }
 
-  List<CartesianSeries<LinearWeightCompleted, int>> _createData() {
-    List<LinearWeightCompleted> weightCompletedList = <LinearWeightCompleted>[];
-    for (int i = 0; i < exercise.exHistory.length; i++) {
-      double tempWeight = _getMaxWeight(exercise.exHistory.values.toList()[i]);
-      weightCompletedList.add(LinearWeightCompleted(i, tempWeight.toInt()));
+  Future<List<RoutineHistory>?> _getExerciseHistory() async {
+    return await DBProvider.db.getRoutineHistoryForExercise(exercise.id);
+  }
+
+  List<CartesianSeries<LinearWeightCompleted, int>> _createData(List<RoutineHistory> history) {
+    List<LinearWeightCompleted> weightCompletedList = [];
+    for (int i = 0; i < history.length; i++) {
+      Map? additionalData = _getWeightFromHistory(history[i]);
+      if (additionalData != null && additionalData.containsKey(exercise.id.toString())) {
+        var weightData = additionalData[exercise.id.toString()]['weight'];
+        if (weightData != null) {
+          double weight = (weightData is int) ? weightData.toDouble() : weightData;
+          weightCompletedList.add(LinearWeightCompleted(i, weight.toInt()));
+        }
+      }
     }
 
     return <CartesianSeries<LinearWeightCompleted, int>>[
@@ -30,74 +67,21 @@ class StackedAreaLineChart extends StatelessWidget {
         dataSource: weightCompletedList,
         xValueMapper: (LinearWeightCompleted weightCompleted, _) => weightCompleted.month,
         yValueMapper: (LinearWeightCompleted weightCompleted, _) => weightCompleted.weight,
-        color: Colors.deepOrange,
+        color: Color(0xFFE91E63),
+        width: 2,
+        markerSettings: MarkerSettings(isVisible: true, color: Color(0xFFE91E63)),
       )
     ];
   }
 
-  double _getMaxWeight(String weightsStr) {
-    List<double> weights = weightsStr.split('/').map((str) => double.parse(str)).toList();
-    return weights.reduce((max, weight) => weight > max ? weight : max);
+
+  Map? _getWeightFromHistory(RoutineHistory history) {
+    return history.additionalData;
   }
 }
 
 class LinearWeightCompleted {
   final int month;
   final int weight;
-
   LinearWeightCompleted(this.month, this.weight);
-}
-
-class DonutAutoLabelChart extends StatelessWidget {
-  final List<Routine> routines;
-  final bool animate;
-
-  const DonutAutoLabelChart(this.routines, {super.key, required this.animate});
-
-  factory DonutAutoLabelChart.withSampleData() {
-    return const DonutAutoLabelChart([], animate: false);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SfCircularChart(
-      series: _createData(),
-      legend: const Legend(isVisible: true),
-    );
-  }
-
-  List<PieSeries<LinearRecords, String>> _createData() {
-    final data = [
-      LinearRecords('Abs', 0, _getTotalCount(MainTargetedBodyPart.abs)),
-      LinearRecords('Arms', 1, _getTotalCount(MainTargetedBodyPart.arm)),
-      LinearRecords('Back', 2, _getTotalCount(MainTargetedBodyPart.back)),
-      LinearRecords('Chest', 3, _getTotalCount(MainTargetedBodyPart.chest)),
-      LinearRecords('Legs', 4, _getTotalCount(MainTargetedBodyPart.leg)),
-      LinearRecords('Shoulders', 5, _getTotalCount(MainTargetedBodyPart.shoulder)),
-      LinearRecords('Full Body', 6, _getTotalCount(MainTargetedBodyPart.fullBody)),
-    ];
-
-    return <PieSeries<LinearRecords, String>>[
-      PieSeries<LinearRecords, String>(
-        dataSource: data,
-        xValueMapper: (LinearRecords sales, _) => sales.label,
-        yValueMapper: (LinearRecords sales, _) => sales.totalCount,
-        dataLabelMapper: (LinearRecords sales, _) => sales.label,
-        dataLabelSettings: const DataLabelSettings(isVisible: true),
-      )
-    ];
-  }
-
-  int _getTotalCount(MainTargetedBodyPart mt) {
-    return routines.where((routine) => routine.mainTargetedBodyPart == mt)
-        .fold(0, (sum, routine) => sum + routine.completionCount);
-  }
-}
-
-class LinearRecords {
-  final String label;
-  final int index;
-  final int totalCount;
-
-  LinearRecords(this.label, this.index, this.totalCount);
 }
