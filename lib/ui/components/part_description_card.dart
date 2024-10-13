@@ -1,62 +1,99 @@
 import 'package:flutter/material.dart';
-import 'package:workout/models/routine.dart';
-import 'package:intl/intl.dart';
+import 'package:workout/models/part.dart';
+import 'package:workout/utils/routine_helpers.dart';
+import 'package:workout/resource/db_provider.dart';
+import 'package:workout/models/exercise.dart';
 
-class RoutineDescriptionCard extends StatelessWidget {
-  final Routine routine;
+class PartDescriptionCard extends StatelessWidget {
+  final Part part;
 
-  const RoutineDescriptionCard({super.key, required this.routine});
+  const PartDescriptionCard({Key? key, required this.part}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
       child: Card(
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(4))),
-        elevation: 12,
-        color: Colors.grey[700],
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: 4,
+        color: Color(0xFF2C2C2C),
         child: Padding(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                routine.routineName,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 24, color: Colors.white),
+                part.name,
+                style: TextStyle(fontSize: 20, color: Colors.white, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 8),
-              const Text(
-                'You have done this workout',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, color: Colors.white),
+              SizedBox(height: 8),
+              Text(
+                'Targeted Body Part: ${targetedBodyPartToStringConverter(part.targetedBodyPart)}',
+                style: TextStyle(fontSize: 14, color: Colors.white70),
               ),
               Text(
-                routine.completionCount.toString(),
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 36, color: Colors.white),
+                'Set Type: ${setTypeToStringConverter(part.setType)}',
+                style: TextStyle(fontSize: 14, color: Colors.white70),
               ),
-              const Text(
-                'times',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, color: Colors.white),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'since',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, color: Colors.white),
-              ),
+              SizedBox(height: 16),
               Text(
-                DateFormat('MM/dd/yyyy').format(routine.createdDate),
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 14, color: Colors.white),
+                'Exercises:',
+                style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
               ),
+              SizedBox(height: 8),
+              FutureBuilder<List<Exercise>>(
+                future: _getExercises(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return CircularProgressIndicator(color: Color(0xFFE91E63));
+                  } else if (snapshot.hasError) {
+                    return Text('Error: ${snapshot.error}', style: TextStyle(color: Colors.red));
+                  } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    return Text('No exercises found', style: TextStyle(color: Colors.white70));
+                  } else {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: snapshot.data!.map((exercise) =>
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Text(
+                              '• ${exercise.name}',
+                              style: TextStyle(fontSize: 14, color: Colors.white70),
+                            ),
+                          )
+                      ).toList(),
+                    );
+                  }
+                },
+              ),
+              if (part.additionalNotes.isNotEmpty) ...[
+                SizedBox(height: 16),
+                Text(
+                  'Additional Notes:',
+                  style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  part.additionalNotes,
+                  style: TextStyle(fontSize: 14, color: Colors.white70),
+                ),
+              ],
             ],
           ),
         ),
       ),
     );
+  }
+
+  Future<List<Exercise>> _getExercises() async {
+    final db = await DBProvider.db.database;
+    final exercises = await Future.wait(
+        part.exerciseIds.map((id) async {
+          var result = await db.query('Exercises', where: 'Id = ?', whereArgs: [id]);
+          return Exercise.fromMap(result.first);
+        })
+    );
+    return exercises;
   }
 }

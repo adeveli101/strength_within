@@ -1,207 +1,59 @@
 import 'package:flutter/material.dart';
-import 'package:percent_indicator/circular_percent_indicator.dart';
-import 'package:workout/ui/components/chart.dart';
-import 'package:workout/ui/routine_edit_page.dart';
-import 'package:workout/ui/routine_step_page.dart';
+import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../models/RoutineHistory.dart';
+import '../../models/routine.dart';
+import '../../resource/db_provider.dart';
 import '../controllers/routines_bloc.dart';
-import '../models/routine.dart';
-import '../utils/routine_helpers.dart';
-import 'calender_page.dart';
-
+import '../../resource/shared_prefs_provider.dart';
+import 'package:fl_chart/fl_chart.dart';
 
 class StatisticsPage extends StatefulWidget {
-  const StatisticsPage({Key? key}) : super(key: key);
-
   @override
-  State<StatisticsPage> createState() => _StatisticsPageState();
+  _StatisticsPageState createState() => _StatisticsPageState();
 }
 
 class _StatisticsPageState extends State<StatisticsPage> {
-  final ScrollController _scrollController = ScrollController();
-  final int _pageSize = 20;
-  int _currentPage = 0;
-  bool _isLoading = false;
-  List<Routine> _loadedRoutines = [];
+  late Future<int> _dailyRankFuture;
+  late Future<List<RoutineHistory>> _routineHistoryFuture;
 
   @override
   void initState() {
     super.initState();
-    _loadMoreRoutines();
-    _scrollController.addListener(_onScroll);
-  }
-
-  @override
-  void dispose() {
-    _scrollController.removeListener(_onScroll);
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  void _onScroll() {
-    if (_scrollController.position.pixels == _scrollController.position.maxScrollExtent) {
-      _loadMoreRoutines();
-    }
-  }
-
-  Future<void> _loadMoreRoutines() async {
-    if (_isLoading) return;
-    setState(() {
-      _isLoading = true;
-    });
-    final newRoutines = await RoutinesBloc().fetchRoutinesPaginated(_currentPage, _pageSize);
-    setState(() {
-      _loadedRoutines.addAll(newRoutines);
-      _currentPage++;
-      _isLoading = false;
-    });
+    _dailyRankFuture = sharedPrefsProvider.getDailyRank();
+    _routineHistoryFuture = DBProvider.db.getAllRoutineHistory();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Color(0xFF121212),
       body: SafeArea(
-        child: CustomScrollView(
-          controller: _scrollController,
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.all(8.0),
-              sliver: SliverGrid(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  childAspectRatio: 1.0,
-                  crossAxisSpacing: 8.0,
-                  mainAxisSpacing: 8.0,
-                ),
-                delegate: SliverChildListDelegate([
-                  _buildUsageCard(),
-                  _buildTotalCompletionCard(_getTotalWorkoutCount(_loadedRoutines)),
-                  _buildDonutChartCard(_loadedRoutines, _getTotalWorkoutCount(_loadedRoutines)),
-                  _buildGoalCard(_getRatio(_loadedRoutines)),
-                ]),
-              ),
-            ),
-            SliverFillRemaining(
-              child: Container(
-                child: CalendarPage(routines: _loadedRoutines),
-              ),
-            ),
-            if (_isLoading)
-              const SliverToBoxAdapter(
-                child: Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Center(child: CircularProgressIndicator()),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-
-
-
-  Widget buildMainLayout() {
-    var totalCount = _getTotalWorkoutCount(_loadedRoutines);
-    var ratio = _getRatio(_loadedRoutines);
-    return SliverGrid.count(
-      crossAxisCount: 2,
-      children: [
-        _buildUsageCard(),
-        _buildTotalCompletionCard(totalCount),
-        _buildDonutChartCard(_loadedRoutines, totalCount),
-        _buildGoalCard(ratio),
-      ],
-    );
-  }
-
-  Widget _buildUsageCard() {
-    return Padding(
-      padding: const EdgeInsets.all(4),
-      child: Card(
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(8))),
-        elevation: 12,
-        color: Theme.of(context).primaryColor,
-        child: Padding(
-          padding: const EdgeInsets.all(4),
-          child: FutureBuilder<String?>(
-            future: _getFirstRunDate(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              if (snapshot.hasError) {
-                return Center(child: Text('Hata: ${snapshot.error}'));
-              }
-
-              String firstRunDateText = snapshot.data ?? "N/A";
-              String daysSinceFirstRun = "N/A";
-
-              if (snapshot.hasData && snapshot.data != null) {
-                try {
-                  DateTime firstRunDate = DateTime.parse(snapshot.data!);
-                  daysSinceFirstRun = DateTime.now().difference(firstRunDate).inDays.toString();
-                } catch (e) {
-                  print('Tarih ayrıştırma hatası: $e');
-                }
-              }
-
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: RichText(
-                      textAlign: TextAlign.center,
-                      text: TextSpan(
-                        style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color),
-                        children: [
-                          TextSpan(
-                            text: 'Bu uygulamayı kullanmaya başladığınız tarih:\n$firstRunDateText',
-                            style: const TextStyle(fontFamily: 'Staa'),
-                          ),
-                          const TextSpan(text: '\n\nKullanım süreniz:\n', style: TextStyle(fontFamily: 'Staa')),
-                          TextSpan(
-                            text: daysSinceFirstRun,
-                            style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, fontFamily: 'Staa'),
-                          ),
-                          const TextSpan(text: ' gün', style: TextStyle(fontFamily: 'Staa')),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-
-
-
-
-
-  Widget _buildTotalCompletionCard(int totalCount) {
-    return Padding(
-      padding: const EdgeInsets.all(4),
-      child: Card(
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(8))),
-        elevation: 12,
-        color: Theme.of(context).primaryColor,
-        child: Padding(
-          padding: const EdgeInsets.only(top: 12, bottom: 4, left: 8, right: 8),
-          child: RichText(
-            textAlign: TextAlign.center,
-            text: TextSpan(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const TextSpan(text: 'Total Completion\n', style: TextStyle(fontFamily: 'Staa')),
-                TextSpan(
-                  text: totalCount.toString(),
-                  style: TextStyle(fontSize: _getFontSize(totalCount.toString()), fontFamily: 'Staa'),
+                Text(
+                  'Hi,',
+                  style: TextStyle(color: Colors.white, fontSize: 24),
                 ),
+                Text(
+                  'Statistics',
+                  style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 24),
+                _buildStatCards(),
+                SizedBox(height: 24),
+                _buildWorkoutChart(),
+                SizedBox(height: 24),
+                Text(
+                  'Routine Statistics',
+                  style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 16),
+                _buildRoutineStatsList(),
               ],
             ),
           ),
@@ -210,195 +62,294 @@ class _StatisticsPageState extends State<StatisticsPage> {
     );
   }
 
-  Widget _buildDonutChartCard(List<Routine> routines, int totalCount) {
-    return Padding(
-      padding: const EdgeInsets.all(4),
-      child: Card(
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(8))),
-        elevation: 12,
-        color: Theme.of(context).primaryColor,
-        child: Center(
-          child: totalCount == 0
-              ? const Text(
-            'No data available',
-            style: TextStyle(color: Colors.white, fontSize: 16),
-          )
-              : SizedBox(
-            width: MediaQuery.of(context).size.width * 0.4,
-            height: MediaQuery.of(context).size.width * 0.4,
-            child: DonutAutoLabelChart(
-              routines,
-              animate: true,
-            ),
-          ),
+  Widget _buildStatCards() {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(child: _buildDailyRankCard()),
+            SizedBox(width: 16),
+            Expanded(child: _buildTotalWorkoutsCard()),
+          ],
         ),
-      ),
+        SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(child: _buildLastWorkoutCard()),
+            SizedBox(width: 16),
+            Expanded(child: _buildMostUsedRoutineCard()),
+          ],
+        ),
+        SizedBox(height: 16),
+        _buildWeeklyProgressCard(),
+      ],
     );
   }
 
-  Widget _buildGoalCard(double ratio) {
-    return Padding(
-      padding: const EdgeInsets.all(4),
-      child: Card(
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(8))),
-        elevation: 12,
-        color: Theme.of(context).primaryColor,
-        child: InkWell(
-          onTap: _handleCardTap,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              double radius = constraints.maxWidth * 0.4;
-              return Center(
-                child: CircularPercentIndicator(
-                  radius: radius,
-                  lineWidth: radius * 0.1,
-                  animation: true,
-                  animateFromLastPercent: true,
-                  percent: ratio,
-                  center: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      "${(ratio * 100).toStringAsFixed(0)}%",
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20.0, color: Colors.white),
-                    ),
-                  ),
-                  header: const FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      "Goal of this week",
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17.0, color: Colors.white),
-                    ),
-                  ),
-                  circularStrokeCap: CircularStrokeCap.round,
-                  progressColor: Colors.grey,
-                ),
-              );
-            },
-          ),
-        ),
-      ),
+  Widget _buildDailyRankCard() {
+    return FutureBuilder<int>(
+      future: _dailyRankFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _buildStatCard('Daily Rank', 'Loading...', Icons.emoji_events);
+        }
+        if (snapshot.hasError) {
+          return _buildStatCard('Daily Rank', 'Error', Icons.error);
+        }
+        final rank = snapshot.data ?? 0;
+        return _buildStatCard('Daily Rank', rank.toString(), Icons.emoji_events);
+      },
     );
   }
 
-
-  void _handleCardTap() {
-    if (_loadedRoutines.isEmpty) {
-      _navigateToRoutineEditPage();
-    } else {
-      _navigateToRoutineStepPage(_loadedRoutines as Routine);
-    }
-  }
-
-  void _navigateToRoutineEditPage() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => RoutineEditPage(
-          addOrEdit: AddOrEdit.add,
-          mainTargetedBodyPart: MainTargetedBodyPart.fullBody,
-        ),
-      ),
+  Widget _buildTotalWorkoutsCard() {
+    return FutureBuilder<List<RoutineHistory>>(
+      future: _routineHistoryFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _buildStatCard('Total Workouts', 'Loading...', Icons.fitness_center);
+        }
+        if (snapshot.hasError) {
+          return _buildStatCard('Total Workouts', 'Error', Icons.error);
+        }
+        final totalWorkouts = snapshot.data?.length ?? 0;
+        return _buildStatCard('Total Workouts', totalWorkouts.toString(), Icons.fitness_center);
+      },
     );
   }
 
-  void _navigateToRoutineStepPage(Routine selectedRoutine) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => RoutineStepPage(
-          routine: selectedRoutine,
-          celebrateCallback: () {
-            // Celebration logic can be implemented here
-            // For example, you might want to show a congratulatory message or update some stats
+  Widget _buildLastWorkoutCard() {
+    return FutureBuilder<List<RoutineHistory>>(
+      future: _routineHistoryFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _buildStatCard('Last Workout', 'Loading...', Icons.access_time);
+        }
+        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+          return _buildStatCard('Last Workout', 'No data', Icons.access_time);
+        }
+        final lastWorkout = snapshot.data!.last.completedDate;
+        final formattedDate = DateFormat('dd/MM/yyyy').format(lastWorkout);
+        return _buildStatCard('Last Workout', formattedDate, Icons.access_time);
+      },
+    );
+  }
+
+  Widget _buildMostUsedRoutineCard() {
+    return FutureBuilder<List<RoutineHistory>>(
+      future: _routineHistoryFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _buildStatCard('Most Used Routine', 'Loading...', Icons.star);
+        }
+        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+          return _buildStatCard('Most Used Routine', 'No data', Icons.star);
+        }
+        final routineCounts = <int, int>{};
+        for (var history in snapshot.data!) {
+          routineCounts[history.routineId] = (routineCounts[history.routineId] ?? 0) + 1;
+        }
+        final mostUsedRoutineId = routineCounts.entries.reduce((a, b) => a.value > b.value ? a : b).key;
+        return StreamBuilder<List<Routine>>(
+          stream: routinesBloc.allRoutines,
+          builder: (context, routineSnapshot) {
+            if (!routineSnapshot.hasData) return _buildStatCard('Most Used Routine', 'Loading...', Icons.star);
+            final mostUsedRoutine = routineSnapshot.data!.firstWhere((r) => r.id == mostUsedRoutineId);
+            return _buildStatCard('Most Used Routine', mostUsedRoutine.name, Icons.star);
           },
-          onBackPressed: () async {
-            // This function will be called when the back button is pressed
-            bool shouldPop = await showDialog(
-              context: context,
-              builder: (context) => AlertDialog(
-                backgroundColor: Colors.white,
-                elevation: 4,
-                title: Container(
-                  width: double.infinity,
-                  color: Theme.of(context).primaryColor,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Column(
-                    children: const [
-                      Text(
-                        'Too soon to quit. 😑',
-                        style: TextStyle(color: Colors.white, fontSize: 16),
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        'Your progress will not be saved.',
-                        style: TextStyle(color: Colors.white, fontSize: 16),
-                      ),
-                    ],
+        );
+      },
+    );
+  }
+
+  Widget _buildWeeklyProgressCard() {
+    return FutureBuilder<SharedPreferences>(
+      future: sharedPrefsProvider.sharedPreferences,
+      builder: (context, prefsSnapshot) {
+        if (prefsSnapshot.connectionState == ConnectionState.waiting) {
+          return _buildStatCard('Weekly Progress', 'Loading...', Icons.trending_up);
+        }
+        if (prefsSnapshot.hasError || !prefsSnapshot.hasData) {
+          return _buildStatCard('Weekly Progress', 'Error', Icons.error);
+        }
+
+        final weeklyGoal = prefsSnapshot.data!.getInt(weeklyAmountKey) ?? 3;
+
+        return FutureBuilder<List<RoutineHistory>>(
+          future: _routineHistoryFuture,
+          builder: (context, historySnapshot) {
+            if (historySnapshot.connectionState == ConnectionState.waiting) {
+              return _buildStatCard('Weekly Progress', 'Loading...', Icons.trending_up);
+            }
+            if (historySnapshot.hasError || !historySnapshot.hasData) {
+              return _buildStatCard('Weekly Progress', 'Error', Icons.error);
+            }
+
+            final now = DateTime.now();
+            final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+            final workoutsThisWeek = historySnapshot.data!
+                .where((history) => history.completedDate.isAfter(startOfWeek))
+                .length;
+
+            final progress = (workoutsThisWeek / weeklyGoal * 100).toStringAsFixed(1);
+            return _buildStatCard('Weekly Progress', '$progress%', Icons.trending_up);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildWorkoutChart() {
+    return FutureBuilder<List<RoutineHistory>>(
+      future: _routineHistoryFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return CircularProgressIndicator();
+        }
+        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+          return Text('No data available', style: TextStyle(color: Colors.white));
+        }
+
+        final workouts = snapshot.data!;
+        final workoutCounts = <DateTime, int>{};
+        final now = DateTime.now();
+        final sevenDaysAgo = now.subtract(Duration(days: 6));
+
+        for (var i = 0; i < 7; i++) {
+          final date = sevenDaysAgo.add(Duration(days: i));
+          workoutCounts[date] = 0;
+        }
+
+        for (var workout in workouts) {
+          final date = DateTime(workout.completedDate.year, workout.completedDate.month, workout.completedDate.day);
+          if (date.isAfter(sevenDaysAgo.subtract(Duration(days: 1))) && date.isBefore(now.add(Duration(days: 1)))) {
+            workoutCounts[date] = (workoutCounts[date] ?? 0) + 1;
+          }
+        }
+
+        return Container(
+          height: 200,
+          child: LineChart(
+            LineChartData(
+              gridData: FlGridData(show: false),
+              titlesData: FlTitlesData(
+                leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                bottomTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    getTitlesWidget: (value, meta) {
+                      final date = sevenDaysAgo.add(Duration(days: value.toInt()));
+                      return Text(
+                        DateFormat('E').format(date),
+                        style: TextStyle(color: Colors.white, fontSize: 12),
+                      );
+                    },
                   ),
-                ),
-                contentPadding: EdgeInsets.zero,
-                content: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(false),
-                      child: Text(
-                        'Stay',
-                        style: TextStyle(color: Theme.of(context).primaryColor, fontSize: 16),
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(true),
-                      child: Text(
-                        'Quit',
-                        style: TextStyle(color: Theme.of(context).primaryColor, fontSize: 16),
-                      ),
-                    ),
-                  ],
                 ),
               ),
-            ) ?? false;
+              borderData: FlBorderData(show: false),
+              minX: 0,
+              maxX: 6,
+              minY: 0,
+              maxY: workoutCounts.values.reduce((a, b) => a > b ? a : b).toDouble(),
+              lineBarsData: [
+                LineChartBarData(
+                  spots: workoutCounts.entries.map((e) {
+                    final daysFromStart = e.key.difference(sevenDaysAgo).inDays;
+                    return FlSpot(daysFromStart.toDouble(), e.value.toDouble());
+                  }).toList(),
+                  isCurved: true,
+                  color: Color(0xFFE91E63),
+                  barWidth: 3,
+                  isStrokeCapRound: true,
+                  dotData: FlDotData(show: false),
+                  belowBarData: BarAreaData(show: true, color: Color(0x29E91E63)),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
-            if (shouldPop) {
-              Navigator.of(context).pop();
-            }
-          },
+  Widget _buildRoutineStatsList() {
+    return StreamBuilder<List<Routine>>(
+      stream: routinesBloc.allRoutines,
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return CircularProgressIndicator();
+        final routines = snapshot.data!;
+        return SizedBox(
+          height: 150, // Kartların yüksekliğini ayarlayın
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            reverse: true, // Sağdan sola doğru sıralama
+            itemCount: routines.length,
+            itemBuilder: (context, index) => _buildRoutineStatCard(routines[index]),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildRoutineStatCard(Routine routine) {
+    return Container(
+      width: 250, // Kartın genişliğini ayarlayın
+      margin: EdgeInsets.only(left: 10),
+      child: Card(
+        color: Color(0xFF2C2C2C),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(10.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                routine.name,
+                style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              SizedBox(height: 10),
+              FutureBuilder<List<RoutineHistory>>(
+                future: DBProvider.db.getRoutineHistory(routine.id),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) return Text('Loading...', style: TextStyle(color: Colors.white70));
+                  final completions = snapshot.data!.length;
+                  return Text('Completions: $completions', style: TextStyle(color: Colors.white70));
+                },
+              ),
+              SizedBox(height: 5),
+
+            ],
+          ),
         ),
       ),
     );
   }
+
+  Widget _buildStatCard(String title, String value, IconData icon) {
+    return Card(
+      color: Color(0xFF2C2C2C),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: Color(0xFFE91E63), size: 24),
+            SizedBox(height: 8),
+            Text(title, style: TextStyle(color: Colors.white70, fontSize: 14)),
+            SizedBox(height: 4),
+            Text(value, style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatWeekdays(List<int> weekdays) {
+    final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return weekdays.map((day) => days[day - 1]).join(', ');
+  }
 }
-
-
-Future<String?> _getFirstRunDate() async {
-  return  _getFirstRunDate();
-}
-
-
-  int _getTotalWorkoutCount(List<Routine> routines) {
-    return routines.fold(0, (total, routine) => total + routine.completionCount);
-  }
-
-  double _getRatio(List<Routine> routines) {
-    int totalShare = 0;
-    int share = 0;
-    DateTime mondayDate = DateTime.now().subtract(Duration(days: DateTime.now().weekday - 1));
-    mondayDate = DateTime(mondayDate.year, mondayDate.month, mondayDate.day);
-    for (var routine in routines) {
-      totalShare += routine.weekdays.length;
-      for (var weekday in routine.weekdays) {
-        if (routine.routineHistory.any((ts) {
-          var date = DateTime.fromMillisecondsSinceEpoch(ts).toLocal();
-          return date.weekday == weekday && date.isAfter(mondayDate);
-        })) {
-          share++;
-        }
-      }
-    }
-    return totalShare == 0 ? 0 : share / totalShare;
-  }
-
-  double _getFontSize(String displayText) {
-    return displayText.length <= 2 ? 120 : 72;
-  }
-

@@ -1,127 +1,98 @@
 import 'dart:convert';
-import 'part.dart';
 
 enum MainTargetedBodyPart { abs, arm, back, chest, leg, shoulder, fullBody }
 
 class Routine {
-  late final int id;
-  late final MainTargetedBodyPart mainTargetedBodyPart;
-  final List<int> routineHistory;
-  final List<int> weekdays;
-  late final String routineName;
-  final List<Part> parts;
-  final DateTime lastCompletedDate;
-  final DateTime createdDate;
-  late final int completionCount;
+  int id;
+  String name;
+  MainTargetedBodyPart mainTargetedBodyPart;
+  List<int> partIds;
+  DateTime createdDate;
+  DateTime? lastCompletedDate;
+  int completionCount;
+  bool isRecommended;
+  bool isFavorite; // Yeni eklenen özellik
+  int difficulty; // Yeni eklenen özellik (1-3 arası bir değer olabilir)
+  int estimatedTime; // Yeni eklenen özellik (dakika cinsinden)
 
   Routine({
     required this.id,
+    required this.name,
     required this.mainTargetedBodyPart,
-    required this.routineName,
-    required List<Part> parts,
+    required this.partIds,
     required this.createdDate,
-    DateTime? lastCompletedDate,
-    int? completionCount,
-    List<int>? routineHistory,
-    List<int>? weekdays,
-  }) :
-        parts = parts.isNotEmpty ? parts : [],
-        lastCompletedDate = lastCompletedDate ?? DateTime.now(),
-        completionCount = completionCount ?? 0,
-        routineHistory = routineHistory ?? [],
-        weekdays = weekdays ?? [];
-
-  static Map<bool, String> checkIfAnyNull(Routine routine) {
-    for (var part in routine.parts) {
-      var map = Part.validatePart(part);
-      if (!map.keys.first) return map;
-    }
-    if (routine.routineName.isEmpty) {
-      return {false: 'Please give your routine a name.'};
-    }
-    return {true: ''};
-  }
+    this.lastCompletedDate,
+    this.completionCount = 0,
+    this.isRecommended = false,
+    this.isFavorite = false, // Varsayılan değer
+    this.difficulty = 1, // Varsayılan değer
+    this.estimatedTime = 30, // Varsayılan değer
+  });
 
   factory Routine.fromMap(Map<String, dynamic> map) {
     return Routine(
-      id: map["Id"] as int,
-      routineName: map['RoutineName'] as String,
-      mainTargetedBodyPart: MainTargetedBodyPart.values[map['MainPart'] as int],
-      parts: map['Parts'] != null
-          ? (jsonDecode(map['Parts']) as List).map((partMap) => Part.fromMap(partMap as Map<String, dynamic>)).toList()
-          : [],
-      lastCompletedDate: map['LastCompletedDate'] != null
-          ? DateTime.parse(map['LastCompletedDate'] as String)
-          : null,
-      createdDate: map['CreatedDate'] != null
-          ? DateTime.parse(map['CreatedDate'] as String)
-          : DateTime.now(),
-      completionCount: map['Count'] as int,
-      routineHistory: map["RoutineHistory"] != null
-          ? (jsonDecode(map['RoutineHistory']) as List<dynamic>).cast<int>()
-          : null,
-      weekdays: map["Weekdays"] != null
-          ? (jsonDecode(map["Weekdays"]) as List<dynamic>).cast<int>()
-          : null,
+      id: map['Id'] as int,
+      name: map['Name'] as String,
+      mainTargetedBodyPart: MainTargetedBodyPart.values.firstWhere(
+            (e) => e.toString() == 'MainTargetedBodyPart.${map['MainTargetedBodyPart']}',
+        orElse: () => MainTargetedBodyPart.fullBody,
+      ),
+      partIds: (map['PartIds'] as String?)?.split(',').map((e) => int.parse(e)).toList() ?? [],
+      createdDate: DateTime.parse(map['CreatedDate'] as String),
+      lastCompletedDate: map['LastCompletedDate'] != null ? DateTime.parse(map['LastCompletedDate'] as String) : null,
+      completionCount: map['CompletionCount'] as int? ?? 0,
+      isRecommended: (map['IsRecommended'] as int?) == 1,
+      difficulty: map['Difficulty'] as int? ?? 1,
+      estimatedTime: map['EstimatedTime'] as int? ?? 30,
+      isFavorite: (map['IsFavorite'] as int? ?? 0) == 1,
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
       'Id': id,
-      'RoutineName': routineName,
-      'RoutineHistory': jsonEncode(routineHistory),
-      'Weekdays': jsonEncode(weekdays),
+      'RoutineName': name,
       'MainPart': mainTargetedBodyPart.index,
-      'Parts': jsonEncode(parts.map((part) => part.toMap()).toList()),
-      'LastCompletedDate': lastCompletedDate.toIso8601String(),
+      'Parts': jsonEncode(partIds),
       'CreatedDate': createdDate.toIso8601String(),
+      'LastCompletedDate': lastCompletedDate?.toIso8601String(),
       'Count': completionCount,
+      'IsRecommended': isRecommended ? 1 : 0,
+      'IsFavorite': isFavorite ? 1 : 0, // Yeni eklenen
+      'Difficulty': difficulty, // Yeni eklenen
+      'EstimatedTime': estimatedTime, // Yeni eklenen
+
     };
   }
 
   Routine copyWith({
     int? id,
+    String? name,
     MainTargetedBodyPart? mainTargetedBodyPart,
-    List<int>? routineHistory,
-    List<int>? weekdays,
-    String? routineName,
-    List<Part>? parts,
-    DateTime? lastCompletedDate,
+    List<int>? partIds,
     DateTime? createdDate,
+    DateTime? lastCompletedDate,
     int? completionCount,
+    bool? isRecommended,
+    bool? isFavorite, // Yeni eklenen
+    int? difficulty, // Yeni eklenen
+    int? estimatedTime, // Yeni eklenen
   }) {
     return Routine(
       id: id ?? this.id,
+      name: name ?? this.name,
       mainTargetedBodyPart: mainTargetedBodyPart ?? this.mainTargetedBodyPart,
-      routineName: routineName ?? this.routineName,
-      parts: parts ?? this.parts.map((part) => Part.copyFromPart(part)).toList(),
+      partIds: partIds ?? List.from(this.partIds),
       createdDate: createdDate ?? this.createdDate,
       lastCompletedDate: lastCompletedDate ?? this.lastCompletedDate,
       completionCount: completionCount ?? this.completionCount,
-      routineHistory: routineHistory ?? List.from(this.routineHistory),
-      weekdays: weekdays ?? List.from(this.weekdays),
-    );
-  }
-
-  Routine copyWithoutHistory() {
-    return copyWith(routineHistory: [], weekdays: []);
-  }
-
-  static Routine copyFromRoutine(Routine original) {
-    return Routine(
-      id: original.id,
-      mainTargetedBodyPart: original.mainTargetedBodyPart,
-      routineName: original.routineName,
-      parts: original.parts.map((part) => Part.copyFromPart(part)).toList(),
-      createdDate: original.createdDate,
-      lastCompletedDate: original.lastCompletedDate,
-      completionCount: original.completionCount,
-      routineHistory: List.from(original.routineHistory),
-      weekdays: List.from(original.weekdays),
+      isRecommended: isRecommended ?? this.isRecommended,
+      isFavorite: isFavorite ?? this.isFavorite, // Yeni eklenen
+      difficulty: difficulty ?? this.difficulty, // Yeni eklenen
+      estimatedTime: estimatedTime ?? this.estimatedTime, // Yeni eklenen
     );
   }
 
   @override
-  String toString() => 'Routine(id: $id, name: $routineName)';
+  String toString() => 'Routine(id: $id, name: $name, difficulty: $difficulty, isFavorite: $isFavorite)';
 }

@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-
-
 import '../controllers/routines_bloc.dart';
 import '../models/routine.dart';
 import '../utils/routine_helpers.dart';
@@ -17,46 +15,51 @@ class _RecommendPageState extends State<RecommendPage> {
 
   @override
   void initState() {
+    super.initState();
     scrollController.addListener(() {
       if (this.mounted) {
         if (scrollController.offset <= 0) {
           setState(() {
             showShadow = false;
           });
-        } else if (showShadow == false) {
+        } else if (!showShadow) {
           setState(() {
             showShadow = true;
           });
         }
       }
     });
-
-    super.initState();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-        appBar: AppBar(
-          title: Text("Recomended"),
-          elevation: showShadow ? 8 : 0,
-        ),
-        body: Container(
-          height: MediaQuery.of(context).size.height,
-          child: StreamBuilder(
-            stream: routinesBloc.allRecRoutines,
-            builder: (_, AsyncSnapshot<List<Routine>> snapshot) {
-              if (snapshot.hasData) {
-                var routines = snapshot.data;
-                return ListView(
-                  controller: scrollController,
-                  children: buildChildren(routines!),
-                );
-              }
+      appBar: AppBar(
+        title: Text("Recommended"),
+        elevation: showShadow ? 8 : 0,
+      ),
+      body: Container(
+        height: MediaQuery.of(context).size.height,
+        child: StreamBuilder<List<Routine>>(
+          stream: routinesBloc.allRecRoutines,
+          builder: (_, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
               return Center(child: CircularProgressIndicator());
-            },
-          ),
-        ));
+            } else if (snapshot.hasError) {
+              return Center(child: Text('Error loading data'));
+            } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+              return Center(child: Text('No recommended routines available.'));
+            } else {
+              var routines = snapshot.data!;
+              return ListView(
+                controller: scrollController,
+                children: buildChildren(routines),
+              );
+            }
+          },
+        ),
+      ),
+    );
   }
 
   List<Widget> buildChildren(List<Routine> routines) {
@@ -66,17 +69,16 @@ class _RecommendPageState extends State<RecommendPage> {
     var textColor = Colors.black;
     var style = TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: textColor);
 
-    routines.forEach((routine) {
-      if (map.containsKey(routine.mainTargetedBodyPart) == false) map[routine.mainTargetedBodyPart] = [];
-      map[routine.mainTargetedBodyPart]?.add(routine);
-    });
+    for (var routine in routines) {
+      map.putIfAbsent(routine.mainTargetedBodyPart, () => []).add(routine);
+    }
 
-    map.keys.forEach((bodyPart) {
+    map.forEach((bodyPart, routinesList) {
       children.add(Padding(
         padding: EdgeInsets.only(left: 16),
         child: Text(mainTargetedBodyPartToStringConverter(bodyPart), style: style),
       ));
-      children.addAll(map[bodyPart]?.map((routine) => RoutineCard(routine: routine, isRecRoutine: true)) ?? []);
+      children.addAll(routinesList.map((routine) => RoutineCard(routine: routine, isRecRoutine: true)));
       children.add(Divider());
     });
 

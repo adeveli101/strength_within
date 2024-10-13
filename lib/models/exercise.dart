@@ -1,81 +1,63 @@
-import 'dart:convert';
 
 enum WorkoutType { cardio, weight }
 
 class Exercise {
-  String name;
-  double weight;
-  int sets;
-  String reps;
-  WorkoutType workoutType;
-  Map<String, dynamic> exHistory;
+  final int id;
+  final String name;
+  final double? defaultWeight;
+  late final int? defaultSets;
+  late final String? defaultReps;  // Change this to nullable
+  final WorkoutType workoutType;
 
   Exercise({
+    required this.id,
     required this.name,
-    required this.weight,
-    required this.sets,
-    required this.reps,
+    this.defaultWeight,
+    this.defaultSets,
+    this.defaultReps,
     this.workoutType = WorkoutType.weight,
-    Map<String, dynamic>? exHistory,
-  }) : exHistory = exHistory ?? {};
+  });
 
-  Exercise.fromMap(Map<String, dynamic> map)
-      : name = map["name"] ?? '',
-        weight = double.tryParse(map["weight"]?.toString() ?? '0') ?? 0,
-        sets = int.tryParse(map["sets"]?.toString() ?? '0') ?? 0,
-        reps = map["reps"] ?? '',
-        workoutType = intToWorkoutTypeConverter(map['workoutType'] ?? 1),
-        exHistory = jsonDecode(map["history"] ?? '{}');
+  factory Exercise.fromMap(Map<String, dynamic> map) {
+    return Exercise(
+      id: map['id'] as int,
+      name: map['name'] as String,
+      defaultWeight: (map['defaultWeight'] as num?)?.toDouble(),
+      defaultSets: map['defaultSets'] as int?,
+      defaultReps: map['defaultReps'] as String?,
+      workoutType: WorkoutType.values[map['workoutType'] as int? ?? 0],
+    );
+  }
 
-  Map<String, dynamic> toMap() => {
-    'name': name,
-    'weight': weight.toStringAsFixed(1),
-    'sets': sets,
-    'reps': reps,
-    'workoutType': workoutTypeToIntConverter(workoutType),
-    'history': jsonEncode(exHistory),
-  };
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'defaultWeight': defaultWeight,
+      'defaultSets': defaultSets,
+      'defaultReps': defaultReps,
+      'workoutType': workoutType.index,
+    };
+  }
 
-  Exercise.copyFromExercise(Exercise ex)
-      : name = ex.name,
-        weight = ex.weight,
-        sets = ex.sets,
-        reps = ex.reps,
-        workoutType = ex.workoutType,
-        exHistory = Map.from(ex.exHistory); // Shallow copy
-
-  Exercise.copyFromExerciseWithoutHistory(Exercise ex)
-      : name = ex.name,
-        weight = ex.weight,
-        sets = ex.sets,
-        reps = ex.reps,
-        workoutType = ex.workoutType,
-        exHistory = {}; // Empty history
+  Exercise copyWith({
+    int? id,
+    String? name,
+    double? defaultWeight,
+    int? defaultSets,
+    String? defaultReps,
+    WorkoutType? workoutType,
+  }) {
+    return Exercise(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      defaultWeight: defaultWeight ?? this.defaultWeight,
+      defaultSets: defaultSets ?? this.defaultSets,
+      defaultReps: defaultReps ?? this.defaultReps,
+      workoutType: workoutType ?? this.workoutType,
+    );
+  }
 
   @override
-  String toString() {
-    return "Instance of Exercise: name: $name";
-  }
-}
-
-int workoutTypeToIntConverter(WorkoutType wt) {
-  switch (wt) {
-    case WorkoutType.cardio:
-      return 0;
-    case WorkoutType.weight:
-      return 1;
-    default:
-      throw Exception('Invalid Workout Type');
-  }
-}
-
-WorkoutType intToWorkoutTypeConverter(int i) {
-  switch (i) {
-    case 0:
-      return WorkoutType.cardio;
-    case 1:
-      return WorkoutType.weight;
-    default:
-      throw Exception('Invalid integer for Workout Type');
-  }
+  String toString() => 'Exercise(id: $id, name: $name, defaultWeight: $defaultWeight, defaultSets: $defaultSets, defaultReps: $defaultReps)';
 }

@@ -1,19 +1,18 @@
-import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_database/firebase_database.dart';
 import 'package:workout/ui/recommend_page.dart';
 import 'package:workout/ui/home_page.dart';
-import 'package:workout/ui/statistics_page.dart';
 import 'package:workout/ui/setting_page.dart';
+import 'package:workout/ui/statistics_page.dart';
 import 'package:responsive_framework/responsive_framework.dart';
-
 import 'controllers/routines_bloc.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   Get.put(RoutinesBloc());
+  routinesBloc.initialize();
   runApp(const App());
 }
 
@@ -22,12 +21,47 @@ class App extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FluentApp(
+    return MaterialApp(
       title: 'Workout App',
-      theme: FluentThemeData(
-        accentColor: Colors.blue,
-        brightness: Brightness.light,
-        visualDensity: VisualDensity.adaptivePlatformDensity,
+      theme: ThemeData.dark().copyWith(
+        primaryColor: Color(0xFF1E1E1E), // Koyu arka plan rengi
+        scaffoldBackgroundColor: Color(0xFF121212), // Daha koyu arka plan rengi
+        cardColor: Color(0xFF2C2C2C), // Kart rengi
+        appBarTheme: AppBarTheme(
+          backgroundColor: Color(0xFF1E1E1E),
+          elevation: 0,
+          iconTheme: IconThemeData(color: Colors.white),
+        ),
+        bottomNavigationBarTheme: BottomNavigationBarThemeData(
+          backgroundColor: Color(0xFF1E1E1E),
+          selectedItemColor: Color(0xFFE91E63), // Pembe vurgu rengi
+          unselectedItemColor: Colors.grey[600],
+        ),
+        textTheme: TextTheme(
+          titleLarge: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          bodyLarge: TextStyle(color: Colors.white70),
+          bodyMedium: TextStyle(color: Colors.white60),
+        ),
+        buttonTheme: ButtonThemeData(
+          buttonColor: Color(0xFFE91E63), // Pembe buton rengi
+          textTheme: ButtonTextTheme.primary,
+        ),
+        // Ek özellikler için yorum satırları:
+        // colorScheme: ColorScheme.dark(
+        //   primary: Color(0xFFE91E63),
+        //   secondary: Color(0xFF03DAC6),
+        //   surface: Color(0xFF1E1E1E),
+        //   background: Color(0xFF121212),
+        //   error: Color(0xFFCF6679),
+        // ),
+        // inputDecorationTheme: InputDecorationTheme(
+        //   fillColor: Color(0xFF2C2C2C),
+        //   filled: true,
+        //   border: OutlineInputBorder(
+        //     borderRadius: BorderRadius.circular(8),
+        //     borderSide: BorderSide.none,
+        //   ),
+        // ),
       ),
       debugShowCheckedModeBanner: false,
       home: const MainPage(),
@@ -52,45 +86,59 @@ class MainPage extends StatefulWidget {
 
 class _MainPageState extends State<MainPage> {
   int _selectedIndex = 0;
+  final PageController _pageController = PageController();
 
-  final List<NavigationPaneItem> _items = [
-    PaneItem(
-      icon: const Icon(FluentIcons.favorite_star),
-      title: const Text('Recommend'),
-      body: RecommendPage(),
-    ),
-    PaneItem(
-      icon: const Icon(FluentIcons.health),
-      title: const Text('Home'),
-      body: HomePage(),
-    ),
-    PaneItem(
-      icon: const Icon(FluentIcons.line_chart),
-      title: const Text('Statistics'),
-      body: const StatisticsPage(),
-    ),
+  final List<Widget> _pages = [
+    RecommendPage(),
+    HomePage(),
+    StatisticsPage(),
   ];
+
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+    _pageController.jumpToPage(index);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return NavigationView(
-      appBar: NavigationAppBar(
-        title: const Text('Workout'),
-        actions: Row(
-          children: [
-            IconButton(
-              icon: const Icon(FluentIcons.settings),
-              onPressed: () => _showSettingsPopup(context),
-            ),
-          ],
-        ),
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Workout', style: Theme.of(context).textTheme.titleLarge),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.settings),
+            onPressed: () => _showSettingsPopup(context),
+          ),
+        ],
       ),
-      pane: NavigationPane(
-        selected: _selectedIndex,
-        onChanged: (index) => setState(() => _selectedIndex = index),
-        items: _items,
-        displayMode:
-        PaneDisplayMode.auto, // Automatically switches between modes
+      body: PageView(
+        controller: _pageController,
+        onPageChanged: (index) {
+          setState(() {
+            _selectedIndex = index;
+          });
+        },
+        children: _pages,
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.favorite),
+            label: 'Recommend',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.bar_chart),
+            label: 'Statistics',
+          ),
+        ],
       ),
     );
   }
@@ -99,16 +147,16 @@ class _MainPageState extends State<MainPage> {
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return ContentDialog(
-          title: const Text('Settings'),
+        return AlertDialog(
+          title: Text('Settings', style: Theme.of(context).textTheme.titleLarge),
           content: SizedBox(
             width: MediaQuery.of(context).size.width * 0.8,
             height: MediaQuery.of(context).size.height * 0.6,
             child: SettingsPage(),
           ),
           actions: [
-            Button(
-              child: const Text('Close'),
+            TextButton(
+              child: Text('Close', style: TextStyle(color: Color(0xFFE91E63))),
               onPressed: () => Navigator.pop(context),
             ),
           ],
@@ -116,22 +164,4 @@ class _MainPageState extends State<MainPage> {
       },
     );
   }
-}
-
-// Function to save anonymous data
-void saveAnonymousData() {
-  final DatabaseReference database = FirebaseDatabase.instance.ref();
-
-  String uniqueId = DateTime.now().millisecondsSinceEpoch.toString();
-
-  Map<String, dynamic> data = {
-    "timestamp": DateTime.now().toIso8601String(),
-    "someData": "exampleValue" // Replace with actual data fields
-  };
-
-  database.child("anonymousUsers").child(uniqueId).set(data).then((_) {
-    print("Data saved successfully.");
-  }).catchError((error) {
-    print("Failed to save data: $error");
-  });
 }

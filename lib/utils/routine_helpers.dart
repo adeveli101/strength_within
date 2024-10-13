@@ -44,30 +44,15 @@ Color setTypeToColorConverter(SetType setType) {
   }
 }
 
-String targetedBodyPartToStringConverter(TargetedBodyPart targetedBodyPart) {
-  switch (targetedBodyPart) {
-    case TargetedBodyPart.abs:
-      return 'Abs';
-    case TargetedBodyPart.arm:
-      return 'Arms';
-    case TargetedBodyPart.back:
-      return 'Back';
-    case TargetedBodyPart.chest:
-      return 'Chest';
-    case TargetedBodyPart.leg:
-      return 'Legs';
-    case TargetedBodyPart.shoulder:
-      return 'Shoulders';
-    case TargetedBodyPart.tricep:
-      return 'Triceps';
-    case TargetedBodyPart.bicep:
-      return 'Biceps';
-    case TargetedBodyPart.fullBody:
-      return 'Full Body';
-    default:
-      throw Exception;
+String targetedBodyPartToStringConverter(dynamic bodyPart) {
+  if (bodyPart is MainTargetedBodyPart) {
+    return bodyPart.toString().split('.').last;
+  } else if (bodyPart is TargetedBodyPart) {
+    return bodyPart.toString().split('.').last;
   }
+  return 'Unknown';
 }
+
 
 String setTypeToStringConverter(SetType setType) {
   switch (setType) {
@@ -81,8 +66,8 @@ String setTypeToStringConverter(SetType setType) {
       return 'Tri-sets';
     case SetType.giant:
       return 'Giant sets';
-    default:
-      throw Exception;
+    case SetType.normal:
+      return 'Normal';
   }
 }
 

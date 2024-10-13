@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:workout/ui/recommend_page.dart';
 import 'package:workout/ui/routine_edit_page.dart';
-
 import '../controllers/routines_bloc.dart';
-import '../models/part.dart';
 import '../models/routine.dart';
 import '../utils/routine_helpers.dart';
 import 'components/routine_card.dart';
@@ -16,156 +13,227 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final scrollController = ScrollController();
   bool showShadow = false;
+  List<MainTargetedBodyPart> selectedParts = [];
+  List<Routine> filteredRoutines = [];
 
   @override
   void initState() {
-    scrollController.addListener(() {
-      if (this.mounted) {
-        if (scrollController.offset <= 0) {
-          setState(() {
-            showShadow = false;
-          });
-        } else if (showShadow == false) {
-          setState(() {
-            showShadow = true;
-          });
-        }
+    super.initState();
+    routinesBloc.fetchAllRoutines();
+    scrollController.addListener(_scrollListener);
+    _listenToRoutines();
+  }
+
+  @override
+  void dispose() {
+    scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollListener() {
+    if (mounted) {
+      setState(() {
+        showShadow = scrollController.offset > 0;
+      });
+    }
+  }
+
+  void _listenToRoutines() {
+    routinesBloc.allRoutines.listen((routines) {
+      if (mounted) {
+        setState(() {
+          filteredRoutines = _filterRoutines(routines);
+        });
       }
     });
+  }
 
-    super.initState();
+  List<Routine> _filterRoutines(List<Routine> routines) {
+    if (selectedParts.isEmpty) {
+      return routines;
+    }
+    return routines.where((routine) =>
+        selectedParts.contains(routine.mainTargetedBodyPart)).toList();
+  }
+
+  String _getGreeting() {
+    var hour = DateTime.now().hour;
+    if (hour < 12) {
+      return 'Good Morning';
+    } else if (hour < 17) {
+      return 'Good Afternoon';
+    } else {
+      return 'Good Evening';
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        height: MediaQuery.of(context).size.height,
-        child: StreamBuilder<List<Routine>>(
-          stream: routinesBloc.allRoutines,
-          builder: (_, AsyncSnapshot<List<Routine>> snapshot) {
-            if (snapshot.hasData) {
-              var routines = snapshot.data ?? [];
-
-              return ListView(
-                controller: scrollController,
-                children: buildChildren(routines),
-              );
-            }
-            return Center(child: CircularProgressIndicator());
-          },
+      backgroundColor: Color(0xFF121212),
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Hi,',
+                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.normal)),
+            Text(_getGreeting(),
+                style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.settings, color: Colors.white),
+            onPressed: () {
+              // Implement settings functionality
+            },
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Categories',
+                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+              SizedBox(height: 12),
+              buildFilterOptions(),
+              SizedBox(height: 24),
+              Text('Önerilen Rutinler',
+                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+              SizedBox(height: 12),
+              Container(
+                height: 180,
+                child: buildRoutineList(isRecommended: true),
+              ),
+              SizedBox(height: 24),
+              buildRoutineList(isRecommended: false),
+            ],
+          ),
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: Theme.of(context).primaryColor,
+        backgroundColor: Color(0xFFE91E63),
         child: Icon(Icons.add, color: Colors.white),
-        onPressed: () {
-          showModalBottomSheet(
-            context: context,
-            builder: (context) {
-              return Container(
-                child: Column(
-                  children: [
-                    ...MainTargetedBodyPart.values.map((val) {
-                      var title = mainTargetedBodyPartToStringConverter(val);
-                      return ListTile(
-                        title: Text(title),
-                        onTap: () {
-                          Navigator.pop(context);
-                          var tempRoutine = Routine(
-                            id: DateTime.now().millisecondsSinceEpoch, // Benzersiz bir ID için zaman damgası kullanılıyor
-                            mainTargetedBodyPart: val,
-                            routineName: 'New Routine', // Varsayılan isim
-                            parts: <Part>[],
-                            createdDate: DateTime.now(), // Varsayılan tarih
-                          );
-                          routinesBloc.setCurrentRoutine(tempRoutine);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => RoutineEditPage(
-                                addOrEdit: AddOrEdit.add,
-                                mainTargetedBodyPart: val,
-                              ),
-                            ),
-                          );
-                        },
-                      );
-                    }).toList(),
-                    ListTile(
-                      title: Text(
-                        'Template',
-                        style: TextStyle(color: Colors.red),
-                      ),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => RecommendPage(),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          );
-        },
+        onPressed: _showAddRoutineBottomSheet,
       ),
-
+      bottomNavigationBar: BottomNavigationBar(
+        backgroundColor: Color(0xFF1E1E1E),
+        selectedItemColor: Color(0xFFE91E63),
+        unselectedItemColor: Colors.grey,
+        currentIndex: 0,
+        items: [
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'Statistics'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+        ],
+      ),
     );
   }
 
-  List<Widget> buildChildren(List<Routine> routines) {
-    var map = <MainTargetedBodyPart, List<Routine>>{};
-    var todayRoutines = <Routine>[];
-    int weekday = DateTime.now().weekday;
-    var children = <Widget>[];
+  Widget buildFilterOptions() {
+    return Container(
+      height: 40,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: MainTargetedBodyPart.values.length,
+        itemBuilder: (context, index) {
+          final part = MainTargetedBodyPart.values[index];
+          final isSelected = selectedParts.contains(part);
+          final label = part.toString().split('.').last.capitalize();
 
-    var textColor = Colors.black;
-    var todayTextStyle = TextStyle(fontWeight: FontWeight.bold, fontSize: 36, color: Colors.orangeAccent);
-    var routineTitleTextStyle = TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: textColor);
-
-    for (var routine in routines) {
-      if (routine != null && routine.weekdays.contains(weekday)) {
-        todayRoutines.add(routine);
-      }
-    }
-
-    children.add(Padding(
-        padding: EdgeInsets.only(left: 16),
-        child: Row(
-          children: <Widget>[
-            Text(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][weekday - 1], style: todayTextStyle),
-          ],
-        )));
-    children.addAll(todayRoutines.map((routine) => RoutineCard(isActive: true, routine: routine)));
-
-    routines.forEach((routine) {
-      if (routine != null) {
-        if (!map.containsKey(routine.mainTargetedBodyPart)) {
-          map[routine.mainTargetedBodyPart] = [];
-        }
-        map[routine.mainTargetedBodyPart]!.add(routine);
-      }
-    });
-
-    map.keys.forEach((bodyPart) {
-      children.add(Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Container(
-            width: MediaQuery.of(context).size.width,
-            child: Flex(
-              direction: Axis.horizontal,
-              children: [
-                Text(mainTargetedBodyPartToStringConverter(bodyPart), style: routineTitleTextStyle),
-                SizedBox(width: 16),
-                Expanded(child: Divider()),
-              ],
+          return Padding(
+            padding: EdgeInsets.only(right: 8),
+            child: FilterChip(
+              label: Text(label),
+              selected: isSelected,
+              onSelected: (selected) => _togglePartSelection(part),
+              backgroundColor: Color(0xFF2C2C2C),
+              selectedColor: Color(0xFFE91E63),
+              labelStyle: TextStyle(color: Colors.white, fontSize: 12),
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             ),
-          )));
-      children.addAll(map[bodyPart]!.map((routine) => RoutineCard(routine: routine)));
-    });
+          );
+        },
+      ),
+    );
+  }
 
-    return children;
+  Widget buildRoutineList({bool isRecommended = false}) {
+    return StreamBuilder<List<Routine>>(
+      stream: routinesBloc.allRoutines,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(child: CircularProgressIndicator(color: Color(0xFFE91E63)));
+        }
+
+        if (snapshot.hasError) {
+          return Center(child: Text('Error loading routines', style: TextStyle(color: Colors.white)));
+        }
+
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return Center(child: Text('No routines available', style: TextStyle(color: Colors.white)));
+        }
+
+        List<Routine> routines = isRecommended
+            ? snapshot.data!.where((r) => r.isRecommended).take(3).toList()
+            : _filterRoutines(snapshot.data!);
+
+        return ListView.builder(
+          scrollDirection: isRecommended ? Axis.horizontal : Axis.vertical,
+          itemCount: routines.length,
+          itemBuilder: (context, index) {
+            return Padding(
+              padding: EdgeInsets.only(right: isRecommended ? 16 : 0, bottom: isRecommended ? 0 : 16),
+              child: RoutineCard(
+                routine: routines[index],
+                isRecRoutine: isRecommended,
+                isSmall: isRecommended,
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _togglePartSelection(MainTargetedBodyPart part) {
+    setState(() {
+      if (selectedParts.contains(part)) {
+        selectedParts.remove(part);
+      } else {
+        selectedParts.clear();
+        selectedParts.add(part);
+      }
+    });
+  }
+
+  void _showAddRoutineBottomSheet() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => RoutineEditPage(
+          addOrEdit: AddOrEdit.add,
+          mainTargetedBodyPart: MainTargetedBodyPart.fullBody,
+          routine: Routine(
+            id: DateTime.now().millisecondsSinceEpoch,
+            name: 'New Routine',
+            mainTargetedBodyPart: MainTargetedBodyPart.fullBody,
+            partIds: [],
+            createdDate: DateTime.now(),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+extension StringExtension on String {
+  String capitalize() {
+    return "${this[0].toUpperCase()}${this.substring(1)}";
   }
 }

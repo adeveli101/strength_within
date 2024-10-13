@@ -8,20 +8,15 @@ const String firstRunDateKey = "firstRunDate";
 const String dailyRankKey = "dailyRank";
 const String databaseStatusKey = "databaseStatus";
 const String weeklyAmountKey = "weeklyAmount";
+const String lastSyncDateKey = "lastSyncDate";
 
 class SharedPrefsProvider {
   SharedPreferences? _sharedPreferences;
-
-
-
-  SharedPrefsProvider() {
-  }
 
   Future<SharedPreferences> get sharedPreferences async {
     _sharedPreferences ??= await SharedPreferences.getInstance();
     return _sharedPreferences!;
   }
-
 
   Future<void> prepareData() async {
     final PackageInfo packageInfo = await PackageInfo.fromPlatform();
@@ -43,16 +38,15 @@ class SharedPrefsProvider {
     }
 
     firebaseProvider.firstRunDate = DateTime.tryParse(prefs.getString(firstRunDateKey) ?? '');
+    firebaseProvider.weeklyAmount = prefs.getInt(weeklyAmountKey)?.toDouble() ?? 3.0;
   }
 
   Future<int> getDailyRank() async {
     final SharedPreferences prefs = await sharedPreferences;
     final String? dailyRankInfo = prefs.getString(dailyRankKey);
     if (dailyRankInfo == null) return 0;
-
     final DateTime lastWorkoutDate = DateTime.parse(dailyRankInfo.split('/').first).toLocal();
     if (DateTime.now().difference(lastWorkoutDate).inDays >= 1) return 0;
-
     return int.parse(dailyRankInfo.split('/')[1]);
   }
 
@@ -77,8 +71,16 @@ class SharedPrefsProvider {
     return prefs.getBool(databaseStatusKey);
   }
 
-
+  Future<void> setLastSyncDate(DateTime date) async {
+    final SharedPreferences prefs = await sharedPreferences;
+    await prefs.setString(lastSyncDateKey, date.toIso8601String());
   }
 
+  Future<DateTime?> getLastSyncDate() async {
+    final SharedPreferences prefs = await sharedPreferences;
+    final String? dateStr = prefs.getString(lastSyncDateKey);
+    return dateStr != null ? DateTime.parse(dateStr) : null;
+  }
+}
 
 final sharedPrefsProvider = SharedPrefsProvider();
