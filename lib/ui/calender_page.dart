@@ -1,8 +1,6 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:workout/models/routine.dart';
-import 'package:workout/ui/components/routine_card.dart';
 import 'package:workout/resource/db_provider.dart';
 
 class CalendarPage extends StatelessWidget {
@@ -153,23 +151,7 @@ class _CalendarPageContentState extends State<CalendarPageContent> {
     _loadWorkoutDates();
   }
 
-  void _showBottomSheet(Routine routine) {
-    showCupertinoModalPopup(
-      context: context,
-      builder: (BuildContext context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Container(
-              color: Colors.transparent,
-              width: MediaQuery.of(context).size.width,
-              child: RoutineCard(routine: routine),
-            ),
-          ),
-        );
-      },
-    );
-  }
+
 
   Future<Map<String, Routine>> _getWorkoutDates(List<Routine> routines) async {
     final Map<String, Routine> dates = {};

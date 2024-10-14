@@ -5,13 +5,16 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:uuid/uuid.dart';
 import 'package:workout/models/routine.dart';
 import 'package:workout/models/part.dart';
 import 'package:workout/models/exercise.dart';
-import '../models/RoutineHistory.dart';
 import '../models/RoutinePart.dart';
 import '../models/RoutineWeekday.dart';
+
+
+// bu kod sql veri tabanı içinde bulunan verileri değiştirmez.
+
+
 
 class DBProvider {
   DBProvider._();
@@ -21,10 +24,6 @@ class DBProvider {
 
   Future<Database> get database async {
     return _database ??= await initDB();
-  }
-
-  String generateId() {
-    return const Uuid().v4();
   }
 
   void _log(String message) {
@@ -69,30 +68,33 @@ class DBProvider {
     }
   }
 
-  Future<int> deleteAllRoutines() async {
+  Future<int> newRoutine(Routine routine) async {
+    final db = await database;
+    return await db.insert('Routines', routine.toMap());
+  }
+
+  Future<int> updateRoutine(Routine routine) async {
+    final db = await database;
+    return await db.update("Routines", routine.toMap(), where: "Id = ?", whereArgs: [routine.id]);
+  }
+
+  Future<int> deleteRoutine(int routineId) async {
+    final db = await database;
+    return await db.delete("Routines", where: "Id = ?", whereArgs: [routineId]);
+  }
+
+  Future<List<Routine>> getAllRoutines() async {
     final db = await database;
     try {
-      return await db.delete("Routines");
+      var res = await db.query('Routines');
+      return res.map((r) => Routine.fromMap(r)).toList();
     } catch (e) {
-      _log('Error: $e');
-      return -1;
+      _log('Error in getAllRoutines: $e');
+      return [];
     }
   }
 
-  Future<void> addAllRoutines(List<Routine> routines) async {
-    final db = await database;
-    try {
-      await db.transaction((txn) async {
-        for (var routine in routines) {
-          await txn.insert('Routines', routine.toMap(),
-              conflictAlgorithm: ConflictAlgorithm.replace);
-        }
-      });
-    } catch (e) {
-      _log('Error: $e');
-    }
-  }
-
+  // Part operations
   Future<Part?> getPart(int partId) async {
     final db = await database;
     try {
@@ -114,45 +116,6 @@ class DBProvider {
     }
   }
 
-  Future<int> newRoutine(Routine routine) async {
-    final db = await database;
-    return await db.insert('Routines', routine.toMap());
-  }
-
-  Future<int> updateRoutine(Routine routine) async {
-    final db = await database;
-    return await db.update("Routines", routine.toMap(), where: "Id = ?", whereArgs: [routine.id]);
-  }
-
-  Future<int> deleteRoutine(int routineId) async {
-    final db = await database;
-    return await db.delete("Routines", where: "Id = ?", whereArgs: [routineId]);
-  }
-
-  Future<List<Routine>> getAllRoutines() async {
-    final db = await database;
-    try {
-      var res = await db.query('Routines');
-      print('Fetched ${res.length} routines from database');
-      return res.map((r) {
-        try {
-          return Routine.fromMap(r);
-        } catch (e) {
-          print('Error converting routine: $e');
-          print('Problematic routine data: $r');
-          return null;
-        }
-      }).where((r) => r != null).cast<Routine>().toList();
-    } catch (e) {
-      print('Error in getAllRoutines: $e');
-      print('Stack trace: ${StackTrace.current}');
-      return [];
-    }
-  }
-
-
-
-  // Part operations
   Future<int> newPart(Part part) async {
     final db = await database;
     return await db.insert('Parts', part.toMap());
@@ -184,6 +147,30 @@ class DBProvider {
     return await db.delete("Exercises", where: "Id = ?", whereArgs: [exerciseId]);
   }
 
+  Future<List<Part>> getAllParts() async {
+    final db = await database;
+    try {
+      var res = await db.query('Parts');
+      List<Part> parts = res.map((p) => Part.fromMap(p)).toList();
+
+      // Her bölüm için egzersiz ID'lerini al
+      for (var part in parts) {
+        var exerciseRes = await db.query(
+            'PartExercises',
+            where: 'PartId = ?',
+            whereArgs: [part.id]
+        );
+        part.exerciseIds = exerciseRes.map((e) => e['ExerciseId'] as int).toList();
+      }
+
+      return parts;
+    } catch (e) {
+      _log('Error in getAllParts: $e');
+      return [];
+    }
+  }
+
+
   Future<Map<String, Exercise>> getExercisesForPart(Part part) async {
     final db = await database;
     var exerciseIds = part.exerciseIds;
@@ -199,7 +186,6 @@ class DBProvider {
     );
   }
 
-
   // RoutinePart operations
   Future<void> addRoutinePart(RoutinePart routinePart) async {
     final db = await database;
@@ -210,33 +196,6 @@ class DBProvider {
     final db = await database;
     await db.delete('RoutineParts', where: 'RoutineId = ? AND PartId = ?', whereArgs: [routineId, partId]);
   }
-
-  // RoutineHistory operations
-  Future<int> addRoutineHistory(RoutineHistory history) async {
-    final db = await database;
-    return await db.insert('RoutineHistory', history.toMap());
-  }
-
-  Future<List<RoutineHistory>> getRoutineHistory(int routineId) async {
-    final db = await database;
-    var res = await db.query('RoutineHistory', where: 'RoutineId = ?', whereArgs: [routineId]);
-    return res.map((r) => RoutineHistory.fromMap(r)).toList();
-  }
-
-  Future<List<RoutineHistory>> getAllRoutineHistory() async {
-    final db = await database;
-    try {
-      var res = await db.query('RoutineHistory');
-      return res.map((r) => RoutineHistory.fromMap(r)).toList();
-    } catch (e) {
-      _log('Error in getAllRoutineHistory: $e');
-      return []; // Boş liste döndür, hata durumunda
-    }
-  }
-
-
-
-
 
   // RoutineWeekday operations
   Future<void> updateRoutineWeekdays(int routineId, List<int> weekdays) async {
@@ -257,36 +216,6 @@ class DBProvider {
     return List.generate(maps.length, (i) {
       return RoutineWeekday.fromMap(maps[i]);
     });
-  }
-
-  Future<void> toggleRoutineFavorite(int routineId) async {
-    final db = await database;
-    var routine = await db.query('Routines', where: 'Id = ?', whereArgs: [routineId]);
-    if (routine.isNotEmpty) {
-      var currentFavorite = routine.first['IsFavorite'] as int;
-      await db.update('Routines', {'IsFavorite': 1 - currentFavorite}, where: 'Id = ?', whereArgs: [routineId]);
-    }
-  }
-
-  Future<void> updateRoutineDifficulty(int routineId, int difficulty) async {
-    final db = await database;
-    await db.update('Routines', {'Difficulty': difficulty}, where: 'Id = ?', whereArgs: [routineId]);
-  }
-
-  Future<void> updateRoutineEstimatedTime(int routineId, int estimatedTime) async {
-    final db = await database;
-    await db.update('Routines', {'EstimatedTime': estimatedTime}, where: 'Id = ?', whereArgs: [routineId]);
-  }
-
-  Future<List<RoutineHistory>> getRoutineHistoryForExercise(int exerciseId) async {
-    final db = await database;
-    var res = await db.rawQuery('''
-      SELECT rh.* FROM RoutineHistory rh
-      JOIN RoutineParts rp ON rh.RoutineId = rp.RoutineId
-      JOIN PartExercises pe ON rp.PartId = pe.PartId
-      WHERE pe.ExerciseId = ?
-    ''', [exerciseId]);
-    return res.map((r) => RoutineHistory.fromMap(r)).toList();
   }
 }
 

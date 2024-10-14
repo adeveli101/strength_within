@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/routine.dart';
 import '../models/part.dart';
 import '../resource/db_provider.dart';
+import '../resource/routines_bloc.dart';
 import 'components/part_card.dart';
 
 class RoutineStepPage extends StatefulWidget {
@@ -27,13 +28,18 @@ class _RoutineStepPageState extends State<RoutineStepPage> {
   }
 
   Future<void> _loadParts() async {
-    final parts = await Future.wait(
-      _routine.partIds.map((id) => DBProvider.db.getPart(id)),
-    );
-    setState(() {
-      _parts = parts.whereType<Part>().toList();
-      _expandedState = Map.fromIterable(_parts, key: (part) => part.id, value: (_) => false);
-    });
+    try {
+      final parts = await Future.wait(
+        _routine.partIds.map((id) => DBProvider.db.getPart(id)),
+      );
+      setState(() {
+        _parts = parts.whereType<Part>().toList();
+        _expandedState = Map.fromIterable(_parts, key: (part) => part.id, value: (_) => false);
+      });
+    } catch (e) {
+      print('Error loading parts: $e');
+      // You might want to show an error message to the user here
+    }
   }
 
   @override
@@ -62,11 +68,10 @@ class _RoutineStepPageState extends State<RoutineStepPage> {
           _expandedState[_parts[_currentPartIndex].id] = expanded;
         });
       },
-      onDelete: () {}, // Boş bir fonksiyon
-      onPartTap: null, // RoutineStepPage'de part'a tıklama işlevi yok
+      onDelete: () {}, // Empty function
+      onPartTap: null, // No part tap functionality in RoutineStepPage
     );
   }
-
 
   Widget _buildNavigationButtons() {
     return Padding(
@@ -104,24 +109,27 @@ class _RoutineStepPageState extends State<RoutineStepPage> {
   }
 
   void _finishRoutine() async {
-    _routine.completionCount++;
-    _routine.lastCompletedDate = DateTime.now();
-    await DBProvider.db.updateRoutine(_routine);
+    try {
+      await routinesBloc.updateRoutineProgress(_routine.id, 100);
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Routine Completed'),
-        content: Text('Great job! You have completed the routine.\n\nTotal completions: ${_routine.completionCount}'),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).popUntil((route) => route.isFirst);
-            },
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Routine Completed'),
+          content: const Text('Great job! You have completed the routine.'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).popUntil((route) => route.isFirst);
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      print('Error updating routine progress: $e');
+      // You might want to show an error message to the user here
+    }
   }
 }

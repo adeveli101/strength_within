@@ -1,18 +1,19 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 import '../../models/exercise.dart';
-import '../../models/RoutineHistory.dart';
-import '../../resource/db_provider.dart';
+import '../../resource/firebase_provider.dart';
 
 class StackedAreaLineChart extends StatelessWidget {
   final bool animate;
   final Exercise exercise;
+  final String userId;
 
-  const StackedAreaLineChart(this.exercise, {Key? key, required this.animate}) : super(key: key);
+  const StackedAreaLineChart(this.exercise, {Key? key, required this.animate, required this.userId}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<RoutineHistory>?>(
+    return FutureBuilder<List<Map<String, dynamic>>>(
       future: _getExerciseHistory(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -23,7 +24,7 @@ class StackedAreaLineChart extends StatelessWidget {
           return Center(child: Text('No data available', style: TextStyle(color: Colors.white70)));
         } else {
           return SfCartesianChart(
-            primaryXAxis: NumericAxis(
+            primaryXAxis: DateTimeAxis(
               majorGridLines: MajorGridLines(width: 0),
               axisLine: AxisLine(width: 0),
               labelStyle: TextStyle(color: Colors.white70),
@@ -34,7 +35,16 @@ class StackedAreaLineChart extends StatelessWidget {
               labelStyle: TextStyle(color: Colors.white70),
             ),
             plotAreaBorderWidth: 0,
-            series: _createData(snapshot.data!),
+            series: <CartesianSeries<LinearWeightCompleted, DateTime>>[
+              LineSeries<LinearWeightCompleted, DateTime>(
+                dataSource: _getWeightCompletedList(snapshot.data!),
+                xValueMapper: (LinearWeightCompleted weightCompleted, _) => weightCompleted.date,
+                yValueMapper: (LinearWeightCompleted weightCompleted, _) => weightCompleted.weight,
+                color: Color(0xFFE91E63),
+                width: 2,
+                markerSettings: MarkerSettings(isVisible: true, color: Color(0xFFE91E63)),
+              )
+            ],
             enableSideBySideSeriesPlacement: false,
             backgroundColor: Color(0xFF121212),
             legend: Legend(isVisible: false),
@@ -45,43 +55,26 @@ class StackedAreaLineChart extends StatelessWidget {
     );
   }
 
-  Future<List<RoutineHistory>?> _getExerciseHistory() async {
-    return await DBProvider.db.getRoutineHistoryForExercise(exercise.id);
+  Future<List<Map<String, dynamic>>> _getExerciseHistory() async {
+    return await firebaseProvider.getUserRoutines();
   }
 
-  List<CartesianSeries<LinearWeightCompleted, int>> _createData(List<RoutineHistory> history) {
+  List<LinearWeightCompleted> _getWeightCompletedList(List<Map<String, dynamic>> history) {
     List<LinearWeightCompleted> weightCompletedList = [];
-    for (int i = 0; i < history.length; i++) {
-      Map? additionalData = _getWeightFromHistory(history[i]);
-      if (additionalData != null && additionalData.containsKey(exercise.id.toString())) {
-        var weightData = additionalData[exercise.id.toString()]['weight'];
-        if (weightData != null) {
-          double weight = (weightData is int) ? weightData.toDouble() : weightData;
-          weightCompletedList.add(LinearWeightCompleted(i, weight.toInt()));
-        }
+    for (var routine in history) {
+      if (routine['lastUsedDate'] != null && routine['progress'] != null) {
+        DateTime date = (routine['lastUsedDate'] as Timestamp).toDate();
+        int progress = routine['progress'] as int;
+        weightCompletedList.add(LinearWeightCompleted(date, progress));
       }
     }
-
-    return <CartesianSeries<LinearWeightCompleted, int>>[
-      LineSeries<LinearWeightCompleted, int>(
-        dataSource: weightCompletedList,
-        xValueMapper: (LinearWeightCompleted weightCompleted, _) => weightCompleted.month,
-        yValueMapper: (LinearWeightCompleted weightCompleted, _) => weightCompleted.weight,
-        color: Color(0xFFE91E63),
-        width: 2,
-        markerSettings: MarkerSettings(isVisible: true, color: Color(0xFFE91E63)),
-      )
-    ];
-  }
-
-
-  Map? _getWeightFromHistory(RoutineHistory history) {
-    return history.additionalData;
+    weightCompletedList.sort((a, b) => a.date.compareTo(b.date));
+    return weightCompletedList;
   }
 }
 
 class LinearWeightCompleted {
-  final int month;
+  final DateTime date;
   final int weight;
-  LinearWeightCompleted(this.month, this.weight);
+  LinearWeightCompleted(this.date, this.weight);
 }
