@@ -1,141 +1,123 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../controllers/routines_bloc.dart';
-import '../models/routine.dart';
-import '../resource/firebase_provider.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class SettingsPage extends StatefulWidget {
-  const SettingsPage({super.key});
+  const SettingsPage({Key? key}) : super(key: key);
 
   @override
-  State createState() => _SettingsPageState();
+  _SettingsPageState createState() => _SettingsPageState();
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  late int selectedRadioValue;
-  final FirebaseProvider firebaseProvider = FirebaseProvider();
+  String appVersion = '';
+  bool isDarkMode = false;
 
   @override
   void initState() {
     super.initState();
-    selectedRadioValue = (firebaseProvider.weeklyAmount).toInt();
+    _getAppVersion();
   }
 
-  Future<void> handleRestore() async {
-    try {
-      await firebaseProvider.checkInternetConnection();
-      List<Routine> routines = await firebaseProvider.restoreRoutines();
-      if (routines.isNotEmpty) {
-        routinesBloc.restoreRoutines();
-        showMsg("Restored Successfully");
-      } else {
-        showMsg("No Data Found");
-      }
-    } catch (e) {
-      showMsg("Error: $e");
-    }
+  Future<void> _getAppVersion() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    setState(() {
+      appVersion = packageInfo.version;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: SizedBox(
-        height: MediaQuery.of(context).size.height,
-        child: ListView(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.cloud_upload),
-              title: const Text("Back up my data"),
-              onTap: onBackUpTapped,
-            ),
-            const Padding(padding: EdgeInsets.only(left: 56), child: Divider(height: 0)),
-            ListTile(
-              leading: const Icon(Icons.cloud_download),
-              title: const Text("Restore my data"),
-              onTap: handleRestore,
-            ),
-            const Padding(padding: EdgeInsets.only(left: 56), child: Divider(height: 0)),
-            AboutListTile(
-              applicationIcon: SizedBox(
-                height: 50,
-                width: 50,
-                child: Image.asset('assets/app_icon.png', fit: BoxFit.contain),
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Settings'),
+      ),
+      body: ListView(
+        children: [
+          _buildSection(
+            title: 'Appearance',
+            children: [
+              SwitchListTile(
+                title: Text('Dark Mode'),
+                value: isDarkMode,
+                onChanged: (value) {
+                  setState(() {
+                    isDarkMode = value;
+                    // Burada tema değiştirme işlemi yapılabilir
+                  });
+                },
               ),
-              applicationVersion: 'v1.1.6',
-              aboutBoxChildren: [
-                ElevatedButton(
-                  onPressed: () {
-                    launchUrl(Uri.parse("https://livinglist.github.io"));
-                  },
-                  child: const Row(
-                    children: [
-                      Icon(FontAwesomeIcons.addressCard),
-                      SizedBox(width: 12),
-                      Text("Developed by adeveli"),
-                    ],
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    launchUrl(Uri.parse("https://github.com/adeveli101"));
-                  },
-                  child: const Row(
-                    children: [
-                      Icon(FontAwesomeIcons.github),
-                      SizedBox(width: 12),
-                      Text("Github"),
-                    ],
-                  ),
-                ),
-              ],
-              icon: const Icon(Icons.info),
-            ),
-          ],
-        ),
+            ],
+          ),
+          _buildSection(
+            title: 'About',
+            children: [
+              _buildListTile(
+                icon: Icons.info,
+                title: 'App Version',
+                trailing: Text(appVersion),
+              ),
+              _buildListTile(
+                icon: FontAwesomeIcons.github,
+                title: 'GitHub',
+                onTap: () => _launchURL('https://github.com/adeveli101'),
+              ),
+              _buildListTile(
+                icon: FontAwesomeIcons.addressCard,
+                title: 'Developer',
+                onTap: () => _launchURL('https://livinglist.github.io'),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  void showMsg(String msg) {
-    showDialog(
-      context: context,
-      builder: (_) {
-        return AlertDialog(
-          title: Text(msg),
-          actions: [
-            TextButton(
-              child: const Text('Okay'),
-              onPressed: () {
-                Navigator.pop(context);
-              },
+  Widget _buildSection({required String title, required List<Widget> children}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Text(
+            title,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).primaryColor,
             ),
-          ],
-        );
-      },
+          ),
+        ),
+        ...children,
+        Divider(),
+      ],
     );
   }
 
-  void onBackUpTapped() async {
-    try {
-      await firebaseProvider.checkInternetConnection();
-      await uploadRoutines();
-      if (!mounted) return;
-      showMsg('Data uploaded');
-    } catch (e) {
-      showMsg('Error uploading data');
-    }
+  Widget _buildListTile({
+    required IconData icon,
+    required String title,
+    VoidCallback? onTap,
+    Widget? trailing,
+  }) {
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(title),
+      trailing: trailing ?? (onTap != null ? Icon(Icons.chevron_right) : null),
+      onTap: onTap,
+    );
   }
 
-  Future<void> uploadRoutines() async {
-    try {
-      var routines = await routinesBloc.allRoutines.first;
-      if (kDebugMode) print("uploading");
-      await firebaseProvider.uploadRoutines(routines);
-    } catch (e) {
-      showMsg('Error uploading routines');
+  Future<void> _launchURL(String url) async {
+    final Uri uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not launch $url')),
+      );
     }
   }
 }

@@ -1,3 +1,4 @@
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -6,11 +7,16 @@ import 'package:workout/ui/home_page.dart';
 import 'package:workout/ui/setting_page.dart';
 import 'package:workout/ui/statistics_page.dart';
 import 'package:responsive_framework/responsive_framework.dart';
-import 'controllers/routines_bloc.dart';
+import 'resource/routines_bloc.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+  await FirebaseAppCheck.instance.activate(
+    androidProvider: AndroidProvider.playIntegrity,
+    appleProvider: AppleProvider.deviceCheck,
+    webProvider: ReCaptchaV3Provider('recaptcha-v3-site-key'),
+  );
   Get.put(RoutinesBloc());
   routinesBloc.initialize();
   runApp(const App());

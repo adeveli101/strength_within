@@ -1,5 +1,5 @@
 
-enum TargetedBodyPart { abs, arm, back, chest, leg, shoulder, fullBody, tricep, bicep }
+enum TargetedBodyPart { abs, arm, back, chest, leg, shoulder, fullBody, tricep, bicep, upperBody, lowerBody, core }
 enum SetType { regular, drop, super_, tri, giant, normal }
 
 class Part {

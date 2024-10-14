@@ -1,11 +1,14 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:workout/ui/part_history_page.dart';
 import 'package:workout/ui/routine_edit_page.dart';
 import 'package:workout/ui/routine_step_page.dart';
-import '../controllers/routines_bloc.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../resource/routines_bloc.dart';
 import '../models/routine.dart';
 import '../models/part.dart';
 import '../resource/db_provider.dart';
+import '../resource/firebase_provider.dart';
 import '../utils/routine_helpers.dart';
 import 'components/part_card.dart';
 
@@ -23,13 +26,15 @@ class _RoutineDetailPageState extends State<RoutineDetailPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   late Routine _routine;
   List<Part> _parts = [];
-  Map<String, bool> _expandedState = {};
+  Map<int, bool> _expandedState = {};
+  String? userId;
 
   @override
   void initState() {
     super.initState();
     _routine = widget.routine;
     _loadParts();
+    _getAnonymousUserId();
   }
 
   Future<void> _loadParts() async {
@@ -45,6 +50,17 @@ class _RoutineDetailPageState extends State<RoutineDetailPage> {
       print('Error loading parts: $e');
       // Hata durumunda kullanıcıya bilgi verebilirsiniz
     }
+  }
+
+  Future<void> _getAnonymousUserId() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      final userCredential = await FirebaseAuth.instance.signInAnonymously();
+      userId = userCredential.user!.uid;
+    } else {
+      userId = user.uid;
+    }
+    setState(() {});
   }
 
   @override
@@ -117,10 +133,9 @@ class _RoutineDetailPageState extends State<RoutineDetailPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                _buildInfoRow(Icons.calendar_today, 'Created', _routine.createdDate.toString().split(' ')[0]),
-                if (_routine.lastCompletedDate != null)
-                  _buildInfoRow(Icons.check_circle_outline, 'Last completed', _routine.lastCompletedDate.toString().split(' ')[0]),
-                _buildInfoRow(Icons.repeat, 'Completion count', _routine.completionCount.toString()),
+                _buildInfoRow(Icons.fitness_center, 'Difficulty', _routine.difficulty.toString()),
+                _buildInfoRow(Icons.timer, 'Estimated Time', '${_routine.estimatedTime} min'),
+                if (userId != null) _buildCompletionInfo(),
               ],
             ),
           ),
@@ -151,15 +166,43 @@ class _RoutineDetailPageState extends State<RoutineDetailPage> {
     );
   }
 
+  Widget _buildCompletionInfo() {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseProvider().firestore
+          .collection("users")
+          .doc(userId)
+          .collection("routines")
+          .doc(_routine.id.toString())
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasData && snapshot.data!.exists) {
+          final data = snapshot.data!.data() as Map<String, dynamic>;
+          final completionCount = data['CompletionCount'] ?? 0;
+          final lastCompletedDate = data['LastCompletedDate'] != null
+              ? (data['LastCompletedDate'] as Timestamp).toDate()
+              : null;
+          return Column(
+            children: [
+              _buildInfoRow(Icons.repeat, 'Completion count', completionCount.toString()),
+              if (lastCompletedDate != null)
+                _buildInfoRow(Icons.calendar_today, 'Last completed', lastCompletedDate.toString().split(' ')[0]),
+            ],
+          );
+        }
+        return SizedBox.shrink();
+      },
+    );
+  }
+
   Widget _buildPartCard(Part part) {
     return PartCard(
       onDelete: () {}, // RoutineDetailPage'de silme işlemi yok
       onPartTap: widget.isRecRoutine ? null : () => _navigateToPartHistoryPage(part),
       part: part,
-      isExpanded: _expandedState[part.id.toString()] ?? false,
+      isExpanded: _expandedState[part.id] ?? false,
       onExpandToggle: (bool expanded) {
         setState(() {
-          _expandedState[part.id.toString()] = expanded;
+          _expandedState[part.id] = expanded;
         });
       },
     );
@@ -170,9 +213,8 @@ class _RoutineDetailPageState extends State<RoutineDetailPage> {
       context,
       MaterialPageRoute(
         builder: (_) => RoutineEditPage(
-          addOrEdit: AddOrEdit.edit,
-          mainTargetedBodyPart: _routine.mainTargetedBodyPart,
           routine: _routine,
+          isEditing: true,
         ),
       ),
     ).then((_) => _loadParts());
@@ -195,7 +237,7 @@ class _RoutineDetailPageState extends State<RoutineDetailPage> {
   }
 
   void _onAddRecPressed() {
-    showDialog<bool>(
+    showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Add to your routines?'),
