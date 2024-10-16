@@ -1,24 +1,29 @@
-import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:workout/ui/recommend_page.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:get/get.dart';
+import 'package:workout/resource/firebase_provider.dart';
 import 'package:workout/ui/home_page.dart';
-import 'package:workout/ui/setting_page.dart';
+import 'package:workout/ui/recommend_page.dart';
 import 'package:workout/ui/statistics_page.dart';
-import 'package:responsive_framework/responsive_framework.dart';
+import 'firebase_options.dart';
 import 'resource/routines_bloc.dart';
+import 'resource/sql_provider.dart';
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   await FirebaseAppCheck.instance.activate(
     androidProvider: AndroidProvider.playIntegrity,
     appleProvider: AppleProvider.deviceCheck,
     webProvider: ReCaptchaV3Provider('recaptcha-v3-site-key'),
   );
-  Get.put(RoutinesBloc());
-  routinesBloc.initialize();
+  final routinesBloc =  Get.put(RoutinesBloc(FirebaseProvider(SQLProvider())));
+
+  await routinesBloc.initialize();
   runApp(const App());
 }
 
@@ -27,147 +32,69 @@ class App extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Workout App',
-      theme: ThemeData.dark().copyWith(
-        primaryColor: Color(0xFF1E1E1E), // Koyu arka plan rengi
-        scaffoldBackgroundColor: Color(0xFF121212), // Daha koyu arka plan rengi
-        cardColor: Color(0xFF2C2C2C), // Kart rengi
+    return GetMaterialApp(
+      title: 'Fitness App',
+      theme: ThemeData(
+        primarySwatch: Colors.pink,
+        scaffoldBackgroundColor: Color(0xFF121212),
         appBarTheme: AppBarTheme(
-          backgroundColor: Color(0xFF1E1E1E),
+          backgroundColor: Colors.transparent,
           elevation: 0,
-          iconTheme: IconThemeData(color: Colors.white),
         ),
-        bottomNavigationBarTheme: BottomNavigationBarThemeData(
-          backgroundColor: Color(0xFF1E1E1E),
-          selectedItemColor: Color(0xFFE91E63), // Pembe vurgu rengi
-          unselectedItemColor: Colors.grey[600],
-        ),
-        textTheme: TextTheme(
-          titleLarge: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-          bodyLarge: TextStyle(color: Colors.white70),
-          bodyMedium: TextStyle(color: Colors.white60),
-        ),
-        buttonTheme: ButtonThemeData(
-          buttonColor: Color(0xFFE91E63), // Pembe buton rengi
-          textTheme: ButtonTextTheme.primary,
-        ),
-        // Ek özellikler için yorum satırları:
-        // colorScheme: ColorScheme.dark(
-        //   primary: Color(0xFFE91E63),
-        //   secondary: Color(0xFF03DAC6),
-        //   surface: Color(0xFF1E1E1E),
-        //   background: Color(0xFF121212),
-        //   error: Color(0xFFCF6679),
-        // ),
-        // inputDecorationTheme: InputDecorationTheme(
-        //   fillColor: Color(0xFF2C2C2C),
-        //   filled: true,
-        //   border: OutlineInputBorder(
-        //     borderRadius: BorderRadius.circular(8),
-        //     borderSide: BorderSide.none,
-        //   ),
-        // ),
       ),
-      debugShowCheckedModeBanner: false,
-      home: const MainPage(),
-      builder: (context, child) => ResponsiveBreakpoints.builder(
-        child: child!,
-        breakpoints: [
-          const Breakpoint(start: 0, end: 450, name: MOBILE),
-          const Breakpoint(start: 451, end: 800, name: TABLET),
-          const Breakpoint(start: 801, end: double.infinity, name: DESKTOP),
-        ],
-      ),
+      home: MainScreen(),
     );
   }
 }
 
-class MainPage extends StatefulWidget {
-  const MainPage({Key? key}) : super(key: key);
-
+class MainScreen extends StatefulWidget {
   @override
-  _MainPageState createState() => _MainPageState();
+  _MainScreenState createState() => _MainScreenState();
 }
 
-class _MainPageState extends State<MainPage> {
-  int _selectedIndex = 0;
-  final PageController _pageController = PageController();
+class _MainScreenState extends State<MainScreen> {
+  int _currentIndex = 0;
+  final RoutinesBloc routinesBloc = Get.find<RoutinesBloc>();
 
-  final List<Widget> _pages = [
-    RecommendPage(),
-    HomePage(),
-    StatisticsPage(),
-  ];
+  final List<Widget> _pages = [];
 
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-    _pageController.jumpToPage(index);
+  @override
+  void initState() {
+    super.initState();
+    _pages.add(HomePage(routinesBloc: routinesBloc));
+    _pages.add(RecommendPage(routinesBloc: routinesBloc));
+    _pages.add(StatisticsPage(routinesBloc: routinesBloc));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Workout', style: Theme.of(context).textTheme.titleLarge),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.settings),
-            onPressed: () => _showSettingsPopup(context),
-          ),
-        ],
-      ),
-      body: PageView(
-        controller: _pageController,
-        onPageChanged: (index) {
+      body: _pages[_currentIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) {
           setState(() {
-            _selectedIndex = index;
+            _currentIndex = index;
           });
         },
-        children: _pages,
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.favorite),
-            label: 'Recommend',
-          ),
+        items: [
           BottomNavigationBarItem(
             icon: Icon(Icons.home),
             label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.recommend),
+            label: 'Recommend',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.bar_chart),
             label: 'Statistics',
           ),
         ],
+        backgroundColor: Color(0xFF2C2C2C),
+        selectedItemColor: Color(0xFFE91E63),
+        unselectedItemColor: Colors.white70,
       ),
-    );
-  }
-
-  void _showSettingsPopup(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('Settings', style: Theme.of(context).textTheme.titleLarge),
-          content: SizedBox(
-            width: MediaQuery.of(context).size.width * 0.8,
-            height: MediaQuery.of(context).size.height * 0.6,
-            child: SettingsPage(),
-          ),
-          actions: [
-            TextButton(
-              child: Text('Close', style: TextStyle(color: Color(0xFFE91E63))),
-              onPressed: () => Navigator.pop(context),
-            ),
-          ],
-        );
-      },
     );
   }
 }

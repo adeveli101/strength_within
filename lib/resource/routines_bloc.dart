@@ -1,8 +1,14 @@
 import 'dart:async';
 import 'package:rxdart/rxdart.dart';
-import 'package:workout/resource/shared_prefs_provider.dart';
-import '../models/routine.dart';
-import 'db_provider.dart';
+import '../models/parts.dart';
+import '../resource/shared_prefs_provider.dart';
+import '../models/routines.dart';
+import '../models/exercises.dart';
+import '../models/BodyPart.dart';
+import '../models/RoutinePart.dart';
+import '../models/WorkoutType.dart';
+import '../firebase_class/firebase_routines.dart';
+import 'sql_provider.dart';
 import 'firebase_provider.dart';
 
 class RoutinesBloc {
@@ -18,141 +24,76 @@ class RoutinesBloc {
   List<Routine> _allRecRoutines = [];
   Routine? _currentRoutine;
 
-  RoutinesBloc() {
+  final SQLProvider _sqlProvider = SQLProvider();
+  final FirebaseProvider _firebaseProvider;
+  final SharedPrefsProvider _sharedPrefsProvider = SharedPrefsProvider();
+
+  RoutinesBloc(this._firebaseProvider) {
     initialize();
   }
 
-  void initialize() {
-    fetchAllRoutines();
-    fetchAllRecRoutines();
-  }
-
-  Future<void> fetchAllRoutines() async {
-    try {
-      final localRoutines = await DBProvider.db.getAllRoutines();
-      List<Map<String, dynamic>> userRoutines = [];
-      try {
-        userRoutines = await firebaseProvider.getUserRoutines();
-      } catch (e) {
-        if (e is Exception && e.toString().contains("User not authenticated")) {
-          print('User not authenticated. Only local routines will be fetched.');
-        } else {
-          rethrow;
-        }
-      }
-      _allRoutines = _mergeRoutines(localRoutines, userRoutines);
-      _allRoutines.sort((a, b) => b.isRecommended ? 1 : -1);
-      _allRoutinesFetcher.add(_allRoutines);
-    } catch (exp) {
-      print('Error fetching routines: $exp');
-      if (!_allRoutinesFetcher.isClosed) {
-        _allRoutinesFetcher.addError('Failed to fetch routines: $exp');
-      }
-    }
-  }
-
-  List<Routine> _mergeRoutines(List<Routine> localRoutines, List<Map<String, dynamic>> userRoutines) {
-    final mergedRoutines = <Routine>[];
-    final userRoutineMap = {for (var r in userRoutines) r['id'].toString(): r};
-    for (var localRoutine in localRoutines) {
-      if (userRoutineMap.containsKey(localRoutine.id.toString())) {
-        mergedRoutines.add(_mergeRoutineData(localRoutine, userRoutineMap[localRoutine.id.toString()]!));
-      } else {
-        mergedRoutines.add(localRoutine);
-      }
-    }
-    return mergedRoutines;
+  Future<void> initialize() async {
+    await fetchAllRoutines();
+    await fetchAllRecRoutines();
+    startPeriodicSync();
   }
 
   void startPeriodicSync() {
-    Timer.periodic(Duration(hours: 12), (_) => syncRoutines());
+    Timer.periodic(Duration(minutes: 15), (_) => syncData());
   }
 
-  Future<void> updateRoutineProgress(int routineId, int progress) async {
-    try {
-      await firebaseProvider.updateRoutineProgress(routineId, progress);
-      final routine = _allRoutines.firstWhere((r) => r.id == routineId);
-      final updatedRoutine = routine.copyWith(userProgress: progress);
-      int index = _allRoutines.indexWhere((r) => r.id == routineId);
-      if (index != -1) {
-        _allRoutines[index] = updatedRoutine;
-        _allRoutinesFetcher.add(_allRoutines);
-      }
-      if (_currentRoutine?.id == routineId) {
-        _currentRoutine = updatedRoutine;
-        _currentRoutineFetcher.add(_currentRoutine);
-      }
+  Future<void> syncData() async {
+    String? userId = await _sharedPrefsProvider.getUserId();
+    if (userId != null) {
+      await _firebaseProvider.syncLocalAndFirebaseData(userId);
       await fetchAllRoutines();
-    } catch (e) {
-      print('Error updating routine progress: $e');
-      rethrow;
+      await fetchAllRecRoutines();
     }
   }
 
-  Future<List<Routine>> searchRoutines(String query) async {
-    final allRoutines = await DBProvider.db.getAllRoutines();
-    return allRoutines.where((routine) =>
-        routine.name.toLowerCase().contains(query.toLowerCase())).toList();
-  }
-
-  Future<void> syncRoutines() async {
-    final localRoutines = await DBProvider.db.getAllRoutines();
-    final userRoutines = await firebaseProvider.getUserRoutines();
-    final mergedRoutines = _mergeRoutines(localRoutines, userRoutines);
-    for (var routine in mergedRoutines) {
-      await firebaseProvider.saveUserRoutine(routine);
+  Future<void> fetchAllRoutines() async {
+    _allRoutines = await _sqlProvider.getAllRoutines();
+    String? userId = await _sharedPrefsProvider.getUserId();
+    if (userId != null) {
+      List<FirebaseRoutine> firebaseRoutines = await _firebaseProvider.getUserRoutines(userId);
+      for (var fbRoutine in firebaseRoutines) {
+        int index = _allRoutines.indexWhere((r) => r.id == fbRoutine.routine.id);
+        if (index == -1) {
+          _allRoutines.add(fbRoutine.routine);
+        }
+      }
     }
-    await sharedPrefsProvider.setLastSyncDate(DateTime.now());
-  }
-
-  Routine _mergeRoutineData(Routine localRoutine, Map<String, dynamic> userRoutineData) {
-    return localRoutine.copyWith(
-      isRecommended: userRoutineData['isRecommended'] as bool? ?? false,
-      userProgress: userRoutineData['progress'] as int? ?? 0,
-    );
+    _allRoutinesFetcher.add(_allRoutines);
   }
 
   Future<void> fetchAllRecRoutines() async {
-    try {
-      _allRecRoutines = await DBProvider.db.getAllRecRoutines();
-      _allRecRoutinesFetcher.add(_allRecRoutines);
-    } catch (error) {
-      _allRecRoutinesFetcher.addError(error);
+    _allRecRoutines = await _sqlProvider.getRecommendedRoutines();
+    _allRecRoutinesFetcher.add(_allRecRoutines);
+  }
+
+  Future<void> addUserRoutine(Routine routine) async {
+    String? userId = await _sharedPrefsProvider.getUserId();
+    if (userId != null) {
+      FirebaseRoutine fbRoutine = FirebaseRoutine.fromRoutine(routine);
+      await _firebaseProvider.addOrUpdateUserRoutine(userId, fbRoutine);
+      await fetchAllRoutines();
     }
   }
 
-  Future<bool> hasStartedAnyRoutine() async {
-    final routines = await DBProvider.db.getAllRoutines();
-    final userRoutines = await firebaseProvider.getUserRoutines();
-    final mergedRoutines = _mergeRoutines(routines, userRoutines);
-    return mergedRoutines.any((routine) => routine.isRecommended);
+  Future<void> updateUserRoutine(FirebaseRoutine routine) async {
+    String? userId = await _sharedPrefsProvider.getUserId();
+    if (userId != null) {
+      await _firebaseProvider.addOrUpdateUserRoutine(userId, routine);
+      await fetchAllRoutines();
+    }
   }
 
-  Future<List<Routine>> getRecommendedRoutines() async {
-    final allRoutines = await DBProvider.db.getAllRoutines();
-    final userRoutines = await firebaseProvider.getUserRoutines();
-    final mergedRoutines = _mergeRoutines(allRoutines, userRoutines);
-    return mergedRoutines.where((routine) => routine.isRecommended).take(5).toList();
-  }
-
-  Future<List<Routine>> fetchRoutinesPaginated(int page, int pageSize) async {
-    return await DBProvider.db.getRoutinesPaginated(page, pageSize);
-  }
-
-  Future<void> deleteRoutine({required int routineId}) async {
-    _allRoutines.removeWhere((routine) => routine.id == routineId);
-    _allRoutinesFetcher.add(_allRoutines);
-    await firebaseProvider.deleteUserRoutine(routineId);
-  }
-
-  Future<void> addRoutine(Routine routine) async {
-    await firebaseProvider.saveUserRoutine(routine);
-    await fetchAllRoutines();
-  }
-
-  Future<void> updateRoutine(Routine routine) async {
-    await firebaseProvider.saveUserRoutine(routine);
-    await fetchAllRoutines();
+  Future<void> deleteUserRoutine(String routineId) async {
+    String? userId = await _sharedPrefsProvider.getUserId();
+    if (userId != null) {
+      await _firebaseProvider.deleteUserRoutine(userId, routineId);
+      await fetchAllRoutines();
+    }
   }
 
   void setCurrentRoutine(Routine routine) {
@@ -160,10 +101,102 @@ class RoutinesBloc {
     _currentRoutineFetcher.add(_currentRoutine);
   }
 
-  Future<void> toggleRoutineFavorite(int routineId) async {
-    await firebaseProvider.toggleRoutineFavorite(routineId);
-    await fetchAllRoutines();
+  /// SQL Provider metodları
+
+  ///workout type
+  Future<List<WorkoutType>> getAllWorkoutTypes() => _sqlProvider.getAllWorkoutTypes();
+  Future<WorkoutType?> getWorkoutType(int id) => _sqlProvider.getWorkoutType(id);
+  ///routines
+  Future<Routine?> getRoutine(int id) => _sqlProvider.getRoutine(id);
+  Future<List<Routine>> getRoutinesByWorkoutType(int workoutTypeId) => _sqlProvider.getRoutinesByWorkoutType(workoutTypeId);
+  Future<List<Routine>> getRoutinesPaginated(int page, int pageSize) => _sqlProvider.getRoutinesPaginated(page, pageSize);
+  Future<List<RoutinePart>> getRoutinePartsByRoutineId(int routineId) => _sqlProvider.getRoutinePartsByRoutineId(routineId);
+  Future<List<RoutinePart>> getRoutinePartsForRoutine(int routineId) => _sqlProvider.getRoutinePartsForRoutine(routineId);
+  ///exercises
+  Future<List<Exercise>> getAllExercises() => _sqlProvider.getAllExercises();
+  Future<Exercise?> getExerciseById(int id) => _sqlProvider.getExerciseById(id);
+  Future<List<Exercise>> getExercisesByWorkoutType(int workoutTypeId) => _sqlProvider.getExercisesByWorkoutType(workoutTypeId);
+  Future<List<Exercise>> searchExercisesByName(String name) => _sqlProvider.searchExercisesByName(name);
+  Future<List<Exercise>> getExercisesPaginated(int page, int pageSize) => _sqlProvider.getExercisesPaginated(page, pageSize);
+  Future<List<Exercise>> getExercisesByBodyPart(MainTargetedBodyPart bodyPart) => _sqlProvider.getExercisesByBodyPart(bodyPart);
+  Future<List<Exercise>> getExercisesForRoutine(int routineId) => _sqlProvider.getExercisesForRoutine(routineId);
+  Future<List<BodyPart>> getAllBodyParts() => _sqlProvider.getAllBodyParts();
+  ///bodypart
+  Future<BodyPart?> getBodyPartById(int id) => _sqlProvider.getBodyPartById(id);
+  Future<List<BodyPart>> getBodyPartsByMainTargetedBodyPart(MainTargetedBodyPart mainTargetedBodyPart) => _sqlProvider.getBodyPartsByMainTargetedBodyPart(mainTargetedBodyPart);
+  Future<List<BodyPart>> searchBodyPartsByName(String query) => _sqlProvider.searchBodyPartsByName(query);
+  Future<List<String>> getAllBodyPartNames() => _sqlProvider.getAllBodyPartNames();
+  ///parts
+  Future<Part?> getPartById(int id) async {return await _sqlProvider.getPartById(id);}
+  Future<List<Part>> getPartsByMainTargetedBodyPart(MainTargetedBodyPart bodyPart) async {return await _sqlProvider.getPartsByMainTargetedBodyPart(bodyPart);}
+  Future<List<Part>> getPartsBySetType(SetType setType) async {return await _sqlProvider.getPartsBySetType(setType);}
+  Future<List<Part>> searchPartsByName(String query) async {return await _sqlProvider.searchPartsByName(query);}
+  Future<List<Part>> getPartsPaginated(int page, int pageSize) async {return await _sqlProvider.getPartsPaginated(page, pageSize);}
+
+
+  /// Firebase Provider metodları
+  Future<String?> signInAnonymously() => _firebaseProvider.signInAnonymously();
+  Future<void> addOrUpdateUserRoutine(String userId, FirebaseRoutine routine) => _firebaseProvider.addOrUpdateUserRoutine(userId, routine);
+  Future<void> updateUserRoutineProgress(String userId, String routineId, int progress) => _firebaseProvider.updateUserRoutineProgress(userId, routineId, progress);
+  Future<void> updateUserRoutineLastUsedDate(String userId, String routineId) => _firebaseProvider.updateUserRoutineLastUsedDate(userId, routineId);
+  Future<List<Exercise>> getUserCustomExercises(String userId) => _firebaseProvider.getUserCustomExercises(userId);
+  Future<void> addOrUpdateUserCustomExercise(String userId, Exercise exercise) => _firebaseProvider.addOrUpdateUserCustomExercise(userId, exercise);
+  Future<void> deleteUserCustomExercise(String userId, String exerciseId) => _firebaseProvider.deleteUserCustomExercise(userId, exerciseId);
+
+  /// SharedPrefsProvider metodları
+  Future<void> prepareData() => _sharedPrefsProvider.prepareData();
+  Future<double> getWeeklyAmount() => _sharedPrefsProvider.getWeeklyAmount();
+  Future<void> setWeeklyAmount(double amt) => _sharedPrefsProvider.setWeeklyAmount(amt);
+  Future<DateTime?> getFirstRunDate() => _sharedPrefsProvider.getFirstRunDate();
+  Future<void> setLastSyncDate(DateTime date) => _sharedPrefsProvider.setLastSyncDate(date);
+  Future<DateTime?> getLastSyncDate() => _sharedPrefsProvider.getLastSyncDate();
+  Future<void> setUserId(String userId) => _sharedPrefsProvider.setUserId(userId);
+  Future<String?> getUserId() => _sharedPrefsProvider.getUserId();
+  Future<void> clearUserId() => _sharedPrefsProvider.clearUserId();
+  Future<void> clearAllData() => _sharedPrefsProvider.clearAllData();
+
+
+
+
+
+
+  Future<List<FirebaseRoutine>> getRecommendedRoutines() async {
+    List<Routine> recommendedRoutines = await _sqlProvider.getRecommendedRoutines();
+    String? userId = await _sharedPrefsProvider.getUserId();
+    List<FirebaseRoutine> firebaseRecommendedRoutines = [];
+
+    if (userId != null) {
+      for (var routine in recommendedRoutines) {
+        FirebaseRoutine fbRoutine = FirebaseRoutine.fromRoutine(routine);
+        firebaseRecommendedRoutines.add(fbRoutine);
+      }
+    }
+
+    return firebaseRecommendedRoutines;
   }
+
+
+
+
+  Future<bool> hasStartedAnyRoutine() async {
+    String? userId = await _sharedPrefsProvider.getUserId();
+    if (userId == null) {
+      return false; // User is not logged in, so they haven't started any routine
+    }
+
+    List<FirebaseRoutine> userRoutines = await _firebaseProvider.getUserRoutines(userId);
+
+    // Check if any routine has a non-null lastUsedDate or a progress greater than 0
+    return userRoutines.any((routine) =>
+    routine.lastUsedDate != null || (routine.userProgress != null && routine.userProgress! > 0)
+    );
+  }
+
+
+
+
+
+
 
   void dispose() {
     _allRoutinesFetcher.close();
@@ -171,5 +204,3 @@ class RoutinesBloc {
     _currentRoutineFetcher.close();
   }
 }
-
-final routinesBloc = RoutinesBloc();

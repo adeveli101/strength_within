@@ -1,28 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:workout/models/routine.dart';
-import 'package:workout/resource/db_provider.dart';
+import 'package:workout/models/routines.dart';
+import 'package:workout/resource/routines_bloc.dart';
+import 'package:workout/firebase_class/firebase_routines.dart';
 
 class CalendarPage extends StatelessWidget {
-  final List<Routine> routines;
+  final RoutinesBloc routinesBloc;
 
-  const CalendarPage({Key? key, required this.routines}) : super(key: key);
+  const CalendarPage({Key? key, required this.routinesBloc}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Color(0xFF121212),
       body: SafeArea(
-        child: CalendarPageContent(routines: routines),
+        child: CalendarPageContent(routinesBloc: routinesBloc),
       ),
     );
   }
 }
 
 class CalendarPageContent extends StatefulWidget {
-  final List<Routine> routines;
+  final RoutinesBloc routinesBloc;
 
-  const CalendarPageContent({Key? key, required this.routines}) : super(key: key);
+  const CalendarPageContent({Key? key, required this.routinesBloc}) : super(key: key);
 
   @override
   State<CalendarPageContent> createState() => _CalendarPageContentState();
@@ -30,7 +31,7 @@ class CalendarPageContent extends StatefulWidget {
 
 class _CalendarPageContentState extends State<CalendarPageContent> {
   late DateTime _selectedDate;
-  late Map<String, Routine> _dateToRoutineMap;
+  Map<String, FirebaseRoutine> _dateToRoutineMap = {};
 
   @override
   void initState() {
@@ -40,8 +41,12 @@ class _CalendarPageContentState extends State<CalendarPageContent> {
   }
 
   Future<void> _loadWorkoutDates() async {
-    _dateToRoutineMap = await _getWorkoutDates(widget.routines);
-    setState(() {});
+    final userId = await widget.routinesBloc.getUserId();
+    if (userId != null) {
+      final allRoutines = await widget.routinesBloc.allRoutines.first;
+      _dateToRoutineMap = await _getWorkoutDates(allRoutines.cast<FirebaseRoutine>());
+      setState(() {});
+    }
   }
 
   @override
@@ -151,20 +156,14 @@ class _CalendarPageContentState extends State<CalendarPageContent> {
     _loadWorkoutDates();
   }
 
-
-
-  Future<Map<String, Routine>> _getWorkoutDates(List<Routine> routines) async {
-    final Map<String, Routine> dates = {};
+  Future<Map<String, FirebaseRoutine>> _getWorkoutDates(List<FirebaseRoutine> routines) async {
+    final Map<String, FirebaseRoutine> dates = {};
     final dateFormat = DateFormat('yyyy-MM-dd');
-    final db = await DBProvider.db.database;
 
     for (var routine in routines) {
-      final routineHistory = await db.query('RoutineHistory',
-          where: 'routineId = ?', whereArgs: [routine.id]);
-
-      for (var history in routineHistory) {
-        final date = DateTime.fromMillisecondsSinceEpoch(history['completedDate'] as int).toLocal();
-        dates[dateFormat.format(date)] = routine;
+      if (routine.lastUsedDate != null) {
+        final dateStr = dateFormat.format(routine.lastUsedDate!);
+        dates[dateStr] = routine;
       }
     }
 

@@ -4,6 +4,7 @@ import '../models/BodyPart.dart';
 import '../models/RoutinePart.dart';
 import '../models/WorkoutType.dart';
 import '../models/exercises.dart';
+import '../models/parts.dart';
 import '../models/routines.dart';
 
 //önceden tanımlanmış ve değişmez bir veri seti
@@ -67,10 +68,10 @@ class SQLProvider {
 
 
 
-  // Routine işlemleri// Routine işlemleri// Routine işlemleri
-  // Routine işlemleri// Routine işlemleri// Routine işlemleri
-  // Routine işlemleri// Routine işlemleri// Routine işlemleri
-  // Routine işlemleri// Routine işlemleri// Routine işlemleri
+  /// Routine işlemleri// Routine işlemleri// Routine işlemleri
+  /// Routine işlemleri// Routine işlemleri// Routine işlemleri
+  /// Routine işlemleri// Routine işlemleri// Routine işlemleri
+  /// Routine işlemleri// Routine işlemleri// Routine işlemleri
 
 
 
@@ -138,10 +139,10 @@ class SQLProvider {
 
 
 
-  // RoutinePart işlemleri// RoutinePart işlemleri// RoutinePart işlemleri
-  // RoutinePart işlemleri// RoutinePart işlemleri// RoutinePart işlemleri
-  // RoutinePart işlemleri// RoutinePart işlemleri// RoutinePart işlemleri
-  // RoutinePart işlemleri// RoutinePart işlemleri// RoutinePart işlemleri
+  /// RoutinePart işlemleri// RoutinePart işlemleri// RoutinePart işlemleri
+  /// RoutinePart işlemleri// RoutinePart işlemleri// RoutinePart işlemleri
+  /// RoutinePart işlemleri// RoutinePart işlemleri// RoutinePart işlemleri
+  /// RoutinePart işlemleri// RoutinePart işlemleri// RoutinePart işlemleri
 
 
   Future<List<RoutinePart>> getRoutinePartsByRoutineId(int routineId) async {
@@ -176,10 +177,10 @@ class SQLProvider {
 
 
 
-  // Exercise işlemleri // Exercise işlemleri // Exercise işlemleri
-  // Exercise işlemleri // Exercise işlemleri // Exercise işlemleri
-  // Exercise işlemleri // Exercise işlemleri // Exercise işlemleri
-  // Exercise işlemleri // Exercise işlemleri // Exercise işlemleri
+  /// Exercise işlemleri // Exercise işlemleri // Exercise işlemleri
+  /// Exercise işlemleri // Exercise işlemleri // Exercise işlemleri
+  /// Exercise işlemleri // Exercise işlemleri // Exercise işlemleri
+  /// Exercise işlemleri // Exercise işlemleri // Exercise işlemleri
 
 
 
@@ -282,9 +283,9 @@ class SQLProvider {
 
 
 
-//BodyPart İşlemleri//BodyPart İşlemleri//BodyPart İşlemleri
-//BodyPart İşlemleri//BodyPart İşlemleri//BodyPart İşlemleri
-//BodyPart İşlemleri//BodyPart İşlemleri//BodyPart İşlemleri
+///BodyPart İşlemleri//BodyPart İşlemleri//BodyPart İşlemleri
+///BodyPart İşlemleri//BodyPart İşlemleri//BodyPart İşlemleri
+///BodyPart İşlemleri//BodyPart İşlemleri//BodyPart İşlemleri
 
 
 
@@ -346,6 +347,82 @@ class SQLProvider {
     return List.generate(maps.length, (i) => maps[i]['name'] as String);
   }
 
+
+
+    ///Part İşlemleri///Part İşlemleri///Part İşlemleri
+    ///Part İşlemleri///Part İşlemleri///Part İşlemleri
+    ///Part İşlemleri///Part İşlemleri///Part İşlemleri
+///
+
+
+  Future<Part?> getPartById(int id) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'Parts',
+      where: 'Id = ?',
+      whereArgs: [id],
+    );
+    if (maps.isNotEmpty) {
+      return Part.fromMap(maps.first);
+    }
+    return null;
+  }
+
+
+
+  Future<List<Part>> getPartsByMainTargetedBodyPart(MainTargetedBodyPart bodyPart) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'Parts',
+      where: 'MainTargetedBodyPart = ?',
+      whereArgs: [bodyPart.index],
+    );
+    return List.generate(maps.length, (i) {
+      return Part.fromMap(maps[i]);
+    });
+  }
+
+
+
+  Future<List<Part>> getPartsBySetType(SetType setType) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'Parts',
+      where: 'SetType = ?',
+      whereArgs: [setType.index],
+    );
+    return List.generate(maps.length, (i) {
+      return Part.fromMap(maps[i]);
+    });
+  }
+
+
+
+  searchPartsByName(String query) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'Parts',
+      where: 'Name LIKE ?',
+      whereArgs: ['%$query%'],
+    );
+    return List.generate(maps.length, (i) => Part.fromMap(maps[i]));
+  }
+
+
+
+  Future<List<Part>> getPartsPaginated(int page, int pageSize) async {
+    final db = await database;
+    final offset = (page - 1) * pageSize;
+    final List<Map<String, dynamic>> maps = await db.query(
+        'Parts',
+        limit: pageSize,
+        offset: offset,
+        orderBy: 'Id ASC'
+    );
+    return List.generate(maps.length, (i) {
+      return Part.fromMap(maps[i]);
+    });
+  }
 
 
 
