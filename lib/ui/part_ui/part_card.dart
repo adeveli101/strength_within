@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../models/exercise.dart';
-import '../../models/part.dart';
-import '../../resource/db_provider.dart';
-
-typedef PartTapCallback = void Function(Part part);
-typedef StringCallback = void Function(String val);
+import '../../models/BodyPart.dart';
+import '../../models/exercises.dart';
+import '../../models/parts.dart';
+import '../../resource/routines_bloc.dart';
 
 class PartCard extends StatelessWidget {
   final Part part;
@@ -12,6 +10,7 @@ class PartCard extends StatelessWidget {
   final Function(bool) onExpandToggle;
   final VoidCallback onDelete;
   final VoidCallback? onPartTap;
+  final RoutinesBloc routinesBloc;
 
   const PartCard({
     Key? key,
@@ -19,6 +18,7 @@ class PartCard extends StatelessWidget {
     required this.isExpanded,
     required this.onExpandToggle,
     required this.onDelete,
+    required this.routinesBloc,
     this.onPartTap,
   }) : super(key: key);
 
@@ -60,7 +60,7 @@ class PartCard extends StatelessWidget {
 
   Widget _buildExerciseList() {
     return FutureBuilder<List<Exercise>>(
-      future: _getExercises(),
+      future: routinesBloc.getExercisesByBodyPart(part as MainTargetedBodyPart),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return CircularProgressIndicator(color: Color(0xFFE91E63));
@@ -126,7 +126,7 @@ class PartCard extends StatelessWidget {
           Expanded(
             flex: 5,
             child: Text(
-              ex.defaultReps ?? '8',
+              ex.defaultReps.toString(),
               style: TextStyle(color: Colors.white, fontSize: 18),
               textAlign: TextAlign.center,
             ),
@@ -134,16 +134,5 @@ class PartCard extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  Future<List<Exercise>> _getExercises() async {
-    final db = await DBProvider.db.database;
-    final exercises = await Future.wait(
-        part.exerciseIds.map((id) async {
-          var result = await db.query('Exercises', where: 'Id = ?', whereArgs: [id]);
-          return Exercise.fromMap(result.first);
-        })
-    );
-    return exercises;
   }
 }

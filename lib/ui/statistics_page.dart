@@ -1,29 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../../resource/firebase_provider.dart';
+import '../../resource/routines_bloc.dart';
+import '../firebase_class/firebase_routines.dart';
+import '../models/routines.dart';
 
-class StatisticsPage extends StatefulWidget {
-  @override
-  _StatisticsPageState createState() => _StatisticsPageState();
-}
 
-class _StatisticsPageState extends State<StatisticsPage> {
-  late Future<List<Map<String, dynamic>>> _userRoutinesFuture;
+class StatisticsPage extends StatelessWidget {
+  final RoutinesBloc routinesBloc;
 
-  @override
-  void initState() {
-    super.initState();
-    _userRoutinesFuture = _fetchUserRoutines();
-  }
-
-  Future<List<Map<String, dynamic>>> _fetchUserRoutines() async {
-    final userId = FirebaseProvider().getCurrentUserId();
-    if (userId == null) {
-      throw Exception("User not authenticated");
-    }
-    return await FirebaseProvider().getUserRoutines();
-  }
+  const StatisticsPage({Key? key, required this.routinesBloc}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -64,32 +50,33 @@ class _StatisticsPageState extends State<StatisticsPage> {
     );
   }
 
+
   Widget _buildStatCards() {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _userRoutinesFuture,
+    return StreamBuilder<List<Routine>>(
+      stream: routinesBloc.allRoutines,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}', style: TextStyle(color: Colors.white)));
+          return Center(child: Text('Hata: ${snapshot.error}', style: TextStyle(color: Colors.white)));
         }
         final userRoutines = snapshot.data ?? [];
         return Column(
           children: [
             Row(
               children: [
-                Expanded(child: _buildTotalWorkoutsCard(userRoutines)),
+                Expanded(child: _buildTotalWorkoutsCard(userRoutines.cast<FirebaseRoutine>())),
                 SizedBox(width: 16),
-                Expanded(child: _buildLastWorkoutCard(userRoutines)),
+                Expanded(child: _buildLastWorkoutCard(userRoutines.cast<FirebaseRoutine>())),
               ],
             ),
             SizedBox(height: 16),
             Row(
               children: [
-                Expanded(child: _buildMostUsedRoutineCard(userRoutines)),
+                Expanded(child: _buildMostUsedRoutineCard(userRoutines.cast<FirebaseRoutine>())),
                 SizedBox(width: 16),
-                Expanded(child: _buildTotalRoutinesCard(userRoutines)),
+                Expanded(child: _buildTotalRoutinesCard(userRoutines.cast<FirebaseRoutine>())),
               ],
             ),
           ],
@@ -98,32 +85,39 @@ class _StatisticsPageState extends State<StatisticsPage> {
     );
   }
 
-  Widget _buildTotalWorkoutsCard(List<Map<String, dynamic>> userRoutines) {
-    final totalWorkouts = userRoutines.fold(0, (sum, routine) => sum + (routine['progress'] as int? ?? 0));
+  Widget _buildTotalWorkoutsCard(List<FirebaseRoutine> userRoutines) {
+    final totalWorkouts = userRoutines.fold(0, (sum, routine) => sum + (routine.userProgress ?? 0));
     return _buildStatCard('Toplam Antrenman', totalWorkouts.toString(), Icons.fitness_center);
   }
 
-  Widget _buildLastWorkoutCard(List<Map<String, dynamic>> userRoutines) {
-    final lastWorkout = userRoutines
-        .where((routine) => routine['lastUsedDate'] != null)
-        .reduce((a, b) => a['lastUsedDate'].toDate().isAfter(b['lastUsedDate'].toDate()) ? a : b);
-    final lastWorkoutDate = lastWorkout['lastUsedDate'].toDate();
-    final formattedDate = DateFormat('dd/MM/yyyy').format(lastWorkoutDate);
+  Widget _buildLastWorkoutCard(List<FirebaseRoutine> userRoutines) {
+    if (userRoutines.isEmpty) {
+      return _buildStatCard('Son Antrenman', 'Veri yok', Icons.access_time);
+    }
+    final routinesWithDate = userRoutines.where((routine) => routine.lastUsedDate != null).toList();
+    if (routinesWithDate.isEmpty) {
+      return _buildStatCard('Son Antrenman', 'Veri yok', Icons.access_time);
+    }
+    final lastWorkout = routinesWithDate.reduce((a, b) => a.lastUsedDate!.isAfter(b.lastUsedDate!) ? a : b);
+    final formattedDate = DateFormat('dd/MM/yyyy').format(lastWorkout.lastUsedDate!);
     return _buildStatCard('Son Antrenman', formattedDate, Icons.access_time);
   }
 
-  Widget _buildMostUsedRoutineCard(List<Map<String, dynamic>> userRoutines) {
-    final mostUsedRoutine = userRoutines.reduce((a, b) => (a['progress'] ?? 0) > (b['progress'] ?? 0) ? a : b);
-    return _buildStatCard('En Çok Kullanılan Rutin', mostUsedRoutine['name'] ?? 'Bilinmiyor', Icons.star);
+  Widget _buildMostUsedRoutineCard(List<FirebaseRoutine> userRoutines) {
+    if (userRoutines.isEmpty) {
+      return _buildStatCard('En Çok Kullanılan Rutin', 'Veri yok', Icons.star);
+    }
+    final mostUsedRoutine = userRoutines.reduce((a, b) => (a.userProgress ?? 0) > (b.userProgress ?? 0) ? a : b);
+    return _buildStatCard('En Çok Kullanılan Rutin', mostUsedRoutine.routine.name, Icons.star);
   }
 
-  Widget _buildTotalRoutinesCard(List<Map<String, dynamic>> userRoutines) {
+  Widget _buildTotalRoutinesCard(List<FirebaseRoutine> userRoutines) {
     return _buildStatCard('Toplam Rutin', userRoutines.length.toString(), Icons.list);
   }
 
   Widget _buildWeeklyProgressCard() {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _userRoutinesFuture,
+    return StreamBuilder<List<Routine>>(
+      stream: routinesBloc.allRoutines,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return _buildStatCard('Haftalık İlerleme', 'Yükleniyor...', Icons.trending_up);
@@ -131,42 +125,40 @@ class _StatisticsPageState extends State<StatisticsPage> {
         if (snapshot.hasError) {
           return _buildStatCard('Haftalık İlerleme', 'Hata', Icons.error);
         }
-        final userRoutines = snapshot.data ?? [];
+        final routines = snapshot.data ?? [];
+
+        // FirebaseRoutine listesini oluştur
+        final userRoutines = routines.map((routine) =>
+            FirebaseRoutine.fromRoutine(routine)
+        ).toList();
+
         final now = DateTime.now();
         final weekStart = now.subtract(Duration(days: now.weekday - 1));
+
+        // Haftalık antrenman sayısını hesapla
         final weeklyWorkouts = userRoutines
-            .where((routine) => routine['lastUsedDate'] != null &&
-            routine['lastUsedDate'].toDate().isAfter(weekStart))
+            .where((firebaseRoutine) =>
+        firebaseRoutine.lastUsedDate != null &&
+            firebaseRoutine.lastUsedDate!.isAfter(weekStart))
             .length;
+
         return _buildStatCard('Haftalık İlerleme', '$weeklyWorkouts antrenman', Icons.trending_up);
       },
     );
   }
 
   Widget _buildWorkoutChart() {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _userRoutinesFuture,
+    return StreamBuilder<List<Routine>>(
+      stream: routinesBloc.allRoutines,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Center(child: CircularProgressIndicator());
         }
+        if (snapshot.hasError) {
+          return Center(child: Text('Hata: ${snapshot.error}', style: TextStyle(color: Colors.white)));
+        }
         final userRoutines = snapshot.data ?? [];
-        final workoutCounts = {};
-        final now = DateTime.now();
-        final sevenDaysAgo = now.subtract(Duration(days: 6));
-        for (var i = 0; i < 7; i++) {
-          final date = sevenDaysAgo.add(Duration(days: i));
-          workoutCounts[date] = 0;
-        }
-        for (var routine in userRoutines) {
-          if (routine['lastUsedDate'] != null) {
-            final date = routine['lastUsedDate'].toDate();
-            if (date.isAfter(sevenDaysAgo.subtract(Duration(days: 1))) && date.isBefore(now.add(Duration(days: 1)))) {
-              final key = DateTime(date.year, date.month, date.day);
-              workoutCounts[key] = (workoutCounts[key] ?? 0) + 1;
-            }
-          }
-        }
+        final workoutCounts = _getWorkoutCounts(userRoutines.cast<FirebaseRoutine>());
         return Container(
           height: 200,
           padding: EdgeInsets.all(16),
@@ -185,7 +177,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
                   sideTitles: SideTitles(
                     showTitles: true,
                     getTitlesWidget: (value, meta) {
-                      final date = sevenDaysAgo.add(Duration(days: value.toInt()));
+                      final date = DateTime.now().subtract(Duration(days: 6 - value.toInt()));
                       return Text(
                         DateFormat('E').format(date),
                         style: TextStyle(color: Colors.white70, fontSize: 12),
@@ -201,10 +193,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
               maxY: workoutCounts.values.isEmpty ? 1 : workoutCounts.values.reduce((a, b) => a > b ? a : b).toDouble(),
               lineBarsData: [
                 LineChartBarData(
-                  spots: workoutCounts.entries.map((e) {
-                    final daysFromStart = e.key.difference(sevenDaysAgo).inDays;
-                    return FlSpot(daysFromStart.toDouble(), e.value.toDouble());
-                  }).toList(),
+                  spots: workoutCounts.entries.map((e) => FlSpot(e.key.toDouble(), e.value.toDouble())).toList(),
                   isCurved: true,
                   color: Color(0xFFE91E63),
                   barWidth: 3,
@@ -219,6 +208,27 @@ class _StatisticsPageState extends State<StatisticsPage> {
       },
     );
   }
+
+  Map<int, int> _getWorkoutCounts(List<FirebaseRoutine> userRoutines) {
+    final workoutCounts = Map<int, int>.fromIterable(
+      List.generate(7, (index) => index),
+      key: (item) => item as int,
+      value: (_) => 0,
+    );
+    final now = DateTime.now();
+    final sevenDaysAgo = now.subtract(Duration(days: 6));
+    for (var routine in userRoutines) {
+      if (routine.lastUsedDate != null) {
+        final date = routine.lastUsedDate!;
+        if (date.isAfter(sevenDaysAgo) && date.isBefore(now.add(Duration(days: 1)))) {
+          final daysAgo = now.difference(date).inDays;
+          workoutCounts[6 - daysAgo] = (workoutCounts[6 - daysAgo] ?? 0) + 1;
+        }
+      }
+    }
+    return workoutCounts;
+  }
+
 
   Widget _buildStatCard(String title, String value, IconData icon) {
     return Card(

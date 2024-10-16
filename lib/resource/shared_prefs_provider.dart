@@ -6,6 +6,7 @@ const String appVersionKey = "appVersion";
 const String firstRunDateKey = "firstRunDate";
 const String weeklyAmountKey = "weeklyAmount";
 const String lastSyncDateKey = "lastSyncDate";
+const String userIdKey = "userId";
 
 class SharedPrefsProvider {
   SharedPreferences? _sharedPreferences;
@@ -56,6 +57,33 @@ class SharedPrefsProvider {
     final SharedPreferences prefs = await sharedPreferences;
     final String? dateStr = prefs.getString(lastSyncDateKey);
     return dateStr != null ? DateTime.parse(dateStr) : null;
+  }
+
+  // Yeni eklenen metodlar
+
+  Future<void> setUserId(String userId) async {
+    final SharedPreferences prefs = await sharedPreferences;
+    await prefs.setString(userIdKey, userId);
+  }
+
+  Future<String?> getUserId() async {
+    final SharedPreferences prefs = await sharedPreferences;
+    return prefs.getString(userIdKey);
+  }
+
+  Future<void> clearUserId() async {
+    final SharedPreferences prefs = await sharedPreferences;
+    await prefs.remove(userIdKey);
+  }
+
+  Future<bool> isUserLoggedIn() async {
+    final SharedPreferences prefs = await sharedPreferences;
+    return prefs.containsKey(userIdKey);
+  }
+
+  Future<void> clearAllData() async {
+    final SharedPreferences prefs = await sharedPreferences;
+    await prefs.clear();
   }
 }
 

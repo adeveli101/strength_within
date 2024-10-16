@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:workout/ui/routine_edit_page.dart';
-import '../models/routine.dart';
+import '../models/BodyPart.dart';
+import '../models/WorkoutType.dart';
+import '../models/routines.dart';
 import '../resource/routines_bloc.dart';
 import '../utils/routine_helpers.dart';
-import 'components/routine_card.dart';
+import 'routine_ui/routine_card.dart';
+import '../firebase_class/firebase_routines.dart';
 
 class HomePage extends StatefulWidget {
+  final RoutinesBloc routinesBloc;
+
+  HomePage({required this.routinesBloc});
+
   @override
   _HomePageState createState() => _HomePageState();
 }
@@ -13,25 +19,46 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final scrollController = ScrollController();
   bool showShadow = false;
-  List<MainTargetedBodyPart> selectedParts = [];
-  List<Routine> filteredRoutines = [];
+  MainTargetedBodyPart? selectedBodyPart;
+  WorkoutType? selectedWorkoutType;
+  List<FirebaseRoutine> filteredRoutines = [];
   bool showRecommended = true;
+
+
+  String searchQuery = '';
+  TextEditingController searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    routinesBloc.initialize();
+    widget.routinesBloc.initialize();
     scrollController.addListener(_scrollListener);
     _listenToRoutines();
     _checkShowRecommended();
+
+    searchController.addListener(_onSearchChanged);
+
   }
 
   @override
   void dispose() {
     scrollController.removeListener(_scrollListener);
     scrollController.dispose();
+
+    searchController.removeListener(_onSearchChanged);
+    searchController.dispose();
+
     super.dispose();
   }
+
+
+  void _onSearchChanged() {
+    setState(() {
+      searchQuery = searchController.text;
+    });
+  }
+
+
 
   void _scrollListener() {
     if (mounted) {
@@ -42,29 +69,33 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _listenToRoutines() {
-    routinesBloc.allRoutines.listen((routines) {
+    widget.routinesBloc.allRoutines.listen((routines) {
       if (mounted) {
         setState(() {
-          filteredRoutines = _filterRoutines(routines);
+          filteredRoutines = _filterRoutines(routines.cast<FirebaseRoutine>());
         });
       }
     });
   }
 
   void _checkShowRecommended() async {
-    bool hasStarted = await routinesBloc.hasStartedAnyRoutine();
+    bool hasStarted = await widget.routinesBloc.hasStartedAnyRoutine();
     setState(() {
       showRecommended = !hasStarted;
     });
   }
 
-  List<Routine> _filterRoutines(List<Routine> routines) {
-    if (selectedParts.isEmpty) {
-      return routines;
-    }
+  List<FirebaseRoutine> _filterRoutines(List<FirebaseRoutine> routines) {
     return routines.where((routine) =>
-        selectedParts.contains(routine.mainTargetedBodyPart)).toList();
+    (selectedBodyPart == null || routine.routine.mainTargetedBodyPart == selectedBodyPart) &&
+        (selectedWorkoutType == null || routine.routine.workoutType == selectedWorkoutType) &&
+        (searchQuery.isEmpty || routine.routine.name.toLowerCase().contains(searchQuery.toLowerCase()))
+    ).toList();
   }
+
+
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -77,7 +108,8 @@ class _HomePageState extends State<HomePage> {
       ),
       body: Column(
         children: [
-          _buildCategoryFilter(),
+          _buildSearchBar(),
+          _buildFilters(),
           Expanded(
             child: _buildRoutineList(),
           ),
@@ -91,46 +123,108 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildCategoryFilter() {
-    return Container(
-      height: 60,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: MainTargetedBodyPart.values.length,
-        itemBuilder: (context, index) {
-          final part = MainTargetedBodyPart.values[index];
-          final isSelected = selectedParts.contains(part);
-          return Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-            child: ChoiceChip(
-              label: Text(mainTargetedBodyPartToStringConverter(part)),
-              selected: isSelected,
-              onSelected: (selected) {
-                setState(() {
-                  if (selected) {
-                    selectedParts.add(part);
-                  } else {
-                    selectedParts.remove(part);
-                  }
-                  routinesBloc.fetchAllRoutines();
-                });
-              },
-              backgroundColor: Color(0xFF2C2C2C),
-              selectedColor: Color(0xFFE91E63),
-              labelStyle: TextStyle(
-                color: isSelected ? Colors.white : Colors.white70,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              ),
-            ),
-          );
-        },
+
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: EdgeInsets.all(16),
+      child: TextField(
+        controller: searchController,
+        style: TextStyle(color: Colors.white),
+        decoration: InputDecoration(
+          hintText: 'Search routines...',
+          hintStyle: TextStyle(color: Colors.white54),
+          prefixIcon: Icon(Icons.search, color: Colors.white54),
+          filled: true,
+          fillColor: Color(0xFF2C2C2C),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(30),
+            borderSide: BorderSide.none,
+          ),
+        ),
       ),
+    );
+  }
+
+
+
+  Widget _buildFilters() {
+    return Container(
+      height: 150,
+      child: Column(
+        children: [
+          _buildFilterRow('Body Part', MainTargetedBodyPart.values, selectedBodyPart, (value) {
+            setState(() {
+              selectedBodyPart = (selectedBodyPart == value) ? null : value;
+              widget.routinesBloc.fetchAllRoutines();
+            });
+          }),
+          FutureBuilder<List<WorkoutType>>(
+            future: widget.routinesBloc.getAllWorkoutTypes(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return CircularProgressIndicator();
+              } else if (snapshot.hasError) {
+                return Text('Error: ${snapshot.error}');
+              } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return Text('No workout types available');
+              } else {
+                return _buildFilterRow('Workout Type', snapshot.data!, selectedWorkoutType, (value) {
+                  setState(() {
+                    selectedWorkoutType = (selectedWorkoutType == value) ? null : value;
+                    widget.routinesBloc.fetchAllRoutines();
+                  });
+                });
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterRow<T>(String title, List<T> values, T? selectedValue, Function(T?) onSelected) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.only(left: 16, top: 8),
+          child: Text(title, style: TextStyle(color: Colors.white70)),
+        ),
+        Container(
+          height: 40,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: values.length,
+            itemBuilder: (context, index) {
+              final value = values[index];
+              final isSelected = value == selectedValue;
+              return Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8),
+                child: ChoiceChip(
+                  label: Text(value is MainTargetedBodyPart
+                      ? mainTargetedBodyPartToStringConverter(value)
+                      : (value as WorkoutType).name),
+                  selected: isSelected,
+                  onSelected: (_) => onSelected(value),
+                  backgroundColor: Color(0xFF2C2C2C),
+                  selectedColor: Color(0xFFE91E63),
+                  labelStyle: TextStyle(
+                    color: isSelected ? Colors.white : Colors.white70,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildRoutineList() {
     return StreamBuilder<List<Routine>>(
-      stream: routinesBloc.allRoutines,
+      stream: widget.routinesBloc.allRoutines,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Center(child: CircularProgressIndicator(color: Color(0xFFE91E63)));
@@ -141,7 +235,8 @@ class _HomePageState extends State<HomePage> {
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return Center(child: Text('No routines available', style: TextStyle(color: Colors.white)));
         }
-        List<Routine> routines = _filterRoutines(snapshot.data!);
+
+        List<FirebaseRoutine> routines = _filterRoutines(snapshot.data!.cast<FirebaseRoutine>());
         return ListView.builder(
           controller: scrollController,
           itemCount: routines.length + (showRecommended ? 1 : 0),
@@ -153,10 +248,8 @@ class _HomePageState extends State<HomePage> {
             return Padding(
               padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
               child: RoutineCard(
-                routine: routines[routineIndex],
-                isRecRoutine: false,
-                isSmall: false,
-                onFavoriteToggle: () => routinesBloc.toggleRoutineFavorite(routines[routineIndex].id),
+                firebaseRoutine: routines[routineIndex],
+                routinesBloc: widget.routinesBloc,
               ),
             );
           },
@@ -178,8 +271,8 @@ class _HomePageState extends State<HomePage> {
         ),
         Container(
           height: 180,
-          child: FutureBuilder<List<Routine>>(
-            future: routinesBloc.getRecommendedRoutines(),
+          child: FutureBuilder<List<FirebaseRoutine>>(
+            future: widget.routinesBloc.getRecommendedRoutines(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return Center(child: CircularProgressIndicator(color: Color(0xFFE91E63)));
@@ -196,10 +289,8 @@ class _HomePageState extends State<HomePage> {
                     child: SizedBox(
                       width: 140,
                       child: RoutineCard(
-                        routine: snapshot.data![index],
-                        isRecRoutine: true,
-                        isSmall: true,
-                        onFavoriteToggle: () => routinesBloc.toggleRoutineFavorite(snapshot.data![index].id),
+                        firebaseRoutine: snapshot.data![index],
+                        routinesBloc: widget.routinesBloc,
                       ),
                     ),
                   );
@@ -213,32 +304,16 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _showAddRoutineBottomSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.9,
-        decoration: BoxDecoration(
-          color: Color(0xFF1E1E1E),
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(20),
-            topRight: Radius.circular(20),
-          ),
-        ),
-        child: RoutineEditPage(
-          routine: Routine(
-            id: DateTime.now().millisecondsSinceEpoch,
-            name: '',
-            mainTargetedBodyPart: MainTargetedBodyPart.fullBody,
-            partIds: [],
-            isRecommended: false,
-            difficulty: 1,
-            estimatedTime: 30,
-          ),
-        ),
-      ),
-    );
+    // Implement the add routine functionality
+  }
+}
+
+
+
+
+
+
+  void _showAddRoutineBottomSheet() {
+    // Implement the add routine functionality
   }
 
-}

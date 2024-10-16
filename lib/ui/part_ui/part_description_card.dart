@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:workout/models/part.dart';
-import 'package:workout/utils/routine_helpers.dart';
-import 'package:workout/resource/db_provider.dart';
-import 'package:workout/models/exercise.dart';
+import 'package:workout/models/parts.dart';
+import 'package:workout/models/exercises.dart';
+import '../../resource/routines_bloc.dart';
 
 class PartDescriptionCard extends StatelessWidget {
   final Part part;
+  final RoutinesBloc routinesBloc;
 
-  const PartDescriptionCard({Key? key, required this.part}) : super(key: key);
+  const PartDescriptionCard({
+    Key? key,
+    required this.part,
+    required this.routinesBloc,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -29,11 +33,11 @@ class PartDescriptionCard extends StatelessWidget {
               ),
               SizedBox(height: 8),
               Text(
-                'Targeted Body Part: ${targetedBodyPartToStringConverter(part.targetedBodyPart)}',
+                'Targeted Body Part: ${part.mainTargetedBodyPart.toString().split('.').last}',
                 style: TextStyle(fontSize: 14, color: Colors.white70),
               ),
               Text(
-                'Set Type: ${setTypeToStringConverter(part.setType)}',
+                'Set Type: ${part.setType.toString().split('.').last}',
                 style: TextStyle(fontSize: 14, color: Colors.white70),
               ),
               SizedBox(height: 16),
@@ -43,7 +47,7 @@ class PartDescriptionCard extends StatelessWidget {
               ),
               SizedBox(height: 8),
               FutureBuilder<List<Exercise>>(
-                future: _getExercises(),
+                future: routinesBloc.getExercisesByBodyPart(part.mainTargetedBodyPart),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return CircularProgressIndicator(color: Color(0xFFE91E63));
@@ -84,16 +88,5 @@ class PartDescriptionCard extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  Future<List<Exercise>> _getExercises() async {
-    final db = await DBProvider.db.database;
-    final exercises = await Future.wait(
-        part.exerciseIds.map((id) async {
-          var result = await db.query('Exercises', where: 'Id = ?', whereArgs: [id]);
-          return Exercise.fromMap(result.first);
-        })
-    );
-    return exercises;
   }
 }

@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import '../resource/routines_bloc.dart';
-import '../models/routine.dart';
-import '../utils/routine_helpers.dart';
-import 'components/routine_card.dart';
+import '../models/routines.dart';
+import '../models/BodyPart.dart';
+import 'routine_ui/routine_card.dart';
+import '../firebase_class/firebase_routines.dart';
 
 class RecommendPage extends StatefulWidget {
+  final RoutinesBloc routinesBloc;
+
+  RecommendPage({required this.routinesBloc});
+
   @override
   _RecommendPageState createState() => _RecommendPageState();
 }
@@ -12,14 +17,12 @@ class RecommendPage extends StatefulWidget {
 class _RecommendPageState extends State<RecommendPage> {
   final scrollController = ScrollController();
   bool showShadow = false;
-  List<MainTargetedBodyPart> selectedParts = [];
-  List<Routine> filteredRoutines = [];
+  List<MainTargetedBodyPart> selectedBodyParts = [];
 
   @override
   void initState() {
     super.initState();
     scrollController.addListener(_scrollListener);
-    _loadRecommendedRoutines();
   }
 
   @override
@@ -37,21 +40,6 @@ class _RecommendPageState extends State<RecommendPage> {
     }
   }
 
-  void _loadRecommendedRoutines() async {
-    final recommendedRoutines = await routinesBloc.getRecommendedRoutines();
-    setState(() {
-      filteredRoutines = recommendedRoutines;
-    });
-  }
-
-  List<Routine> _filterRoutines(List<Routine> routines) {
-    if (selectedParts.isEmpty) {
-      return routines;
-    }
-    return routines.where((routine) =>
-        selectedParts.contains(routine.mainTargetedBodyPart)).toList();
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -63,7 +51,7 @@ class _RecommendPageState extends State<RecommendPage> {
       ),
       body: Column(
         children: [
-          _buildCategoryFilter(),
+          _buildBodyPartFilter(),
           Expanded(
             child: _buildRecommendedRoutinesList(),
           ),
@@ -72,62 +60,77 @@ class _RecommendPageState extends State<RecommendPage> {
     );
   }
 
-  Widget _buildCategoryFilter() {
-    return Container(
-      height: 60,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: MainTargetedBodyPart.values.length,
-        itemBuilder: (context, index) {
-          final part = MainTargetedBodyPart.values[index];
-          final isSelected = selectedParts.contains(part);
-          return Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-            child: ChoiceChip(
-              label: Text(mainTargetedBodyPartToStringConverter(part)),
-              selected: isSelected,
-              onSelected: (selected) {
-                setState(() {
-                  if (selected) {
-                    selectedParts.add(part);
-                  } else {
-                    selectedParts.remove(part);
-                  }
-                  filteredRoutines = _filterRoutines(filteredRoutines);
-                });
-              },
-              backgroundColor: Color(0xFF2C2C2C),
-              selectedColor: Color(0xFFE91E63),
-              labelStyle: TextStyle(
-                color: isSelected ? Colors.white : Colors.white70,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              ),
-            ),
-          );
-        },
-      ),
+  Widget _buildBodyPartFilter() {
+    return FutureBuilder<List<BodyPart>>(
+      future: widget.routinesBloc.getAllBodyParts(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return CircularProgressIndicator();
+        }
+
+        List<BodyPart> bodyParts = snapshot.data!;
+        return Container(
+          height: 60,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: bodyParts.length,
+            itemBuilder: (context, index) {
+              final bodyPart = bodyParts[index];
+              final isSelected = selectedBodyParts.contains(bodyPart.mainTargetedBodyPartString);
+              return Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                child: ChoiceChip(
+                  label: Text(bodyPart.name),
+                  selected: isSelected,
+                  onSelected: (selected) {
+                    setState(() {
+                      if (selected) {
+                        selectedBodyParts.add(MainTargetedBodyPart.values.firstWhere((e) => e.name == bodyPart.mainTargetedBodyPartString));
+                      } else {
+                        selectedBodyParts.remove(MainTargetedBodyPart.values.firstWhere((e) => e.name == bodyPart.mainTargetedBodyPartString));
+                      }
+                    });
+                  },
+                  backgroundColor: Color(0xFF2C2C2C),
+                  selectedColor: Color(0xFFE91E63),
+                  labelStyle: TextStyle(
+                    color: isSelected ? Colors.white : Colors.white70,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 
   Widget _buildRecommendedRoutinesList() {
-    if (filteredRoutines.isEmpty) {
-      return Center(child: CircularProgressIndicator(color: Color(0xFFE91E63)));
-    }
+    return StreamBuilder<List<Routine>>(
+      stream: widget.routinesBloc.allRecRoutines,
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return Center(child: CircularProgressIndicator(color: Color(0xFFE91E63)));
+        }
 
-    return ListView.builder(
-      controller: scrollController,
-      itemCount: filteredRoutines.length,
-      itemBuilder: (context, index) {
-        return Padding(
-          padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-          child: RoutineCard(
-            routine: filteredRoutines[index],
-            isRecRoutine: true,
-            isSmall: false,
-            onFavoriteToggle: () {
-              routinesBloc.toggleRoutineFavorite(filteredRoutines[index].id);
-            },
-          ),
+        List<Routine> routines = snapshot.data!;
+        List<Routine> filteredRoutines = selectedBodyParts.isEmpty
+            ? routines
+            : routines.where((r) => selectedBodyParts.contains(r.mainTargetedBodyPart)).toList();
+
+        return ListView.builder(
+          controller: scrollController,
+          itemCount: filteredRoutines.length,
+          itemBuilder: (context, index) {
+            return Padding(
+              padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+              child: RoutineCard(
+                firebaseRoutine: FirebaseRoutine.fromRoutine(filteredRoutines[index]),
+                routinesBloc: widget.routinesBloc,
+              ),
+            );
+          },
         );
       },
     );
