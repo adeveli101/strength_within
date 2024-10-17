@@ -4,7 +4,7 @@ import 'BodyPart.dart';
 
 enum SetType { regular, drop, superSet, tri, giant, normal }
 
-class Part {
+class Parts {
   final int id;
   final String name;
   final MainTargetedBodyPart mainTargetedBodyPart;
@@ -16,7 +16,7 @@ class Part {
   final Color setTypeColor;
   final int exerciseCount;
 
-  Part({
+  Parts({
     required this.id,
     required this.name,
     required this.mainTargetedBodyPart,
@@ -28,8 +28,8 @@ class Part {
         setTypeColor = setTypeToColorConverter(setType),
         exerciseCount = setTypeToExerciseCountConverter(setType);
 
-  factory Part.fromMap(Map<String, dynamic> map) {
-    return Part(
+  factory Parts.fromMap(Map<String, dynamic> map) {
+    return Parts(
       id: map['Id'] as int,
       name: map['Name'] as String,
       mainTargetedBodyPart: MainTargetedBodyPart.values[map['MainTargetedBodyPart'] as int],
@@ -52,7 +52,7 @@ class Part {
 
 
 
-  Part copyWith({
+  Parts copyWith({
     int? id,
     String? name,
     MainTargetedBodyPart? mainTargetedBodyPart,
@@ -60,7 +60,7 @@ class Part {
     List<int>? exerciseIds,
     String? additionalNotes,
   }) {
-    return Part(
+    return Parts(
       id: id ?? this.id,
       name: name ?? this.name,
       mainTargetedBodyPart: mainTargetedBodyPart ?? this.mainTargetedBodyPart,

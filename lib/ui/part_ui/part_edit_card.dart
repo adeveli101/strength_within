@@ -5,9 +5,9 @@ import '../../models/exercises.dart';
 import '../../resource/routines_bloc.dart';
 
 class PartEditCard extends StatefulWidget {
-  final Part part;
+  final Parts part;
   final RoutinesBloc routinesBloc;
-  final Function(Part) onSave;
+  final Function(Parts) onSave;
 
   const PartEditCard({
     Key? key,
@@ -25,7 +25,7 @@ class _PartEditCardState extends State<PartEditCard> {
   late MainTargetedBodyPart _selectedBodyPart;
   late SetType _selectedSetType;
   late TextEditingController _notesController;
-  List<Exercise> _exercises = [];
+  List<Exercises> _exercises = [];
 
   @override
   void initState() {

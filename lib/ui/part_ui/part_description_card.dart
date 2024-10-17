@@ -4,7 +4,7 @@ import 'package:workout/models/exercises.dart';
 import '../../resource/routines_bloc.dart';
 
 class PartDescriptionCard extends StatelessWidget {
-  final Part part;
+  final Parts part;
   final RoutinesBloc routinesBloc;
 
   const PartDescriptionCard({
@@ -46,7 +46,7 @@ class PartDescriptionCard extends StatelessWidget {
                 style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
               ),
               SizedBox(height: 8),
-              FutureBuilder<List<Exercise>>(
+              FutureBuilder<List<Exercises>>(
                 future: routinesBloc.getExercisesByBodyPart(part.mainTargetedBodyPart),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {

@@ -7,7 +7,7 @@ import '../../utils/routine_helpers.dart';
 
 
 class PartStepPage extends StatefulWidget {
-  final Part part;
+  final Parts part;
   final RoutinesBloc routinesBloc;
 
   const PartStepPage({Key? key, required this.part, required this.routinesBloc}) : super(key: key);
@@ -17,7 +17,7 @@ class PartStepPage extends StatefulWidget {
 }
 
 class _PartStepPageState extends State<PartStepPage> {
-  List<Exercise> exercises = [];
+  List<Exercises> exercises = [];
 
   @override
   void initState() {
@@ -30,7 +30,7 @@ class _PartStepPageState extends State<PartStepPage> {
       widget.part.exerciseIds.map((id) => widget.routinesBloc.getExerciseById(id)),
     );
     setState(() {
-      exercises = loadedExercises.whereType<Exercise>().toList();
+      exercises = loadedExercises.whereType<Exercises>().toList();
     });
   }
 
@@ -67,7 +67,7 @@ class _PartStepPageState extends State<PartStepPage> {
 }
 
 class TabChild extends StatelessWidget {
-  final Exercise exercise;
+  final Exercises exercise;
   final SetType setType;
 
   const TabChild({Key? key, required this.exercise, required this.setType}) : super(key: key);

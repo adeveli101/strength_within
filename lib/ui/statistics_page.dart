@@ -1,252 +1,238 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../../resource/routines_bloc.dart';
+
+import '../firebase_class/RoutineHistory.dart';
 import '../firebase_class/firebase_routines.dart';
-import '../models/routines.dart';
+import '../resource/firebase_provider.dart';
+import '../resource/routines_bloc.dart';
 
-
-class StatisticsPage extends StatelessWidget {
+class StatisticsPage extends StatefulWidget {
+  @override
+  _StatisticsPageState createState() => _StatisticsPageState();
   final RoutinesBloc routinesBloc;
 
   const StatisticsPage({Key? key, required this.routinesBloc}) : super(key: key);
+}
+
+class _StatisticsPageState extends State<StatisticsPage> {
+  String? userId;
+
+  @override
+  void initState() {
+    super.initState();
+    _getUserId();
+  }
+
+  Future<void> _getUserId() async {
+    final deviceId = await BlocProvider.of<RoutinesBloc>(context).getDeviceId();
+    final id = await FirebaseProvider.getUserId(deviceId);
+    setState(() {
+      userId = id;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Color(0xFF121212),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'İstatistikler',
-                  style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
-                ),
-                SizedBox(height: 24),
-                _buildStatCards(),
-                SizedBox(height: 24),
-                Text(
-                  'Haftalık İlerleme',
-                  style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                SizedBox(height: 16),
-                _buildWeeklyProgressCard(),
-                SizedBox(height: 24),
-                Text(
-                  'Son 7 Gün',
-                  style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                SizedBox(height: 16),
-                _buildWorkoutChart(),
-              ],
+    if (userId == null) {
+      return Center(child: CircularProgressIndicator());
+    }
+
+    return BlocBuilder<RoutinesBloc, RoutinesState>(
+      builder: (context, state) {
+        if (state is RoutinesLoading) {
+          return Center(child: CircularProgressIndicator());
+        } else if (state is RoutinesLoaded) {
+          return _buildStatisticsContent(context, state.routines.cast<FirebaseRoutine>());
+        } else if (state is RoutinesError) {
+          return Center(child: Text('Hata: ${state.message}'));
+        }
+        return Center(child: Text('İstatistikler yüklenemedi.'));
+      },
+    );
+  }
+
+  Widget _buildStatisticsContent(BuildContext context, List<FirebaseRoutine> routines) {
+    return CustomScrollView(
+      slivers: [
+        SliverAppBar(
+          expandedHeight: 200,
+          flexibleSpace: FlexibleSpaceBar(
+            title: Text('İstatistikler'),
+            background: Image.asset('assets/statistics_background.jpg', fit: BoxFit.cover),
+          ),
+          pinned: true,
+        ),
+        SliverList(
+          delegate: SliverChildListDelegate([
+            _buildWeeklyProgressChart(routines),
+            _buildMostUsedRoutines(routines),
+            _buildRecentActivity(context),
+          ]),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWeeklyProgressChart(List<FirebaseRoutine> routines) {
+    final weeklyData = _getWeeklyProgressData(routines);
+
+    return Container(
+      height: 300,
+      padding: EdgeInsets.all(16),
+      child: BarChart(
+        BarChartData(
+          alignment: BarChartAlignment.spaceAround,
+          maxY: weeklyData.map((e) => e.value).reduce((a, b) => a > b ? a : b).toDouble(),
+          barTouchData: BarTouchData(enabled: false),
+          titlesData: FlTitlesData(
+            show: true,
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                getTitlesWidget: (double value, TitleMeta meta) {
+                  return Text(
+                    weeklyData[value.toInt()].day,
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  );
+                },
+                reservedSize: 38,
+              ),
+            ),
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            topTitles: AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            rightTitles: AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
             ),
           ),
+          borderData: FlBorderData(show: false),
+          barGroups: weeklyData.asMap().entries.map((entry) {
+            return BarChartGroupData(
+              x: entry.key,
+              barRods: [
+                BarChartRodData(
+                  toY: entry.value.value.toDouble(),
+                  color: Colors.blue,
+                  width: 22,
+                  borderRadius: BorderRadius.circular(4),
+                )
+              ],
+            );
+          }).toList(),
         ),
       ),
     );
   }
 
 
-  Widget _buildStatCards() {
-    return StreamBuilder<List<Routine>>(
-      stream: routinesBloc.allRoutines,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(child: Text('Hata: ${snapshot.error}', style: TextStyle(color: Colors.white)));
-        }
-        final userRoutines = snapshot.data ?? [];
-        return Column(
-          children: [
-            Row(
-              children: [
-                Expanded(child: _buildTotalWorkoutsCard(userRoutines.cast<FirebaseRoutine>())),
-                SizedBox(width: 16),
-                Expanded(child: _buildLastWorkoutCard(userRoutines.cast<FirebaseRoutine>())),
-              ],
-            ),
-            SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(child: _buildMostUsedRoutineCard(userRoutines.cast<FirebaseRoutine>())),
-                SizedBox(width: 16),
-                Expanded(child: _buildTotalRoutinesCard(userRoutines.cast<FirebaseRoutine>())),
-              ],
-            ),
-          ],
-        );
-      },
-    );
-  }
+  List<ProgressData> _getWeeklyProgressData(List<FirebaseRoutine> routines) {
+    Map<String, int> progressByDay = {
+      'Pzt': 0, 'Sal': 0, 'Çar': 0, 'Per': 0, 'Cum': 0, 'Cmt': 0, 'Paz': 0
+    };
 
-  Widget _buildTotalWorkoutsCard(List<FirebaseRoutine> userRoutines) {
-    final totalWorkouts = userRoutines.fold(0, (sum, routine) => sum + (routine.userProgress ?? 0));
-    return _buildStatCard('Toplam Antrenman', totalWorkouts.toString(), Icons.fitness_center);
-  }
-
-  Widget _buildLastWorkoutCard(List<FirebaseRoutine> userRoutines) {
-    if (userRoutines.isEmpty) {
-      return _buildStatCard('Son Antrenman', 'Veri yok', Icons.access_time);
-    }
-    final routinesWithDate = userRoutines.where((routine) => routine.lastUsedDate != null).toList();
-    if (routinesWithDate.isEmpty) {
-      return _buildStatCard('Son Antrenman', 'Veri yok', Icons.access_time);
-    }
-    final lastWorkout = routinesWithDate.reduce((a, b) => a.lastUsedDate!.isAfter(b.lastUsedDate!) ? a : b);
-    final formattedDate = DateFormat('dd/MM/yyyy').format(lastWorkout.lastUsedDate!);
-    return _buildStatCard('Son Antrenman', formattedDate, Icons.access_time);
-  }
-
-  Widget _buildMostUsedRoutineCard(List<FirebaseRoutine> userRoutines) {
-    if (userRoutines.isEmpty) {
-      return _buildStatCard('En Çok Kullanılan Rutin', 'Veri yok', Icons.star);
-    }
-    final mostUsedRoutine = userRoutines.reduce((a, b) => (a.userProgress ?? 0) > (b.userProgress ?? 0) ? a : b);
-    return _buildStatCard('En Çok Kullanılan Rutin', mostUsedRoutine.routine.name, Icons.star);
-  }
-
-  Widget _buildTotalRoutinesCard(List<FirebaseRoutine> userRoutines) {
-    return _buildStatCard('Toplam Rutin', userRoutines.length.toString(), Icons.list);
-  }
-
-  Widget _buildWeeklyProgressCard() {
-    return StreamBuilder<List<Routine>>(
-      stream: routinesBloc.allRoutines,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildStatCard('Haftalık İlerleme', 'Yükleniyor...', Icons.trending_up);
-        }
-        if (snapshot.hasError) {
-          return _buildStatCard('Haftalık İlerleme', 'Hata', Icons.error);
-        }
-        final routines = snapshot.data ?? [];
-
-        // FirebaseRoutine listesini oluştur
-        final userRoutines = routines.map((routine) =>
-            FirebaseRoutine.fromRoutine(routine)
-        ).toList();
-
-        final now = DateTime.now();
-        final weekStart = now.subtract(Duration(days: now.weekday - 1));
-
-        // Haftalık antrenman sayısını hesapla
-        final weeklyWorkouts = userRoutines
-            .where((firebaseRoutine) =>
-        firebaseRoutine.lastUsedDate != null &&
-            firebaseRoutine.lastUsedDate!.isAfter(weekStart))
-            .length;
-
-        return _buildStatCard('Haftalık İlerleme', '$weeklyWorkouts antrenman', Icons.trending_up);
-      },
-    );
-  }
-
-  Widget _buildWorkoutChart() {
-    return StreamBuilder<List<Routine>>(
-      stream: routinesBloc.allRoutines,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(child: Text('Hata: ${snapshot.error}', style: TextStyle(color: Colors.white)));
-        }
-        final userRoutines = snapshot.data ?? [];
-        final workoutCounts = _getWorkoutCounts(userRoutines.cast<FirebaseRoutine>());
-        return Container(
-          height: 200,
-          padding: EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Color(0xFF2C2C2C),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: LineChart(
-            LineChartData(
-              gridData: FlGridData(show: false),
-              titlesData: FlTitlesData(
-                leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                bottomTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    getTitlesWidget: (value, meta) {
-                      final date = DateTime.now().subtract(Duration(days: 6 - value.toInt()));
-                      return Text(
-                        DateFormat('E').format(date),
-                        style: TextStyle(color: Colors.white70, fontSize: 12),
-                      );
-                    },
-                  ),
-                ),
-              ),
-              borderData: FlBorderData(show: false),
-              minX: 0,
-              maxX: 6,
-              minY: 0,
-              maxY: workoutCounts.values.isEmpty ? 1 : workoutCounts.values.reduce((a, b) => a > b ? a : b).toDouble(),
-              lineBarsData: [
-                LineChartBarData(
-                  spots: workoutCounts.entries.map((e) => FlSpot(e.key.toDouble(), e.value.toDouble())).toList(),
-                  isCurved: true,
-                  color: Color(0xFFE91E63),
-                  barWidth: 3,
-                  isStrokeCapRound: true,
-                  dotData: FlDotData(show: true),
-                  belowBarData: BarAreaData(show: true, color: Color(0x29E91E63)),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Map<int, int> _getWorkoutCounts(List<FirebaseRoutine> userRoutines) {
-    final workoutCounts = Map<int, int>.fromIterable(
-      List.generate(7, (index) => index),
-      key: (item) => item as int,
-      value: (_) => 0,
-    );
-    final now = DateTime.now();
-    final sevenDaysAgo = now.subtract(Duration(days: 6));
-    for (var routine in userRoutines) {
+    for (var routine in routines) {
       if (routine.lastUsedDate != null) {
-        final date = routine.lastUsedDate!;
-        if (date.isAfter(sevenDaysAgo) && date.isBefore(now.add(Duration(days: 1)))) {
-          final daysAgo = now.difference(date).inDays;
-          workoutCounts[6 - daysAgo] = (workoutCounts[6 - daysAgo] ?? 0) + 1;
-        }
+        String dayName = _getDayName(routine.lastUsedDate!.weekday);
+        progressByDay[dayName] = (progressByDay[dayName] ?? 0) + (routine.userProgress ?? 0);
       }
     }
-    return workoutCounts;
+
+    return progressByDay.entries.map((e) => ProgressData(e.key, e.value)).toList();
   }
 
+  String _getDayName(int weekday) {
+    switch (weekday) {
+      case 1: return 'Pzt';
+      case 2: return 'Sal';
+      case 3: return 'Çar';
+      case 4: return 'Per';
+      case 5: return 'Cum';
+      case 6: return 'Cmt';
+      case 7: return 'Paz';
+      default: return '';
+    }
+  }
 
-  Widget _buildStatCard(String title, String value, IconData icon) {
-    return Card(
-      color: Color(0xFF2C2C2C),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: Color(0xFFE91E63), size: 24),
-            SizedBox(height: 8),
-            Text(title, style: TextStyle(color: Colors.white70, fontSize: 14)),
-            SizedBox(height: 4),
-            Text(value, style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-          ],
+  Widget _buildMostUsedRoutines(List<FirebaseRoutine> routines) {
+    var sortedRoutines = List<FirebaseRoutine>.from(routines)
+      ..sort((a, b) => (b.userProgress ?? 0).compareTo(a.userProgress ?? 0));
+    var topRoutines = sortedRoutines.take(5).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.all(16),
+          child: Text('En Çok Kullanılan Rutinler', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         ),
-      ),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: NeverScrollableScrollPhysics(),
+          itemCount: topRoutines.length,
+          itemBuilder: (context, index) {
+            var routine = topRoutines[index];
+            return ListTile(
+              leading: CircleAvatar(child: Text('${index + 1}')),
+              title: Text('Rutin ${routine.routineId}'),
+              subtitle: Text('İlerleme: ${routine.userProgress ?? 0}%'),
+              trailing: Icon(Icons.fitness_center),
+            );
+          },
+        ),
+      ],
     );
   }
+
+  Widget _buildRecentActivity(BuildContext context) {
+    return FutureBuilder<List<RoutineHistory>>(
+      future: BlocProvider.of<RoutinesBloc>(context).getUserRoutineHistory(userId!),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(child: CircularProgressIndicator());
+        } else if (snapshot.hasError) {
+          return Center(child: Text('Hata: ${snapshot.error}'));
+        } else if (snapshot.hasData) {
+          var recentActivities = snapshot.data!.take(10).toList();
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: EdgeInsets.all(16),
+                child: Text('Son Aktiviteler', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              ),
+              ListView.builder(
+                shrinkWrap: true,
+                physics: NeverScrollableScrollPhysics(),
+                itemCount: recentActivities.length,
+                itemBuilder: (context, index) {
+                  var activity = recentActivities[index];
+                  return ListTile(
+                    leading: Icon(Icons.history),
+                    title: Text('Rutin ${activity.routineId}'),
+                    subtitle: Text('Tarih: ${activity.completedDate.toString().split(' ')[0]}'),
+                  );
+                },
+              ),
+            ],
+          );
+        }
+        return Center(child: Text('Aktivite bulunamadı.'));
+      },
+    );
+  }
+}
+
+class ProgressData {
+  final String day;
+  final int value;
+
+  ProgressData(this.day, this.value);
 }

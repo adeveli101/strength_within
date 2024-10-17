@@ -9,7 +9,7 @@ String mainTargetedBodyPartToStringConverter(MainTargetedBodyPart? mainTargetedB
   return mainTargetedBodyPart!.name.capitalize!;
 }
 
-String workoutTypeToStringConverter(WorkoutType workoutType) {
+String workoutTypeToStringConverter(WorkoutTypes workoutType) {
   return workoutType.name;
 }
 
