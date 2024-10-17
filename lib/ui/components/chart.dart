@@ -7,7 +7,7 @@ import '../../resource/routines_bloc.dart';
 
 class StackedAreaLineChart extends StatelessWidget {
   final bool animate;
-  final Exercise exercise;
+  final Exercises exercise;
   final String userId;
   final RoutinesBloc routinesBloc;
 
@@ -20,7 +20,7 @@ class StackedAreaLineChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Exercise>>(
+    return FutureBuilder<List<Exercises>>(
       future: routinesBloc.getExercisesByBodyPart(exercise.mainTargetedBodyPart),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -42,11 +42,11 @@ class StackedAreaLineChart extends StatelessWidget {
               labelStyle: TextStyle(color: Colors.white70),
             ),
             plotAreaBorderWidth: 0,
-            series: <CartesianSeries<Exercise, String>>[
-              ColumnSeries<Exercise, String>(
+            series: <CartesianSeries<Exercises, String>>[
+              ColumnSeries<Exercises, String>(
                 dataSource: snapshot.data!,
-                xValueMapper: (Exercise exercise, _) => exercise.name,
-                yValueMapper: (Exercise exercise, _) => exercise.defaultWeight,
+                xValueMapper: (Exercises exercise, _) => exercise.name,
+                yValueMapper: (Exercises exercise, _) => exercise.defaultWeight,
                 color: Color(0xFFE91E63),
                 borderRadius: BorderRadius.circular(5),
               ),

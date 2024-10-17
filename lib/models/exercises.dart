@@ -1,16 +1,16 @@
 import 'WorkoutType.dart';
 import 'BodyPart.dart';
 
-class Exercise {
+class Exercises {
   final int id;
   final String name;
   final double defaultWeight;
   final int defaultSets;
   final int defaultReps;
-  final WorkoutType workoutType;
+  final WorkoutTypes workoutType;
   final MainTargetedBodyPart mainTargetedBodyPart;
 
-  Exercise({
+  Exercises({
     required this.id,
     required this.name,
     required this.defaultWeight,
@@ -20,14 +20,14 @@ class Exercise {
     required this.mainTargetedBodyPart,
   });
 
-  factory Exercise.fromMap(Map<String, dynamic> map) {
-    return Exercise(
+  factory Exercises.fromMap(Map<String, dynamic> map) {
+    return Exercises(
       id: map['Id'] as int,
       name: map['Name'] as String,
       defaultWeight: map['DefaultWeight'] as double,
       defaultSets: map['DefaultSets'] as int,
       defaultReps: map['DefaultReps'] as int,
-      workoutType: WorkoutType.fromMap(map['WorkoutType'] as Map<String, dynamic>),
+      workoutType: WorkoutTypes.fromMap(map['WorkoutType'] as Map<String, dynamic>),
       mainTargetedBodyPart: MainTargetedBodyPart.values[map['MainTargetedBodyPart'] as int],
     );
   }
@@ -43,16 +43,16 @@ class Exercise {
       'MainTargetedBodyPart': mainTargetedBodyPart.index,
     };
   }
-  Exercise copyWith({
+  Exercises copyWith({
     int? id,
     String? name,
     double? defaultWeight,
     int? defaultSets,
     int? defaultReps,
-    WorkoutType? workoutType,
+    WorkoutTypes? workoutType,
     MainTargetedBodyPart? mainTargetedBodyPart,
   }) {
-    return Exercise(
+    return Exercises(
       id: id ?? this.id,
       name: name ?? this.name,
       defaultWeight: defaultWeight ?? this.defaultWeight,

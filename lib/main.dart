@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get/get.dart';
 import 'package:workout/resource/firebase_provider.dart';
 import 'package:workout/ui/home_page.dart';
@@ -10,21 +11,37 @@ import 'firebase_options.dart';
 import 'resource/routines_bloc.dart';
 import 'resource/sql_provider.dart';
 
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
   await FirebaseAppCheck.instance.activate(
     androidProvider: AndroidProvider.playIntegrity,
     appleProvider: AppleProvider.deviceCheck,
     webProvider: ReCaptchaV3Provider('recaptcha-v3-site-key'),
   );
-  final routinesBloc =  Get.put(RoutinesBloc(FirebaseProvider(SQLProvider())));
 
-  await routinesBloc.initialize();
-  runApp(const App());
+  final sqlProvider = SQLProvider();
+  await sqlProvider.initDatabase();
+  final firebaseProvider = FirebaseProvider(sqlProvider);
+
+  String? userId = await firebaseProvider.signInAnonymously();
+  if (userId == null) {
+    print('Anonim giriş başarısız oldu.');
+  }
+
+  runApp(
+    BlocProvider(
+      create: (context) => RoutinesBloc(
+        firebaseProvider: firebaseProvider,
+        sqlProvider: sqlProvider,
+      ),
+      child: const App(),
+    ),
+  );
 }
 
 class App extends StatelessWidget {
@@ -41,6 +58,10 @@ class App extends StatelessWidget {
           backgroundColor: Colors.transparent,
           elevation: 0,
         ),
+        textTheme: TextTheme(
+          bodyLarge: TextStyle(color: Colors.white),
+          bodyMedium: TextStyle(color: Colors.white),
+        ),
       ),
       home: MainScreen(),
     );
@@ -54,16 +75,17 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
-  final RoutinesBloc routinesBloc = Get.find<RoutinesBloc>();
+  late RoutinesBloc _routinesBloc;
 
   final List<Widget> _pages = [];
 
   @override
   void initState() {
     super.initState();
-    _pages.add(HomePage(routinesBloc: routinesBloc));
-    _pages.add(RecommendPage(routinesBloc: routinesBloc));
-    _pages.add(StatisticsPage(routinesBloc: routinesBloc));
+    _routinesBloc = BlocProvider.of<RoutinesBloc>(context);
+    _pages.add(HomePage(routinesBloc: _routinesBloc));
+    _pages.add(RecommendPage(routinesBloc: _routinesBloc));
+    _pages.add(StatisticsPage(routinesBloc: _routinesBloc));
   }
 
   @override
@@ -91,9 +113,10 @@ class _MainScreenState extends State<MainScreen> {
             label: 'Statistics',
           ),
         ],
-        backgroundColor: Color(0xFF2C2C2C),
-        selectedItemColor: Color(0xFFE91E63),
-        unselectedItemColor: Colors.white70,
+        backgroundColor: Color(0xFF282828),
+        selectedItemColor: Colors.white,
+        unselectedItemColor: Colors.grey,
+        type: BottomNavigationBarType.fixed,
       ),
     );
   }

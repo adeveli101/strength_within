@@ -5,7 +5,7 @@ import '../../models/parts.dart';
 import '../../resource/routines_bloc.dart';
 
 class PartCard extends StatelessWidget {
-  final Part part;
+  final Parts part;
   final bool isExpanded;
   final Function(bool) onExpandToggle;
   final VoidCallback onDelete;
@@ -59,7 +59,7 @@ class PartCard extends StatelessWidget {
   }
 
   Widget _buildExerciseList() {
-    return FutureBuilder<List<Exercise>>(
+    return FutureBuilder<List<Exercises>>(
       future: routinesBloc.getExercisesByBodyPart(part as MainTargetedBodyPart),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -93,7 +93,7 @@ class PartCard extends StatelessWidget {
     );
   }
 
-  Widget _buildExerciseRow(Exercise ex) {
+  Widget _buildExerciseRow(Exercises ex) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
