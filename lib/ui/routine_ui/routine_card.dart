@@ -1,164 +1,94 @@
 import 'package:flutter/material.dart';
 import '../../firebase_class/firebase_routines.dart';
-import '../../resource/routines_bloc.dart';
-
+import '../../data_bloc/RoutineRepository.dart';
+import 'routine_detail.dart';
 
 class RoutineCard extends StatelessWidget {
-  final FirebaseRoutine firebaseRoutine;
-  final RoutinesBloc routinesBloc;
+  final FirebaseRoutines routine;
+  final Function(bool) onFavoriteToggle;
+  final bool isFavorite;
+  final RoutineRepository repository;
 
   const RoutineCard({
     Key? key,
-    required this.firebaseRoutine,
-    required this.routinesBloc,
+    required this.routine,
+    required this.onFavoriteToggle,
+    required this.isFavorite,
+    required this.repository,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 0,
-      color: Colors.transparent,
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: Colors.grey[900],
       child: InkWell(
         onTap: () {
-          Navigator.pushNamed(context, '/routine_detail', arguments: firebaseRoutine);
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (context) => RoutineDetail(
+              routine: routine,
+              repository: repository,
+            ),
+          );
         },
+        borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8.0),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Routine Image
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: Image.asset(
-                  'assets/images/${firebaseRoutine.routineId}.jpg',
-                  width: 56,
-                  height: 56,
-                  fit: BoxFit.cover,
-                ),
-              ),
-              SizedBox(width: 16),
-              // Routine Details
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      firebaseRoutine.routineId.toString(),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      routine.name,
                       style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
                         color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
-                    SizedBox(height: 4),
-                    Text(
-                      firebaseRoutine.isCustom ? 'Custom Routine' : 'Predefined Routine',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.white70,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      routine.isFavorite ? Icons.favorite : Icons.favorite_border,
+                      color: routine.isFavorite ? Colors.red : Colors.grey[400],
                     ),
-                  ],
+                    onPressed: () => onFavoriteToggle(!routine.isFavorite),
+                  ),
+                ],
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Hedef Bölge: ${routine.mainTargetedBodyPartId.toString().split('.').last}',
+                style: TextStyle(
+                  color: Colors.grey[400],
+                  fontSize: 14,
                 ),
               ),
-              // Favorite Button
-              IconButton(
-                icon: Icon(
-                  firebaseRoutine.isFavorite ? Icons.favorite : Icons.favorite_border,
-                  color: Colors.white70,
+              SizedBox(height: 8),
+              Text(
+                'İlerleme: ${routine.userProgress}%',
+                style: TextStyle(
+                  color: Colors.grey[400],
+                  fontSize: 14,
                 ),
-                onPressed: () => _toggleFavorite(context),
               ),
-              // More Options Button
-              IconButton(
-                icon: Icon(Icons.more_vert, color: Colors.white70),
-                onPressed: () => _showOptionsMenu(context),
+              SizedBox(height: 8),
+              LinearProgressIndicator(
+                value: routine.userProgress! / 100,
+                backgroundColor: Colors.grey[700],
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
               ),
             ],
           ),
         ),
       ),
-    );
-  }
-
-  void _toggleFavorite(BuildContext context) async {
-    final updatedRoutine = FirebaseRoutine(
-      id: firebaseRoutine.id,
-      userId: firebaseRoutine.userId,
-      routineId: firebaseRoutine.routineId,
-      userProgress: firebaseRoutine.userProgress,
-      lastUsedDate: firebaseRoutine.lastUsedDate,
-      userRecommended: firebaseRoutine.userRecommended,
-      isCustom: firebaseRoutine.isCustom,
-      isFavorite: !firebaseRoutine.isFavorite,
-    );
-    String? deviceId = await routinesBloc.getDeviceId();
-    if (deviceId != null) {
-      String? userId = await routinesBloc.getUserId(deviceId);
-      if (userId != null) {
-        await routinesBloc.updateUserRoutine(userId, updatedRoutine);
-      }
-    }
-  }
-
-  void _showOptionsMenu(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      builder: (BuildContext context) {
-        return Container(
-          color: Color(0xFF282828),
-          child: SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                ListTile(
-                  leading: Icon(Icons.play_arrow, color: Colors.white),
-                  title: Text('Start Routine', style: TextStyle(color: Colors.white)),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    String? deviceId = await routinesBloc.getDeviceId();
-                    if (deviceId != null) {
-                      String? userId = await routinesBloc.getUserId(deviceId);
-                      if (userId != null) {
-                        await routinesBloc.updateUserRoutineLastUsedDate(userId, firebaseRoutine.id);
-                        // Navigate to start routine page
-                      }
-                    }
-                  },
-                ),
-                ListTile(
-                  leading: Icon(Icons.edit, color: Colors.white),
-                  title: Text('Edit Routine', style: TextStyle(color: Colors.white)),
-                  onTap: () {
-                    Navigator.pop(context);
-                    // Navigate to edit routine page
-                  },
-                ),
-                ListTile(
-                  leading: Icon(Icons.delete, color: Colors.white),
-                  title: Text('Delete Routine', style: TextStyle(color: Colors.white)),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    String? deviceId = await routinesBloc.getDeviceId();
-                    if (deviceId != null) {
-                      String? userId = await routinesBloc.getUserId(deviceId);
-                      if (userId != null) {
-                        await routinesBloc.deleteUserRoutine(userId, firebaseRoutine.id);
-                      }
-                    }
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 }

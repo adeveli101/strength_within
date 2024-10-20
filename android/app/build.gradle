@@ -43,8 +43,9 @@ flutter {
 dependencies {
     implementation(platform('com.google.firebase:firebase-bom:33.4.0'))
     implementation 'com.google.firebase:firebase-analytics:22.1.2'
-    implementation 'androidx.activity:activity:1.9.2'
+    implementation 'androidx.activity:activity:1.9.3'
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'com.google.android.gms:play-services-safetynet:18.1.0'
+    implementation 'com.google.android.play:integrity:1.4.0'
 
 }
