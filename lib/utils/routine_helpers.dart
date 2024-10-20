@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../models/BodyPart.dart';
 import '../models/WorkoutType.dart';
-import '../models/parts.dart';
+import '../models/PartFocusRoutine.dart';
 
 
 String mainTargetedBodyPartToStringConverter(MainTargetedBodyPart? mainTargetedBodyPart) {
@@ -78,6 +78,8 @@ Widget mainTargetedBodyPartToImageConverter(MainTargetedBodyPart mainTargetedBod
       return Image.asset('assets/chest-96.png', scale: scale);
     case MainTargetedBodyPart.leg:
       return Image.asset('assets/leg-96.png', scale: scale);
+    case MainTargetedBodyPart.core:
+      return Image.asset('assets/abs-96.png');
   }
 }
 

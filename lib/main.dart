@@ -3,15 +3,16 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get/get.dart';
-import 'package:workout/resource/firebase_provider.dart';
 import 'package:workout/ui/home_page.dart';
-import 'package:workout/ui/recommend_page.dart';
-import 'package:workout/ui/statistics_page.dart';
+import 'package:workout/ui/for_you_page.dart';
+import 'package:workout/data_bloc/RoutineRepository.dart';
+import 'package:workout/data_bloc/routines_bloc.dart';
+import 'package:workout/data_provider/firebase_provider.dart';
+import 'package:workout/data_provider/sql_provider.dart';
+import 'package:workout/ui/setting_pages.dart';
 import 'firebase_options.dart';
-import 'resource/routines_bloc.dart';
-import 'resource/sql_provider.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Firebase.initializeApp(
@@ -20,102 +21,122 @@ void main() async {
 
   await FirebaseAppCheck.instance.activate(
     androidProvider: AndroidProvider.playIntegrity,
-    appleProvider: AppleProvider.deviceCheck,
-    webProvider: ReCaptchaV3Provider('recaptcha-v3-site-key'),
   );
 
   final sqlProvider = SQLProvider();
   await sqlProvider.initDatabase();
-  final firebaseProvider = FirebaseProvider(sqlProvider);
+
+  final firebaseProvider = FirebaseProvider();
+  final routineRepository = RoutineRepository(sqlProvider, firebaseProvider);
+  await sqlProvider.testDatabaseContent();
 
   String? userId = await firebaseProvider.signInAnonymously();
-  if (userId == null) {
-    print('Anonim giriş başarısız oldu.');
-  }
 
-  runApp(
-    BlocProvider(
-      create: (context) => RoutinesBloc(
-        firebaseProvider: firebaseProvider,
-        sqlProvider: sqlProvider,
+  if (userId != null) {
+    runApp(
+      BlocProvider<RoutinesBloc>(
+        create: (context) => RoutinesBloc(repository: routineRepository, userId: userId),
+        child: App(userId: userId),
       ),
-      child: const App(),
-    ),
-  );
+    );
+  } else {
+    print('Anonim giriş başarısız oldu.');
+    // TODO: Anonim giriş başarısız olduğunda yapılacaklar
+  }
 }
 
 class App extends StatelessWidget {
-  const App({Key? key}) : super(key: key);
+  final String userId;
+
+  const App({Key? key, required this.userId}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
       title: 'Fitness App',
-      theme: ThemeData(
-        primarySwatch: Colors.pink,
+      theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: Color(0xFF121212),
         appBarTheme: AppBarTheme(
           backgroundColor: Colors.transparent,
           elevation: 0,
         ),
-        textTheme: TextTheme(
-          bodyLarge: TextStyle(color: Colors.white),
-          bodyMedium: TextStyle(color: Colors.white),
+        bottomNavigationBarTheme: BottomNavigationBarThemeData(
+          backgroundColor: Color(0xFF282828),
+          selectedItemColor: Colors.white,
+          unselectedItemColor: Colors.grey,
         ),
       ),
-      home: MainScreen(),
+      home: MainScreen(userId: userId),
     );
   }
 }
 
 class MainScreen extends StatefulWidget {
+  final String userId;
+
+  const MainScreen({Key? key, required this.userId}) : super(key: key);
+
   @override
   _MainScreenState createState() => _MainScreenState();
 }
 
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
-  late RoutinesBloc _routinesBloc;
-
-  final List<Widget> _pages = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _routinesBloc = BlocProvider.of<RoutinesBloc>(context);
-    _pages.add(HomePage(routinesBloc: _routinesBloc));
-    _pages.add(RecommendPage(routinesBloc: _routinesBloc));
-    _pages.add(StatisticsPage(routinesBloc: _routinesBloc));
-  }
 
   @override
   Widget build(BuildContext context) {
+    final RoutinesBloc routinesBloc = BlocProvider.of<RoutinesBloc>(context);
+
     return Scaffold(
-      body: _pages[_currentIndex],
+      appBar: AppBar(
+        title: Text(_currentIndex == 0 ? 'Ana Sayfa' : 'Senin İçin'),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.settings),
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                builder: (BuildContext context) {
+                  return SettingsPage();
+                },
+                isScrollControlled: true,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+      body: IndexedStack(
+        index: _currentIndex,
+        children: [
+          HomePage(userId: widget.userId),
+          ForYouPage(userId: widget.userId),
+        ],
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) {
           setState(() {
             _currentIndex = index;
           });
+          if (index == 0) {
+            routinesBloc.add(FetchHomeData(userId: widget.userId));
+          } else if (index == 1) {
+            routinesBloc.add(FetchForYouData(userId: widget.userId));
+          }
         },
         items: [
           BottomNavigationBarItem(
             icon: Icon(Icons.home),
-            label: 'Home',
+            label: 'Ana Sayfa',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.recommend),
-            label: 'Recommend',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.bar_chart),
-            label: 'Statistics',
+            label: 'Senin İçin',
           ),
         ],
-        backgroundColor: Color(0xFF282828),
-        selectedItemColor: Colors.white,
-        unselectedItemColor: Colors.grey,
         type: BottomNavigationBarType.fixed,
       ),
     );

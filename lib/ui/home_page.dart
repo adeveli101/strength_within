@@ -1,283 +1,148 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:workout/ui/routine_ui/routine_card.dart';
-import '../../resource/routines_bloc.dart';
-import '../models/exercises.dart';
-import '../models/routines.dart';
-
+import 'package:workout/data_bloc/routines_bloc.dart';
+import 'package:workout/models/routines.dart';
+import 'package:workout/models/BodyPart.dart';
+import 'package:workout/models/WorkoutType.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({Key? key, required RoutinesBloc routinesBloc}) : super(key: key);
+  final String userId;
+
+  const HomePage({Key? key, required this.userId}) : super(key: key);
 
   @override
   _HomePageState createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
-  late RoutinesBloc _routinesBloc;
-
   @override
   void initState() {
     super.initState();
-    _routinesBloc = BlocProvider.of<RoutinesBloc>(context);
-    _routinesBloc.add(FetchRoutines());
+    BlocProvider.of<RoutinesBloc>(context).add(FetchHomeData(userId: widget.userId));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xFF121212),
-      body: CustomScrollView(
-        slivers: [
-          _buildAppBar(),
-          _buildUserRoutines(),
-          _buildRecommendedRoutines(),
-          _buildPopularExercises(),
-        ],
+      appBar: AppBar(
+        title: Text('Ana Sayfa'),
       ),
-      bottomNavigationBar: _buildBottomNavigationBar(),
-    );
-  }
-
-  Widget _buildAppBar() {
-    return SliverAppBar(
-      floating: true,
-      backgroundColor: Color(0xFF121212),
-      title: Text('Home', style: TextStyle(color: Colors.white)),
-      actions: [
-        IconButton(
-          icon: Icon(Icons.search, color: Colors.white),
-          onPressed: () {
-            // Implement search functionality
-          },
-        ),
-        IconButton(
-          icon: Icon(Icons.account_circle, color: Colors.white),
-          onPressed: () {
-            // Navigate to user profile
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildUserRoutines() {
-    return SliverToBoxAdapter(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Text(
-              'Your Routines',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          SizedBox(
-            height: 200,
-            child: BlocBuilder<RoutinesBloc, RoutinesState>(
-              builder: (context, state) {
-                if (state is RoutinesLoaded) {
-                  return FutureBuilder<String?>(
-                    future: _routinesBloc.getDeviceId().then((deviceId) =>
-                    deviceId != null ? _routinesBloc.getUserId(deviceId) : null
-                    ),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return Center(child: CircularProgressIndicator());
-                      }
-                      if (snapshot.hasData && snapshot.data != null) {
-                        String userId = snapshot.data!;
-                        return ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: state.routines.length,
-                          itemBuilder: (context, index) {
-                            return RoutineCard(
-                              firebaseRoutine: (state.routines[index]).toFirebaseRoutine(userId),
-                              routinesBloc: _routinesBloc,
-                            );
-                          },
-                        );
-                      } else {
-                        return Center(child: Text('User ID not found', style: TextStyle(color: Colors.white)));
-                      }
-                    },
-                  );
-                } else if (state is RoutinesLoading) {
-                  return Center(child: CircularProgressIndicator());
-                } else {
-                  return Center(child: Text('No routines found', style: TextStyle(color: Colors.white)));
-                }
+      body: BlocBuilder<RoutinesBloc, RoutinesState>(
+        builder: (context, state) {
+          print("Current state: $state"); // Hata ayıklama için eklendi
+          if (state is RoutinesLoading) {
+            return Center(child: CircularProgressIndicator());
+          } else if (state is RoutinesLoaded) {
+            print("Received RoutinesLoaded state with ${state.routines.length} routines");
+            if (state.routines.isEmpty) {
+              return Center(child: Text('Henüz rutin bulunmamaktadır.'));
+            }
+            return ListView.builder(
+              itemCount: state.routines.length,
+              itemBuilder: (context, index) {
+                final routine = state.routines[index];
+                return ListTile(
+                  title: Text(routine.name),
+                  subtitle: Text(routine.description ?? ''),
+                  trailing: Icon(routine.isFavorite ? Icons.favorite : Icons.favorite_border),
+                );
               },
-            ),
-          ),
-        ],
+            );
+          } else if (state is RoutinesError) {
+            return Center(child: Text('Hata: ${state.message}'));
+          }
+          return Center(child: Text('Bilinmeyen durum: ${state.runtimeType}'));
+        },
       ),
-    );
-  }
-
-  Widget _buildRecommendedRoutines() {
-    return SliverToBoxAdapter(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Text(
-              'Recommended for You',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          SizedBox(
-            height: 200,
-            child: FutureBuilder<List<Routines>>(
-              future: _routinesBloc.getRecommendedRoutines(),
-              builder: (context, snapshot) {
-                if (snapshot.hasData) {
-                  return ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: snapshot.data!.length,
-                    itemBuilder: (context, index) {
-                      return _buildRecommendedRoutineCard(snapshot.data![index]);
-                    },
-                  );
-                } else if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}', style: TextStyle(color: Colors.white)));
-                } else {
-                  return Center(child: CircularProgressIndicator());
-                }
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPopularExercises() {
-    return SliverToBoxAdapter(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Text(
-              'Popular Exercises',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          SizedBox(
-            height: 200,
-            child: FutureBuilder<List<Exercises>>(
-              future: _routinesBloc.getAllExercises(),
-              builder: (context, snapshot) {
-                if (snapshot.hasData) {
-                  return ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: snapshot.data!.length,
-                    itemBuilder: (context, index) {
-                      return _buildExerciseCard(snapshot.data![index]);
-                    },
-                  );
-                } else if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}', style: TextStyle(color: Colors.white)));
-                } else {
-                  return Center(child: CircularProgressIndicator());
-                }
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRecommendedRoutineCard(Routines routine) {
-    return Card(
-      color: Color(0xFF282828),
-      child: Container(
-        width: 160,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.asset(
-                'assets/images/${routine.id}.jpg',
-                height: 120,
-                width: 160,
-                fit: BoxFit.cover,
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text(
-                routine.name,
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildExerciseCard(Exercises exercise) {
-    return Card(
-      color: Color(0xFF282828),
-      child: Container(
-        width: 160,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.asset(
-                'assets/images/${exercise.id}.jpg',
-                height: 120,
-                width: 160,
-                fit: BoxFit.cover,
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text(
-                exercise.name,
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBottomNavigationBar() {
-    return BottomNavigationBar(
-      backgroundColor: Color(0xFF282828),
-      selectedItemColor: Colors.white,
-      unselectedItemColor: Colors.grey,
-      items: [
-        BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-        BottomNavigationBarItem(icon: Icon(Icons.fitness_center), label: 'Workouts'),
-        BottomNavigationBarItem(icon: Icon(Icons.library_music), label: 'Library'),
-      ],
     );
   }
 }
+  Widget _buildFavoriteRoutines(List<Routines> routines) {
+    final favoriteRoutines = routines.where((routine) => routine.isFavorite).toList();
+    return _buildRoutineList('Favori Rutinleriniz', favoriteRoutines);
+  }
+
+  Widget _buildRecentRoutines(List<Routines> routines) {
+    final recentRoutines = routines
+        .where((routine) => routine.lastUsedDate != null)
+        .toList()
+      ..sort((a, b) => b.lastUsedDate!.compareTo(a.lastUsedDate!));
+    return _buildRoutineList('Son Kullanılan Rutinler', recentRoutines.take(5).toList());
+  }
+
+  Widget _buildRoutineList(String title, List<Routines> routines) {
+    return Column(
+
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        ),
+        SizedBox(
+          height: 150,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: routines.length,
+            itemBuilder: (context, index) {
+              final routine = routines[index];
+              return Card(
+                child: Container(
+                  width: 120,
+                  padding: EdgeInsets.all(8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(routine.name, style: TextStyle(fontWeight: FontWeight.bold)),
+                      SizedBox(height: 4),
+                      Text(routine.description ?? '', maxLines: 2, overflow: TextOverflow.ellipsis),
+                      Spacer(),
+                      Text('İlerleme: ${routine.userProgress ?? 0}%'),
+
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBodyPartsList(List<BodyParts> bodyParts) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Text('Vücut Bölümleri', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: bodyParts.map((bodyPart) => Chip(label: Text(bodyPart.name))).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWorkoutTypesList(List<WorkoutTypes> workoutTypes) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Text('Antrenman Türleri', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: workoutTypes.map((workoutType) => Chip(label: Text(workoutType.name))).toList(),
+        ),
+
+      ],
+    );
+  }
+
+

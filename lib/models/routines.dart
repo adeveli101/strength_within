@@ -1,40 +1,38 @@
-import '../firebase_class/firebase_routines.dart';
-import '../utils/routine_helpers.dart';
-import 'WorkoutType.dart';
-import 'BodyPart.dart';
-
 class Routines {
   final int id;
   final String name;
-  final MainTargetedBodyPart mainTargetedBodyPart;
-  final WorkoutTypes workoutType;
-  final List<int> partIds;  // List<int> olarak değiştirildi
-  final bool isRecommended;
-  final int difficulty;
-  final int estimatedTime;
-  final String mainTargetedBodyPartString;
+  final String description;
+  final int mainTargetedBodyPartId;
+  final int workoutTypeId;
+  bool isFavorite;
+  bool isCustom;
+  int? userProgress;
+  DateTime? lastUsedDate;
+  bool? userRecommended;
+  List<int> exerciseIds;
 
   Routines({
     required this.id,
     required this.name,
-    required this.mainTargetedBodyPart,
-    required this.workoutType,
-    required this.partIds,
-    required this.isRecommended,
-    required this.difficulty,
-    required this.estimatedTime,
-  }) : mainTargetedBodyPartString = mainTargetedBodyPartToStringConverter(mainTargetedBodyPart);
+    required this.description,
+    required this.mainTargetedBodyPartId,
+    required this.workoutTypeId,
+    this.isFavorite = false,
+    this.isCustom = false,
+    this.userProgress,
+    this.lastUsedDate,
+    this.userRecommended,
+    this.exerciseIds = const [],
+  });
 
-  factory Routines.fromMap(Map map) {
+  factory Routines.fromMap(Map<String, dynamic> map) {
+    print("fromMap çağrıldı: $map");
     return Routines(
-      id: map['Id'] as int,
-      name: map['Name'] as String,
-      mainTargetedBodyPart: MainTargetedBodyPart.values[map['MainTargetedBodyPart'] as int],
-      workoutType: WorkoutTypes.fromMap(map['WorkoutType'] as Map<String, dynamic>),
-      partIds: (map['PartIds'] as String).split(',').map((e) => int.parse(e)).toList(),
-      isRecommended: map['IsRecommended'] == 1,
-      difficulty: map['Difficulty'] as int,
-      estimatedTime: map['EstimatedTime'] as int,
+      id: map['id'],
+      name: map['name'],
+      description: map['description'],
+      mainTargetedBodyPartId: map['mainTargetedBodyPartId'],
+      workoutTypeId: map['workoutTypeId'],
     );
   }
 
@@ -42,56 +40,40 @@ class Routines {
     return {
       'Id': id,
       'Name': name,
-      'MainTargetedBodyPart': mainTargetedBodyPart.index,
-      'WorkoutType': workoutType.toMap(),
-      'PartIds': partIds.join(','),
-      'IsRecommended': isRecommended ? 1 : 0,
-      'Difficulty': difficulty,
-      'EstimatedTime': estimatedTime,
+      'Description': description,
+      'MainTargetedBodyPartId': mainTargetedBodyPartId,
+      'WorkoutTypeId': workoutTypeId,
     };
   }
 
   Routines copyWith({
     int? id,
     String? name,
-    MainTargetedBodyPart? mainTargetedBodyPart,
-    WorkoutTypes? workoutType,
-    List<int>? partIds,
-    bool? isRecommended,
-    int? difficulty,
-    int? estimatedTime,
+    String? description,
+    int? mainTargetedBodyPartId,
+    int? workoutTypeId,
+    bool? isFavorite,
+    bool? isCustom,
+    int? userProgress,
+    DateTime? lastUsedDate,
+    bool? userRecommended,
+    List<int>? exerciseIds,
   }) {
     return Routines(
       id: id ?? this.id,
       name: name ?? this.name,
-      mainTargetedBodyPart: mainTargetedBodyPart ?? this.mainTargetedBodyPart,
-      workoutType: workoutType ?? this.workoutType,
-      partIds: partIds ?? this.partIds,
-      isRecommended: isRecommended ?? this.isRecommended,
-      difficulty: difficulty ?? this.difficulty,
-      estimatedTime: estimatedTime ?? this.estimatedTime,
+      description: description ?? this.description,
+      mainTargetedBodyPartId: mainTargetedBodyPartId ?? this.mainTargetedBodyPartId,
+      workoutTypeId: workoutTypeId ?? this.workoutTypeId,
+      isFavorite: isFavorite ?? this.isFavorite,
+      isCustom: isCustom ?? this.isCustom,
+      userProgress: userProgress ?? this.userProgress,
+      lastUsedDate: lastUsedDate ?? this.lastUsedDate,
+      userRecommended: userRecommended ?? this.userRecommended,
+      exerciseIds: exerciseIds ?? this.exerciseIds,
     );
   }
-
-
-
-
-
-  FirebaseRoutine toFirebaseRoutine(String userId) {
-    return FirebaseRoutine(
-      id: id.toString(), // Eğer id String değilse toString() kullanın
-      userId: userId,
-      routineId: id,
-      userProgress: 0, // Varsayılan değer, gerekirse değiştirin
-      lastUsedDate: null, // Varsayılan değer, gerekirse değiştirin
-      userRecommended: false, // Varsayılan değer, gerekirse değiştirin
-      isCustom: false, // Varsayılan değer, gerekirse değiştirin
-      isFavorite: false, // Varsayılan değer, gerekirse değiştirin
-    );
-  }
-
-
 
   @override
-  String toString() => 'Routine(id: $id, name: $name, mainTargetedBodyPart: $mainTargetedBodyPartString, workoutType: $workoutType, difficulty: $difficulty, isRecommended: $isRecommended)';
+  String toString() => 'Routine(id: $id, name: $name, mainTargetedBodyPartId: $mainTargetedBodyPartId, workoutTypeId: $workoutTypeId, isFavorite: $isFavorite, isCustom: $isCustom, userProgress: $userProgress, lastUsedDate: $lastUsedDate, userRecommended: $userRecommended, exerciseIds: $exerciseIds)';
 }
