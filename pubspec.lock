@@ -554,10 +554,10 @@ packages:
     dependency: "direct main"
     description:
       name: flutter_confetti
-      sha256: "4e5981442675bc42825753efc0a197c524fd099adb699bff95400f4dc1e53cd0"
+      sha256: "22fc66984c17aea73e3cd300666609c4581176c00c31d4513b1e16758f75cb08"
       url: "https://pub.dev"
     source: hosted
-    version: "0.3.3"
+    version: "0.3.4"
   flutter_launcher_icons:
     dependency: "direct main"
     description:
@@ -583,10 +583,10 @@ packages:
     dependency: "direct main"
     description:
       name: flutter_native_splash
-      sha256: aa06fec78de2190f3db4319dd60fdc8d12b2626e93ef9828633928c2dcaea840
+      sha256: ee5c9bd2b74ea8676442fd4ab876b5d41681df49276488854d6c81a5377c0ef1
       url: "https://pub.dev"
     source: hosted
-    version: "2.4.1"
+    version: "2.4.2"
   flutter_plugin_android_lifecycle:
     dependency: "direct main"
     description:
@@ -1222,10 +1222,10 @@ packages:
     dependency: "direct main"
     description:
       name: sqlite3_flutter_libs
-      sha256: "62bbb4073edbcdf53f40c80775f33eea01d301b7b81417e5b3fb7395416258c1"
+      sha256: ccd29dd6cf6fb9351fa07cd6f92895809adbf0779c1d986acf5e3d53b3250e33
       url: "https://pub.dev"
     source: hosted
-    version: "0.5.24"
+    version: "0.5.25"
   stack_trace:
     dependency: transitive
     description:
@@ -1406,10 +1406,10 @@ packages:
     dependency: transitive
     description:
       name: win32
-      sha256: e5c39a90447e7c81cfec14b041cdbd0d0916bd9ebbc7fe02ab69568be703b9bd
+      sha256: "2735daae5150e8b1dfeb3eb0544b4d3af0061e9e82cef063adcd583bdae4306a"
       url: "https://pub.dev"
     source: hosted
-    version: "5.6.0"
+    version: "5.7.0"
   win32_registry:
     dependency: transitive
     description:

@@ -58,7 +58,9 @@ class App extends StatelessWidget {
         scaffoldBackgroundColor: Color(0xFF121212),
         appBarTheme: AppBarTheme(
           backgroundColor: Colors.transparent,
-          elevation: 0,
+          elevation: 0.3,
+          shape: Border.symmetric(),
+
         ),
         bottomNavigationBarTheme: BottomNavigationBarThemeData(
           backgroundColor: Color(0xFF282828),
@@ -89,7 +91,16 @@ class _MainScreenState extends State<MainScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_currentIndex == 0 ? 'Ana Sayfa' : 'Senin İçin'),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+
+            Icon(Icons.sports_score_rounded, color: Colors.red,), // İkon
+            SizedBox(width: 10), // İkon ve metin arasında boşluk
+            Text('Workout App',selectionColor: Colors.red), // Uygulama başlığı
+
+          ],
+        ),
         actions: [
           IconButton(
             icon: Icon(Icons.settings),
@@ -131,6 +142,7 @@ class _MainScreenState extends State<MainScreen> {
           BottomNavigationBarItem(
             icon: Icon(Icons.home),
             label: 'Ana Sayfa',
+
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.recommend),

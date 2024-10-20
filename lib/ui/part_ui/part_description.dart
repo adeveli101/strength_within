@@ -1,31 +1,20 @@
 import 'package:flutter/material.dart';
-
-import '../../data_bloc/RoutineRepository.dart';
-import '../../models/exercises.dart';
-import '../../models/PartFocusRoutine.dart';
-
-
-
-///initState(): Widget'ın başlangıç durumunu ayarlar ve egzersizleri yükler.
-/// build(): Widget'ın ana yapısını oluşturur.
-/// _buildExerciseItem(): Her bir egzersiz için liste öğesi oluşturur.
-/// Bu iki kart, aşağıdaki özellikleri ve metodları kullanıyor:
-/// DraggableScrollableSheet: PartDescription'da kullanılıyor, aşağıdan yukarı kaydırılabilen bir sayfa oluşturuyor.
-/// AnimatedBuilder: PartCard'da kullanılıyor, genişleme/daralma animasyonunu yönetiyor.
-/// FutureBuilder: PartDescription'da kullanılıyor, egzersizleri asenkron olarak yüklüyor.
-/// ScrollController: PartDescription'da kullanılıyor, sayfanın kaydırılmasını kontrol ediyor.
-/// IconButton: PartCard'da kullanılıyor, favori işlemini gerçekleştiriyor.
-/// ElevatedButton: PartCard'da kullanılıyor, detayları gösterme işlemini gerçekleştiriyor.
-
+import 'package:workout/models/PartFocusRoutine.dart';
+import 'package:workout/models/exercises.dart';
+import 'package:workout/models/BodyPart.dart';
+import 'package:workout/data_bloc/RoutineRepository.dart';
+import '../exercises_ui/exercise_card.dart';
 
 class PartDescription extends StatefulWidget {
   final Parts part;
   final RoutineRepository repository;
+  final String userId;
 
   const PartDescription({
     Key? key,
     required this.part,
     required this.repository,
+    required this.userId,
   }) : super(key: key);
 
   @override
@@ -33,128 +22,99 @@ class PartDescription extends StatefulWidget {
 }
 
 class _PartDescriptionState extends State<PartDescription> {
-  late Future<List<Exercises>> _exercisesFuture;
+  late Future<Map<BodyParts, List<Exercises>>> _groupedExercisesFuture;
+  late Map<int, BodyParts> _bodyPartsMap;
 
   @override
   void initState() {
     super.initState();
-    _exercisesFuture = widget.repository.getExercisesForPart(widget.part.id);
+    _loadBodyPartsMap();
+    _groupedExercisesFuture = _loadGroupedExercises();
   }
+
+  Future<void> _loadBodyPartsMap() async {
+    final bodyParts = await widget.repository.getAllBodyParts();
+    _bodyPartsMap = {for (var part in bodyParts) part.id: part};
+  }
+
+  Future<Map<BodyParts, List<Exercises>>> _loadGroupedExercises() async {
+    final exerciseIds = await widget.repository.getExerciseIdsForPart(widget.part.id);
+    final exercises = await Future.wait(
+      exerciseIds.map((id) => widget.repository.getExerciseById(id)),
+    );
+    final validExercises = exercises.whereType<Exercises>().toList();
+
+    Map<BodyParts, List<Exercises>> groupedExercises = {};
+    for (var exercise in validExercises) {
+      final bodyPart = await widget.repository.getBodyPartById(exercise.mainTargetedBodyPartId);
+      if (bodyPart != null) {
+        if (!groupedExercises.containsKey(bodyPart)) {
+          groupedExercises[bodyPart] = [];
+        }
+        groupedExercises[bodyPart]!.add(exercise);
+      }
+    }
+    return groupedExercises;
+  }
+
+
+
 
   @override
   Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.5,
-      minChildSize: 0.2,
-      maxChildSize: 0.9,
-      builder: (BuildContext context, ScrollController scrollController) {
-        return Container(
-          decoration: BoxDecoration(
-            color: Colors.grey[900],
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: ListView(
-            controller: scrollController,
-            padding: EdgeInsets.all(16),
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[700],
-                    borderRadius: BorderRadius.circular(2.5),
-                  ),
-                ),
-              ),
-              SizedBox(height: 16),
-              Text(
-                widget.part.name,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'Hedef Bölge: ${widget.part.bodyPartId.toString().split('.').last}',
-                style: TextStyle(
-                  color: Colors.grey[400],
-                  fontSize: 16,
-                ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'Set Tipi: ${widget.part.setType.toString().split('.').last}',
-                style: TextStyle(
-                  color: Colors.grey[400],
-                  fontSize: 16,
-                ),
-              ),
-              SizedBox(height: 16),
-              Text(
-                'Ek Notlar:',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                widget.part.additionalNotes,
-                style: TextStyle(
-                  color: Colors.grey[400],
-                  fontSize: 14,
-                ),
-              ),
-              SizedBox(height: 24),
-              Text(
-                'Egzersizler',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              SizedBox(height: 8),
-              FutureBuilder<List<Exercises>>(
-                future: _exercisesFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return Center(child: CircularProgressIndicator());
-                  } else if (snapshot.hasError) {
-                    return Text('Hata: ${snapshot.error}', style: TextStyle(color: Colors.red));
-                  } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                    return Text('Bu part için egzersiz bulunamadı.', style: TextStyle(color: Colors.grey[400]));
-                  } else {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.part.name),
+      ),
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ... (Diğer widget'lar aynı kalıyor)
+            FutureBuilder<Map<BodyParts, List<Exercises>>>(
+              future: _groupedExercisesFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return Center(child: Text('Bir hata oluştu: ${snapshot.error}'));
+                }
+                final groupedExercises = snapshot.data ?? {};
+                return ListView.builder(
+                  shrinkWrap: true,
+                  physics: NeverScrollableScrollPhysics(),
+                  itemCount: groupedExercises.length,
+                  itemBuilder: (context, index) {
+                    final bodyPart = groupedExercises.keys.elementAt(index);
+                    final exercises = groupedExercises[bodyPart] ?? [];
                     return Column(
-                      children: snapshot.data!.map((exercise) => _buildExerciseItem(exercise)).toList(),
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Text(
+                            bodyPart.name,
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                        ),
+                        ...exercises.map((exercise) => ExerciseCard(
+                          exercise: exercise,
+                          repository: widget.repository,
+                          bodyPartsMap: _bodyPartsMap,
+                          onTap: () {
+                            // Egzersiz detay sayfasına yönlendirme
+                          },
+                        )).toList(),
+                        Divider(),
+                      ],
                     );
-                  }
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildExerciseItem(Exercises exercise) {
-    return Card(
-      color: Colors.grey[850],
-      child: ListTile(
-        title: Text(
-          exercise.name,
-          style: TextStyle(color: Colors.white),
+                  },
+                );
+              },
+            ),
+          ],
         ),
-        subtitle: Text(
-          'Set: ${exercise.defaultSets}, Tekrar: ${exercise.defaultReps}',
-          style: TextStyle(color: Colors.grey[400]),
-        ),
-        trailing: Icon(Icons.fitness_center, color: Colors.blue),
       ),
     );
   }
