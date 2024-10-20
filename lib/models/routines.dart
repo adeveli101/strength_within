@@ -1,3 +1,5 @@
+import 'RoutineExercises.dart';
+
 class Routines {
   final int id;
   final String name;
@@ -9,7 +11,7 @@ class Routines {
   int? userProgress;
   DateTime? lastUsedDate;
   bool? userRecommended;
-  List<int> exerciseIds;
+  final List<int> exerciseIds;
 
   Routines({
     required this.id,
@@ -17,22 +19,27 @@ class Routines {
     required this.description,
     required this.mainTargetedBodyPartId,
     required this.workoutTypeId,
+    List<RoutineExercises>? routineExercises,
     this.isFavorite = false,
     this.isCustom = false,
     this.userProgress,
     this.lastUsedDate,
     this.userRecommended,
-    this.exerciseIds = const [],
-  });
+  }) : exerciseIds = routineExercises?.map((re) => re.exerciseId).toList() ?? [];
 
   factory Routines.fromMap(Map<String, dynamic> map) {
-    print("fromMap çağrıldı: $map");
     return Routines(
-      id: map['id'],
-      name: map['name'],
-      description: map['description'],
-      mainTargetedBodyPartId: map['mainTargetedBodyPartId'],
-      workoutTypeId: map['workoutTypeId'],
+      id: map['id'] as int? ?? 0,
+      name: map['name'] as String? ?? '',
+      description: map['description'] as String? ?? '',
+      mainTargetedBodyPartId: map['mainTargetedBodyPartId'] as int? ?? 0,
+      workoutTypeId: map['workoutTypeId'] as int? ?? 0,
+      routineExercises: [], // Bu kısmı boş bir liste olarak başlatıyoruz
+      isFavorite: map['isFavorite'] as bool? ?? false,
+      isCustom: map['isCustom'] as bool? ?? false,
+      userProgress: map['userProgress'] as int?,
+      lastUsedDate: map['lastUsedDate'] != null ? DateTime.parse(map['lastUsedDate']) : null,
+      userRecommended: map['userRecommended'] as bool?,
     );
   }
 
@@ -43,6 +50,12 @@ class Routines {
       'Description': description,
       'MainTargetedBodyPartId': mainTargetedBodyPartId,
       'WorkoutTypeId': workoutTypeId,
+      'IsFavorite': isFavorite,
+      'IsCustom': isCustom,
+      'UserProgress': userProgress,
+      'LastUsedDate': lastUsedDate?.toIso8601String(),
+      'UserRecommended': userRecommended,
+      'ExerciseIds': exerciseIds,
     };
   }
 
@@ -57,7 +70,7 @@ class Routines {
     int? userProgress,
     DateTime? lastUsedDate,
     bool? userRecommended,
-    List<int>? exerciseIds,
+    List<RoutineExercises>? routineExercises,
   }) {
     return Routines(
       id: id ?? this.id,
@@ -70,7 +83,7 @@ class Routines {
       userProgress: userProgress ?? this.userProgress,
       lastUsedDate: lastUsedDate ?? this.lastUsedDate,
       userRecommended: userRecommended ?? this.userRecommended,
-      exerciseIds: exerciseIds ?? this.exerciseIds,
+      routineExercises: routineExercises ?? (this.exerciseIds.map((id) => RoutineExercises(id: 0, routineId: this.id, exerciseId: id)).toList()),
     );
   }
 

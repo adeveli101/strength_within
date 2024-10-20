@@ -216,19 +216,15 @@ import '../models/routines.dart';
 
 
   Future<List<RoutineExercises>> getRoutineExercisesByRoutineId(int routineId) async {
-  final db = await database;
-  try {
-  final List<Map<String, dynamic>> maps = await db.query(
-  'RoutineExercises',
-  where: 'routineId = ?',
-  whereArgs: [routineId],
-  );
-  return List.generate(maps.length, (i) => RoutineExercises.fromMap(maps[i]));
-  } catch (e) {
-  print('Error getting routine exercises by routine id: $e');
-  return [];
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'RoutineExercises',
+      where: 'routineId = ?',
+      whereArgs: [routineId],
+    );
+    return List.generate(maps.length, (i) => RoutineExercises.fromMap(maps[i]));
   }
-  }
+
 
 
   Future<RoutineExercises?> getRoutineExerciseById(int id) async {
@@ -288,85 +284,104 @@ import '../models/routines.dart';
 
 
   Future<List<Routines>> getAllRoutines() async {
-  final db = await database;
-  final List<Map<String, dynamic>> maps = await db.query('Routines');
-  print("Veritabanından çekilen ham veri: $maps");
-  return List.generate(maps.length, (i) {
-  return Routines.fromMap(maps[i]);
-  });
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query('Routines');
+    print("Routines ham veri: $maps"); // Bu satırı ekleyin
+
+    List<Routines> routines = [];
+    for (var map in maps) {
+      List<RoutineExercises> routineExercises = await getRoutineExercisesByRoutineId(map['id']);
+      routines.add(Routines.fromMap({...map, 'routineExercises': routineExercises}));
+    }
+
+    return routines;
   }
 
-
-  Future<Routines?> getRoutineById(int id) async {final db = await database;
-  try {
-  final List<Map<String, dynamic>> maps = await db.query(
-  'Routines',
-  where: 'Id = ?',
-  whereArgs: [id],
-  limit: 1,
-  );
-  if (maps.isNotEmpty) {
-  return Routines.fromMap(maps.first);
+  Future<Routines?> getRoutineById(int id) async {
+    final db = await database;
+    try {
+      final List<Map<String, dynamic>> maps = await db.query(
+        'Routines',
+        where: 'Id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
+      if (maps.isNotEmpty) {
+        List<RoutineExercises> routineExercises = await getRoutineExercisesByRoutineId(id);
+        return Routines.fromMap({...maps.first, 'routineExercises': routineExercises});
+      }
+      return null;
+    } catch (e) {
+      print('Error getting routine by id: $e');
+      return null;
+    }
   }
-  return null;
-  } catch (e) {
-  print('Error getting routine by id: $e');
-  return null;
-  }
-  }
-
 
   Future<List<Routines>> getRoutinesByName(String name) async {
-  final db = await database;
-  final List<Map<String, dynamic>> maps = await db.query(
-  'Routines',
-  where: 'Name = ?',
-  whereArgs: [name],
-  );
-  return List.generate(maps.length, (i) => Routines.fromMap(maps[i]));
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'Routines',
+      where: 'Name = ?',
+      whereArgs: [name],
+    );
+    List<Routines> routines = [];
+    for (var map in maps) {
+      List<RoutineExercises> routineExercises = await getRoutineExercisesByRoutineId(map['Id']);
+      routines.add(Routines.fromMap({...map, 'routineExercises': routineExercises}));
+    }
+    return routines;
   }
 
 
   ///for searching///for searching
   Future<List<Routines>> getRoutinesByPartialName(String partialName) async {
-  final db = await database;
-  final List<Map<String, dynamic>> maps = await db.query(
-  'Routines',
-  where: 'Name LIKE ?',
-  whereArgs: ['%$partialName%'],
-  );
-  return List.generate(maps.length, (i) => Routines.fromMap(maps[i]));
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'Routines',
+      where: 'Name LIKE ?',
+      whereArgs: ['%$partialName%'],
+    );
+    List<Routines> routines = [];
+    for (var map in maps) {
+      List<RoutineExercises> routineExercises = await getRoutineExercisesByRoutineId(map['Id']);
+      routines.add(Routines.fromMap({...map, 'routineExercises': routineExercises}));
+    }
+    return routines;
   }
+
+
+
+
   ///for searching///for searching
-  Future<List<Routines>> getRoutinesByMainTargetedBodyPart(int mainTargetedBodyPartId) async {final db = await database;
-  try {
-  final List<Map<String, dynamic>> maps = await db.query(
-  'Routines',
-  where: 'MainTargetedBodyPartId = ?',
-  whereArgs: [mainTargetedBodyPartId],
-  );
-  return List.generate(maps.length, (i) => Routines.fromMap(maps[i]));
-  } catch (e) {
-  print('Error getting routines by main targeted body part: $e');
-  return [];
-  }
-  }
-
-
-  Future<List<Routines>> getRoutinesByWorkoutType(int workoutTypeId) async {final db = await database;
-  try {
-  final List<Map<String, dynamic>> maps = await db.query(
-  'Routines',
-  where: 'WorkoutTypeId = ?',
-  whereArgs: [workoutTypeId],
-  );
-  return List.generate(maps.length, (i) => Routines.fromMap(maps[i]));
-  } catch (e) {
-  print('Error getting routines by workout type: $e');
-  return [];
-  }
+  Future<List<Routines>> getRoutinesByMainTargetedBodyPart(int mainTargetedBodyPartId) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'Routines',
+      where: 'MainTargetedBodyPartId = ?',
+      whereArgs: [mainTargetedBodyPartId],
+    );
+    List<Routines> routines = [];
+    for (var map in maps) {
+      List<RoutineExercises> routineExercises = await getRoutineExercisesByRoutineId(map['Id']);
+      routines.add(Routines.fromMap({...map, 'routineExercises': routineExercises}));
+    }
+    return routines;
   }
 
+  Future<List<Routines>> getRoutinesByWorkoutType(int workoutTypeId) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'Routines',
+      where: 'WorkoutTypeId = ?',
+      whereArgs: [workoutTypeId],
+    );
+    List<Routines> routines = [];
+    for (var map in maps) {
+      List<RoutineExercises> routineExercises = await getRoutineExercisesByRoutineId(map['Id']);
+      routines.add(Routines.fromMap({...map, 'routineExercises': routineExercises}));
+    }
+    return routines;
+  }
 
   Future<List<Routines>> getRoutinesByBodyPartAndWorkoutType(int mainTargetedBodyPartId, int workoutTypeId) async {
   final db = await database;
@@ -455,17 +470,23 @@ import '../models/routines.dart';
   ///
   ///
   Future<List<Parts>> getAllParts() async {
-  final db = await database;
-
-  try {
-  final List<Map<String, dynamic>> maps = await db.query('Parts');
-  return List.generate(maps.length, (i) => Parts.fromMap(maps[i]));
-  } catch (e) {
-  print('Error getting all parts: $e');
-  return [];
+    final db = await database;
+    try {
+      final List<Map<String, dynamic>> maps = await db.query('Parts');
+      return List.generate(maps.length, (i) {
+        final map = maps[i];
+        return Parts(
+          id: map['id'] as int? ?? 0,
+          name: map['name'] as String? ?? '',
+          bodyPartId: map['bodyPartId'] as int? ?? 0,
+          setType: SetType.values[map['setType'] as int? ?? 0],
+        );
+      });
+    } catch (e) {
+      print('Error getting all parts: $e');
+      return [];
+    }
   }
-  }
-
 
   Future<Parts?> getPartById(int id) async {
   final db = await database;

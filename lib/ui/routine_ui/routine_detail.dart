@@ -1,176 +1,207 @@
 import 'package:flutter/material.dart';
-import 'package:workout/models/RoutineExercises.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:workout/models/routines.dart';
+import 'package:workout/models/exercises.dart';
+import 'package:workout/models/BodyPart.dart';
+import 'package:workout/models/WorkoutType.dart';
+import 'package:workout/data_bloc/routines_bloc.dart';
 
-import '../../data_bloc/RoutineRepository.dart';
-import '../../firebase_class/firebase_routines.dart';
-import '../../models/BodyPart.dart';
-import '../../models/PartFocusRoutine.dart';
+class RoutineDetails extends StatefulWidget {
+  final Routines routine;
+  final String userId;
 
-
-class RoutineDetail extends StatefulWidget {
-  final FirebaseRoutines routine;
-  final RoutineRepository repository;
-
-  const RoutineDetail({
+  const RoutineDetails({
     Key? key,
     required this.routine,
-    required this.repository,
+    required this.userId,
   }) : super(key: key);
 
   @override
-  _RoutineDetailState createState() => _RoutineDetailState();
+  _RoutineDetailsState createState() => _RoutineDetailsState();
 }
 
-class _RoutineDetailState extends State<RoutineDetail> {
-  late Future<List<RoutineExercises>> _routineExercisesFuture;
+class _RoutineDetailsState extends State<RoutineDetails> {
+  late RoutinesBloc _routinesBloc;
+  late Future<Routines?> _routineFuture;
 
   @override
   void initState() {
     super.initState();
-    _routineExercisesFuture = widget.repository.getRoutineExercises(widget.routine.id);  }
+    _routinesBloc = BlocProvider.of<RoutinesBloc>(context);
+    _loadData();
+  }
+
+
+
+  void _loadData() {
+    _routineFuture = _routinesBloc.repository.getRoutineWithUserData(widget.userId, widget.routine.id);
+    _routinesBloc.add(FetchExercises());
+    _routinesBloc.add(FetchBodyParts());
+    _routinesBloc.add(FetchWorkoutTypes());
+  }
+
+
 
   @override
   Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.9,
-      minChildSize: 0.5,
-      maxChildSize: 0.9,
-      builder: (BuildContext context, ScrollController scrollController) {
-        return Container(
-          decoration: BoxDecoration(
-            color: Colors.grey[900],
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.routine.name),
+        actions: [
+          IconButton(
+            icon: Icon(
+              widget.routine.isFavorite ? Icons.favorite : Icons.favorite_border,
+              color: widget.routine.isFavorite ? Colors.red : null,
+            ),
+            onPressed: _toggleFavorite,
           ),
-          child: ListView(
-            controller: scrollController,
-            padding: EdgeInsets.all(16),
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[700],
-                    borderRadius: BorderRadius.circular(2.5),
-                  ),
-                ),
-              ),
-              SizedBox(height: 16),
-              Text(
-                widget.routine.name,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'Hedef Bölge: ${widget.routine.mainTargetedBodyPartId.toString().split('.').last}',
-                style: TextStyle(
-                  color: Colors.grey[400],
-                  fontSize: 16,
-                ),
-              ),
-              SizedBox(height: 16),
-              Text(
-                'İlerleme: ${widget.routine.userProgress}%',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                ),
-              ),
-              SizedBox(height: 8),
-              LinearProgressIndicator(
-                value: widget.routine.userProgress! / 100,
-                backgroundColor: Colors.grey[700],
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
-              ),
-              SizedBox(height: 24),
-              Text(
-                'Parçalar',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              SizedBox(height: 8),
-              FutureBuilder<List<RoutineExercises>>(
-                future: _routineExercisesFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return Center(child: CircularProgressIndicator());
-                  } else if (snapshot.hasError) {
-                    return Text('Hata: ${snapshot.error}', style: TextStyle(color: Colors.red));
-                  } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                    return Text('Bu rutin için egzersiz bulunamadı.', style: TextStyle(color: Colors.grey[400]));
-                  } else {
-                    return Column(
-                      children: snapshot.data!.map((routineExercise) => _buildExerciseItem(routineExercise)).toList(),
-                    );
-                  }
-                },
-              ),
-
-              if (widget.routine.description != null && widget.routine.description.isNotEmpty)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(height: 24),
-                    Text(
-                      'Açıklama',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      widget.routine.description,
-                      style: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 16,
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-        );
-      },
+        ],
+      ),
+      body: FutureBuilder<Routines?>(
+        future: _routineFuture,
+        builder: (context, routineSnapshot) {
+          if (routineSnapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          } else if (routineSnapshot.hasError) {
+            return Center(child: Text('Error: ${routineSnapshot.error}'));
+          } else if (routineSnapshot.hasData) {
+            return BlocBuilder<RoutinesBloc, RoutinesState>(
+              builder: (context, state) {
+                if (state is RoutinesLoaded) {
+                  return _buildRoutineDetails(routineSnapshot.data!, state);
+                } else if (state is RoutinesError) {
+                  return Center(child: Text('Error: ${state.message}'));
+                }
+                return Center(child: CircularProgressIndicator());
+              },
+            );
+          } else {
+            return Center(child: Text('No data available'));
+          }
+        },
+      ),
     );
   }
 
-  Widget _buildExerciseItem(RoutineExercises routineExercise) {
-    // Bu metodu, RoutineExercises nesnesine göre güncelleyin
-    return FutureBuilder<RoutineExercises>(
-      future: widget.repository.getExercises(routineExercise.exerciseId),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return CircularProgressIndicator();
-        } else if (snapshot.hasError) {
-          return Text('Hata: ${snapshot.error}');
-        } else if (!snapshot.hasData) {
-          return Text('Egzersiz bulunamadı');
-        } else {
-          final exercise = snapshot.data!;
-          return Card(
-            color: Colors.grey[850],
-            child: ListTile(
-              title: Text(exercise.name, style: TextStyle(color: Colors.white)),
-              subtitle: Text(
-                'Hedef Bölge: ${MainTargetedBodyPart.values[exercise.mainTargetedBodyPartId].toString().split('.').last}',
-                style: TextStyle(color: Colors.grey[400]),
-              ),
-              trailing: Icon(Icons.chevron_right, color: Colors.grey[400]),
-              onTap: () {
-                // Egzersiz detaylarına gitmek için navigasyon ekleyebilirsiniz
+  Widget _buildRoutineDetails(Routines routine, RoutinesLoaded state) {
+    final bodyPart = state.bodyParts.firstWhere(
+          (bp) => bp.id == routine.mainTargetedBodyPartId,
+      orElse: () => BodyParts(id: 0, name: 'Unknown', mainTargetedBodyPart: MainTargetedBodyPart.abs),
+    );
+    final workoutType = state.workoutTypes.firstWhere(
+          (wt) => wt.id == routine.workoutTypeId,
+      orElse: () => WorkoutTypes(id: 0, name: 'Unknown'),
+    );
+
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(routine.name, style: Theme.of(context).textTheme.headlineSmall),
+            SizedBox(height: 8),
+            Text(routine.description, style: Theme.of(context).textTheme.bodyMedium),
+            SizedBox(height: 16),
+            _buildInfoSection(bodyPart, workoutType),
+            SizedBox(height: 16),
+            _buildProgressSection(),
+            SizedBox(height: 16),
+            _buildExerciseList(routine, state.exercises),
+          ],
+        ),
+      ),
+    );
+  }
+
+
+
+  Widget _buildInfoSection(BodyParts bodyPart, WorkoutTypes workoutType) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Routine Information', style: Theme.of(context).textTheme.titleLarge),
+            SizedBox(height: 8),
+            Text('Target Body Part: ${bodyPart.mainTargetedBodyPartString}'),
+            Text('Workout Type: ${workoutType.name}'),
+            if (widget.routine.lastUsedDate != null)
+              Text('Last Used: ${widget.routine.lastUsedDate!.toLocal()}'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProgressSection() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Progress', style: Theme.of(context).textTheme.titleLarge),
+            SizedBox(height: 8),
+            LinearProgressIndicator(
+              value: widget.routine.userProgress != null ? widget.routine.userProgress! / 100 : 0,
+              backgroundColor: Colors.grey[300],
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+            ),
+            SizedBox(height: 4),
+            Text('${widget.routine.userProgress ?? 0}% Complete'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExerciseList(Routines routine, List<Exercises> allExercises) {
+    final routineExercises = allExercises.where((exercise) => routine.exerciseIds.contains(exercise.id)).toList();
+
+    if (routineExercises.isEmpty) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Text('No exercises found for this routine.'),
+        ),
+      );
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Exercises', style: Theme.of(context).textTheme.titleLarge),
+            SizedBox(height: 8),
+            ListView.builder(
+              shrinkWrap: true,
+              physics: NeverScrollableScrollPhysics(),
+              itemCount: routineExercises.length,
+              itemBuilder: (context, index) {
+                final exercise = routineExercises[index];
+                return ListTile(
+                  title: Text(exercise.name),
+                  subtitle: Text('${exercise.defaultSets} sets x ${exercise.defaultReps} reps'),
+                  trailing: Text('${exercise.defaultWeight} kg'),
+                );
               },
             ),
-          );
-        }
-      },
+          ],
+        ),
+      ),
     );
+  }
+
+
+  void _toggleFavorite() {
+    _routinesBloc.add(ToggleRoutineFavorite(
+      userId: widget.userId,
+      routineId: widget.routine.id.toString(),
+      isFavorite: !widget.routine.isFavorite,
+    ));
+  }
 }

@@ -191,6 +191,26 @@ class FirebaseProvider {
       return null;
     }
   }
+  Future<FirebaseParts?> getUserPart(String userId, String partId) async {
+    try {
+      DocumentSnapshot doc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('parts')
+          .doc(partId)
+          .get();
+
+      if (doc.exists) {
+        return FirebaseParts.fromMap(doc.data() as Map<String, dynamic>);
+      }
+      return null;
+    } catch (e) {
+      print('Error getting user part: $e');
+      return null;
+    }
+  }
+
+
 
   Future<List<FirebaseParts>> getPartsByBodyPart(int bodyPartId) async {
     try {
@@ -260,21 +280,18 @@ class FirebaseProvider {
 // Kullanıcının parçalarını getir
   Future<List<FirebaseParts>> getUserParts(String userId) async {
     try {
-      final snapshot = await _firestore
+      final snapshot = await FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
           .collection('parts')
           .get();
 
-      List<FirebaseParts> parts = snapshot.docs
+      return snapshot.docs
           .map((doc) => FirebaseParts.fromFirestore(doc))
           .toList();
-
-      print('Kullanıcı parçaları başarıyla getirildi. Toplam: ${parts.length}');
-      return parts;
     } catch (e) {
-      print('Kullanıcı parçalarını getirme hatası: $e');
-      return [];
+      print('Error getting user parts: $e');
+      return []; // Hata durumunda boş liste dön
     }
   }
 
@@ -312,10 +329,10 @@ class FirebaseProvider {
     }
   }
 
-  // Kullanıcının belirli bir parçasını getir
-  Future<FirebaseParts?> getUserPart(String userId, String partId) async {
+
+  Future<bool> isPartFavorite(String userId, String partId) async {
     try {
-      final doc = await _firestore
+      DocumentSnapshot doc = await _firestore
           .collection('users')
           .doc(userId)
           .collection('parts')
@@ -323,24 +340,29 @@ class FirebaseProvider {
           .get();
 
       if (doc.exists) {
-        return FirebaseParts.fromFirestore(doc);
+        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+        return data['isFavorite'] as bool? ?? false;
       }
-      return null;
+      return false;
     } catch (e) {
-      print('Parça detaylarını getirme hatası: $e');
-      return null;
+      print('Error checking if part is favorite: $e');
+      return false;
     }
   }
 
-
-
-
-
-
-
-
-
-
+  Future<void> togglePartFavorite(String userId, String partId, bool isFavorite) async {
+    try {
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('parts')
+          .doc(partId)
+          .update({'isFavorite': isFavorite});
+    } catch (e) {
+      print('Error toggling part favorite: $e');
+      throw e;
+    }
+  }
 
 
 
@@ -427,6 +449,9 @@ class FirebaseProvider {
       return [];
     }
   }
+
+
+
 
   Future<void> addOrUpdateUserCustomExercise(String userId, Exercises exercise) async {
     try {

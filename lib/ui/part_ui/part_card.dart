@@ -1,178 +1,117 @@
 import 'package:flutter/material.dart';
-import 'package:workout/models/BodyPart.dart';
 import 'package:workout/models/PartFocusRoutine.dart';
+import 'package:workout/data_bloc/RoutineRepository.dart';
+import 'package:workout/models/BodyPart.dart';
 
-
-///initState(): Widget'ın başlangıç durumunu ayarlar ve animasyon kontrolcüsünü başlatır.
-/// dispose(): Widget'ın hafızadan silinmesi sırasında animasyon kontrolcüsünü temizler.
-/// _toggleExpand(): Kartın genişletilip daraltılmasını kontrol eder.
-/// build(): Widget'ın ana yapısını oluşturur.
-/// _buildCollapsedPart(): Kartın daraltılmış halini oluşturur.
-/// _buildExpandedPart(): Kartın genişletilmiş halini oluşturur.
-
-
-
-
-class PartCard extends StatefulWidget {
+class PartFocusRoutineCard extends StatefulWidget {
   final Parts part;
+  final RoutineRepository repository;
+  final String userId;
   final VoidCallback onTap;
-  final bool isFavorite;
-  final Function(bool) onFavoriteToggle;
 
-  const PartCard({
+  const PartFocusRoutineCard({
     Key? key,
     required this.part,
+    required this.repository,
+    required this.userId,
     required this.onTap,
-    required this.isFavorite,
-    required this.onFavoriteToggle,
   }) : super(key: key);
 
   @override
-  _PartCardState createState() => _PartCardState();
+  _PartFocusRoutineCardState createState() => _PartFocusRoutineCardState();
 }
 
-class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _heightFactor;
-  bool _isExpanded = false;
+class _PartFocusRoutineCardState extends State<PartFocusRoutineCard> {
+  bool _isFavorite = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: this,
-    );
-    _heightFactor = _controller.drive(CurveTween(curve: Curves.easeIn));
+    _loadFavoriteStatus();
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+  Future<void> _loadFavoriteStatus() async {
+    _isFavorite = await widget.repository.isPartFavorite(widget.userId, widget.part.id.toString());
+    setState(() {});
   }
 
-  void _toggleExpand() {
+  Future<void> _toggleFavorite() async {
     setState(() {
-      _isExpanded = !_isExpanded;
-      if (_isExpanded) {
-        _controller.forward();
-      } else {
-        _controller.reverse();
-      }
+      _isFavorite = !_isFavorite;
     });
+    try {
+      await widget.repository.togglePartFavorite(widget.userId, widget.part.id.toString(), _isFavorite);
+    } catch (e) {
+      setState(() {
+        _isFavorite = !_isFavorite;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Favori durumu güncellenirken bir hata oluştu')),
+      );
+    }
   }
-
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      color: Colors.grey[900],
+      elevation: 2,
+      margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       child: InkWell(
-        onTap: _toggleExpand,
-        borderRadius: BorderRadius.circular(12),
-        child: AnimatedBuilder(
-          animation: _controller.view,
-          builder: (BuildContext context, Widget? child) {
-            return Column(
-              children: [
-                _buildCollapsedPart(),
-                ClipRect(
-                  child: Align(
-                    heightFactor: _heightFactor.value,
-                    child: _buildExpandedPart(),
+        onTap: widget.onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    widget.part.name,
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
-                ),
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCollapsedPart() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.part.name,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                  IconButton(
+                    icon: Icon(
+                      _isFavorite ? Icons.favorite : Icons.favorite_border,
+                      color: _isFavorite ? Colors.red : null,
+                    ),
+                    onPressed: _toggleFavorite,
                   ),
-                ),
+                ],
+              ),
+              SizedBox(height: 8),
+              FutureBuilder<BodyParts?>(
+                future: widget.repository.getBodyPartById(widget.part.bodyPartId),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Text('Yükleniyor...');
+                  }
+                  final bodyPart = snapshot.data;
+                  return Text(
+                    'Hedef Bölge: ${bodyPart?.name ?? 'Bilinmiyor'}',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  );
+                },
+              ),
+              SizedBox(height: 8),
+              Text('Set Tipi: ${widget.part.setTypeString}'),
+              SizedBox(height: 8),
+              Text('Egzersiz Sayısı: ${widget.part.exerciseCount}'),
+              if (widget.part.additionalNotes.isNotEmpty) ...[
                 SizedBox(height: 8),
-                Text(
-                  'Hedef Bölge: ${MainTargetedBodyPart.values[widget.part.bodyPartId].toString().split('.').last}',
-                  style: TextStyle(
-                    color: Colors.grey[400],
-                    fontSize: 14,
-                  ),
-                ),
+                Text('Notlar: ${widget.part.additionalNotes}'),
               ],
-            ),
+              SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: widget.part.setTypeColor.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(5),
+                ),
+              ),
+            ],
           ),
-          IconButton(
-            icon: Icon(
-              widget.isFavorite ? Icons.favorite : Icons.favorite_border,
-              color: widget.isFavorite ? Colors.red : Colors.grey[400],
-            ),
-            onPressed: () => widget.onFavoriteToggle(!widget.isFavorite),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildExpandedPart() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      color: Colors.grey[850],
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Set Tipi: ${widget.part.setType.toString().split('.').last}',
-            style: TextStyle(
-              color: Colors.grey[400],
-              fontSize: 14,
-            ),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Ek Notlar:',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          SizedBox(height: 4),
-          Text(
-            widget.part.additionalNotes,
-            style: TextStyle(
-              color: Colors.grey[400],
-              fontSize: 14,
-            ),
-          ),
-          SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: widget.onTap,
-            child: Text('Detayları Göster'),
-            style: ElevatedButton.styleFrom(
-              foregroundColor: Colors.white, backgroundColor: Colors.blue[700],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
