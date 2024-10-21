@@ -1,53 +1,32 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:workout/models/routines.dart';
-import 'package:workout/data_bloc/RoutineRepository.dart';
-import 'package:workout/models/BodyPart.dart';
-import 'package:workout/models/WorkoutType.dart';
 import 'package:workout/ui/routine_ui/routine_detail.dart';
 
-import '../../models/RoutineExercises.dart';
+import '../../data_bloc_routine/routines_bloc.dart';
 
-class RoutineCard extends StatefulWidget {
+class RoutineCard extends StatelessWidget {
   final Routines routine;
-  final RoutineRepository repository;
   final String userId;
   final VoidCallback? onTap;
 
   const RoutineCard({
     Key? key,
     required this.routine,
-    required this.repository,
     required this.userId,
     this.onTap,
   }) : super(key: key);
 
-  @override
-  _RoutineCardState createState() => _RoutineCardState();
-}
-
-class _RoutineCardState extends State<RoutineCard> {
-  late Future<BodyParts?> _bodyPartFuture;
-  late Future<WorkoutTypes?> _workoutTypeFuture;
-  late Future<List<RoutineExercises>> _routineExercisesFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _bodyPartFuture = widget.repository.getBodyPartById(widget.routine.mainTargetedBodyPartId);
-    _workoutTypeFuture = widget.repository.getWorkoutTypeById(widget.routine.workoutTypeId);
-    _routineExercisesFuture = widget.repository.getRoutineExercisesByRoutineId(widget.routine.id);
-  }
-  void _handleTap() {
-    if (widget.onTap != null) {
-      widget.onTap!();
+  void _handleTap(BuildContext context) {
+    if (onTap != null) {
+      onTap!();
     } else {
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => RoutineDetails(
-            routine: widget.routine,
-
-            userId: widget.userId,
+            routineId: routine.id,
+            userId: userId,
           ),
         ),
       );
@@ -56,11 +35,14 @@ class _RoutineCardState extends State<RoutineCard> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Card(
-      elevation: 2,
-      margin: EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       child: InkWell(
-        onTap: _handleTap,
+        onTap: () => _handleTap(context),
+        borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -71,61 +53,47 @@ class _RoutineCardState extends State<RoutineCard> {
                 children: [
                   Expanded(
                     child: Text(
-                      widget.routine.name,
-                      style: Theme.of(context).textTheme.titleLarge,
+                      routine.name,
+                      style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   IconButton(
                     icon: Icon(
-                      widget.routine.isFavorite ? Icons.favorite : Icons.favorite_border,
-                      color: widget.routine.isFavorite ? Colors.red : null,
+                      routine.isFavorite ? Icons.favorite : Icons.favorite_border,
+                      color: routine.isFavorite ? theme.colorScheme.secondary : null,
                     ),
-                    onPressed: _toggleFavorite,
+                    onPressed: () => _toggleFavorite(context),
                   ),
                 ],
               ),
               SizedBox(height: 8),
-              FutureBuilder<List<RoutineExercises>>(
-                future: _routineExercisesFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return Text('Egzersizler yükleniyor...');
-                  } else if (snapshot.hasError) {
-                    return Text('Egzersizler yüklenirken hata oluştu');
-                  } else {
-                    return Text('Egzersiz Sayısı: ${snapshot.data?.length ?? 0}');
-                  }
-                },
-              ),
-              SizedBox(height: 8),
               Text(
-                widget.routine.description,
+                routine.description,
+                style: theme.textTheme.bodyMedium,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
-              SizedBox(height: 8),
-              FutureBuilder<BodyParts?>(
-                future: _bodyPartFuture,
-                builder: (context, snapshot) {
-                  return Text('Hedef Bölge: ${snapshot.data?.name ?? 'Yükleniyor...'}');
-                },
+              SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(child: _buildInfoChip(context, Icons.fitness_center, routine.mainTargetedBodyPartId, 'Hedef Bölge')),
+                  SizedBox(width: 8),
+                  Expanded(child: _buildInfoChip(context, Icons.schedule, routine.workoutTypeId, 'Antrenman Türü')),
+                ],
               ),
-              SizedBox(height: 4),
-              FutureBuilder<WorkoutTypes?>(
-                future: _workoutTypeFuture,
-                builder: (context, snapshot) {
-                  return Text('Antrenman Türü: ${snapshot.data?.name ?? 'Yükleniyor...'}');
-                },
-              ),
-              SizedBox(height: 8),
+              SizedBox(height: 12),
               LinearProgressIndicator(
-                value: widget.routine.userProgress != null ? widget.routine.userProgress! / 100 : 0,
-                backgroundColor: Colors.grey[300],
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                value: routine.userProgress != null ? routine.userProgress! / 100 : 0,
+                backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
               ),
               SizedBox(height: 4),
-              Text('İlerleme: ${widget.routine.userProgress ?? 0}%'),
+              Text(
+                'İlerleme: ${routine.userProgress ?? 0}%',
+                style: theme.textTheme.bodySmall,
+              ),
             ],
           ),
         ),
@@ -133,21 +101,63 @@ class _RoutineCardState extends State<RoutineCard> {
     );
   }
 
-  Future<void> _toggleFavorite() async {
-    try {
-      await widget.repository.toggleRoutineFavorite(
-        widget.userId,
-        widget.routine.id.toString(),
-        !widget.routine.isFavorite,
-      );
-      setState(() {
-        widget.routine.isFavorite = !widget.routine.isFavorite;
-      });
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Favori durumu güncellenirken bir hata oluştu')),
-      );
+  Widget _buildInfoChip(BuildContext context, IconData icon, int id, String label) {
+    return FutureBuilder<String>(
+      future: _getInfoName(context, label, id),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _buildChip(context, icon, 'Yükleniyor...');
+        } else if (snapshot.hasError) {
+          return _buildChip(context, Icons.error, 'Hata', isError: true);
+        } else {
+          return _buildChip(context, icon, snapshot.data ?? 'Bilinmiyor');
+        }
+      },
+    );
+  }
+
+  Widget _buildChip(BuildContext context, IconData icon, String label, {bool isError = false}) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: isError ? Theme.of(context).colorScheme.error.withOpacity(0.1) : Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: isError ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.primary),
+          SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              label,
+              style: TextStyle(fontSize: 12),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<String> _getInfoName(BuildContext context, String type, int id) async {
+    final repository = BlocProvider.of<RoutinesBloc>(context).repository;
+    if (type == 'Hedef Bölge') {
+      final bodyPart = await repository.getBodyPartById(id);
+      return bodyPart?.name ?? 'Bilinmiyor';
+    } else if (type == 'Antrenman Türü') {
+      final workoutType = await repository.getWorkoutTypeById(id);
+      return workoutType?.name ?? 'Bilinmiyor';
     }
+    return 'Bilinmiyor';
+  }
+
+  void _toggleFavorite(BuildContext context) {
+    final routinesBloc = BlocProvider.of<RoutinesBloc>(context);
+    routinesBloc.add(ToggleRoutineFavorite(
+      userId: userId,
+      routineId: routine.id.toString(),
+      isFavorite: !routine.isFavorite,
+    ));
   }
 }
-

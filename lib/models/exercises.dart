@@ -7,6 +7,7 @@ class Exercises {
   final int defaultReps;
   final int workoutTypeId;
   final int mainTargetedBodyPartId;
+  final String description;
 
   const Exercises({
     required this.id,
@@ -16,6 +17,7 @@ class Exercises {
     required this.defaultReps,
     required this.workoutTypeId,
     required this.mainTargetedBodyPartId,
+    required this.description,
   });
 
   factory Exercises.fromMap(Map<String, dynamic> map) {
@@ -27,7 +29,7 @@ class Exercises {
       defaultSets: map['DefaultSets'] as int? ?? 0,
       defaultReps: map['DefaultReps'] as int? ?? 0,
       workoutTypeId: map['WorkoutTypeId'] as int? ?? 0,
-      mainTargetedBodyPartId: map['MainTargetedBodyPartId'] as int? ?? 0,
+      mainTargetedBodyPartId: map['MainTargetedBodyPartId'] as int? ?? 0, description: map['desciption'] as String,
     );
   }
   Map<String, dynamic> toMap() {
@@ -39,6 +41,7 @@ class Exercises {
       'DefaultReps': defaultReps,
       'WorkoutTypeId': workoutTypeId,
       'MainTargetedBodyPartId': mainTargetedBodyPartId,
+      'description': description,
     };
   }
 
@@ -50,6 +53,7 @@ class Exercises {
     int? defaultReps,
     int? workoutTypeId,
     int? mainTargetedBodyPartId,
+    String? description,
   }) {
     return Exercises(
       id: id ?? this.id,
@@ -59,6 +63,7 @@ class Exercises {
       defaultReps: defaultReps ?? this.defaultReps,
       workoutTypeId: workoutTypeId ?? this.workoutTypeId,
       mainTargetedBodyPartId: mainTargetedBodyPartId ?? this.mainTargetedBodyPartId,
+      description: description ?? this.description,
     );
   }
 

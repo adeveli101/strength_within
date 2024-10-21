@@ -468,203 +468,223 @@ import '../models/routines.dart';
   ///PartsRt///PartsRt///PartsRt///PartsRt///PartsRt
   ///PartsRt///PartsRt///PartsRt///PartsRt///PartsRt///PartsRt
   ///
-  ///
   Future<List<Parts>> getAllParts() async {
     final db = await database;
     try {
-      final List<Map<String, dynamic>> maps = await db.query('Parts');
-      return List.generate(maps.length, (i) {
-        final map = maps[i];
-        return Parts(
-          id: map['id'] as int? ?? 0,
-          name: map['name'] as String? ?? '',
-          bodyPartId: map['bodyPartId'] as int? ?? 0,
-          setType: SetType.values[map['setType'] as int? ?? 0],
-        );
-      });
+      final List<Map<String, dynamic>> partMaps = await db.query('Parts');
+      final List<Map<String, dynamic>> partExerciseMaps = await db.query('PartExercises');
+      final List<PartExercise> partExercises = partExerciseMaps.map((map) => PartExercise.fromMap(map)).toList();
+
+      return partMaps.map((map) {
+        final exerciseIds = partExercises
+            .where((pe) => pe.partId == map['Id'])
+            .map((pe) => pe.exerciseId)
+            .toList();
+
+        return Parts.fromMap(map, exerciseIds);
+      }).toList();
     } catch (e) {
       print('Error getting all parts: $e');
+      throw Exception('Failed to get parts: $e');
+    }
+  }
+
+
+
+
+  Future<Parts?> getPartById(int id) async {
+    final db = await database;
+    try {
+      final List<Map<String, dynamic>> partMaps = await db.query(
+        'Parts',
+        where: 'Id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
+      if (partMaps.isNotEmpty) {
+        final List<Map<String, dynamic>> partExerciseMaps = await db.query(
+          'PartExercises',
+          where: 'partId = ?',
+          whereArgs: [id],
+        );
+        final List<PartExercise> partExercises = partExerciseMaps.map((map) => PartExercise.fromMap(map)).toList();
+        return Parts.fromMap(partMaps.first, partExercises.cast<int>());
+      }
+      return null;
+    } catch (e) {
+      print('Error getting part by id: $e');
+      return null;
+    }
+  }
+
+  Future<List<Parts>> getPartsByBodyPart(int bodyPartId) async {
+    final db = await database;
+    try {
+      final List<Map<String, dynamic>> partMaps = await db.query(
+        'Parts',
+        where: 'BodyPartId = ?',
+        whereArgs: [bodyPartId],
+      );
+      final List<Map<String, dynamic>> partExerciseMaps = await db.query('PartExercises');
+      final List<PartExercise> partExercises = partExerciseMaps.map((map) => PartExercise.fromMap(map)).toList();
+      return partMaps.map((map) => Parts.fromMap(map, partExercises.cast<int>())).toList();
+    } catch (e) {
+      print('Error getting parts by body part: $e');
       return [];
     }
   }
 
-  Future<Parts?> getPartById(int id) async {
-  final db = await database;
-  try {
-  final List<Map<String, dynamic>> maps = await db.query(
-  'Parts',
-  where: 'Id = ?',
-  whereArgs: [id],
-  limit: 1,
-  );
-  if (maps.isNotEmpty) {
-  return Parts.fromMap(maps.first);
-  }
-  return null;
-  } catch (e) {
-  print('Error getting part by id: $e');
-  return null;
-  }
-  }
-
-
-  Future<List<Parts>> getPartsByBodyPart(int bodyPartId) async {
-  final db = await database;
-  try {
-  final List<Map<String, dynamic>> maps = await db.query(
-  'Parts',
-  where: 'BodyPartId = ?',
-  whereArgs: [bodyPartId],
-  );
-  return List.generate(maps.length, (i) => Parts.fromMap(maps[i]));
-  } catch (e) {
-  print('Error getting parts by body part: $e');
-  return [];
-  }
-  }
-
   Future<List<Parts>> getPartsBySetType(SetType setType) async {
-  final db = await database;
-  try {
-  final List<Map<String, dynamic>> maps = await db.query(
-  'Parts',
-  where: 'SetType = ?',
-  whereArgs: [setType.index],
-  );
-  return List.generate(maps.length, (i) => Parts.fromMap(maps[i]));
-  } catch (e) {
-  print('Error getting parts by set type: $e');
-  return [];
+    final db = await database;
+    try {
+      final List<Map<String, dynamic>> partMaps = await db.query(
+        'Parts',
+        where: 'SetType = ?',
+        whereArgs: [setType.index],
+      );
+      final List<Map<String, dynamic>> partExerciseMaps = await db.query('PartExercises');
+      final List<PartExercise> partExercises = partExerciseMaps.map((map) => PartExercise.fromMap(map)).toList();
+      return partMaps.map((map) => Parts.fromMap(map, partExercises.cast<int>())).toList();
+    } catch (e) {
+      print('Error getting parts by set type: $e');
+      return [];
+    }
   }
-  }
-
 
   Future<List<Parts>> searchPartsByName(String name) async {
-  final db = await database;
-  try {
-  final List<Map<String, dynamic>> maps = await db.query(
-  'Parts',
-  where: 'Name LIKE ?',
-  whereArgs: ['%$name%'],
-  );
-  return List.generate(maps.length, (i) => Parts.fromMap(maps[i]));
-  } catch (e) {
-  print('Error searching parts by name: $e');
-  return [];
+    final db = await database;
+    try {
+      final List<Map<String, dynamic>> partMaps = await db.query(
+        'Parts',
+        where: 'Name LIKE ?',
+        whereArgs: ['%$name%'],
+      );
+      final List<Map<String, dynamic>> partExerciseMaps = await db.query('PartExercises');
+      final List<PartExercise> partExercises = partExerciseMaps.map((map) => PartExercise.fromMap(map)).toList();
+      return partMaps.map((map) => Parts.fromMap(map, partExercises.cast<int>())).toList();
+    } catch (e) {
+      print('Error searching parts by name: $e');
+      return [];
+    }
   }
-  }
-
 
   Future<List<Parts>> getPartsSortedByName({bool ascending = true}) async {
-  final db = await database;
-  try {
-  final List<Map<String, dynamic>> maps = await db.query(
-  'Parts',
-  orderBy: 'Name ${ascending ? 'ASC' : 'DESC'}',
-  );
-  return List.generate(maps.length, (i) => Parts.fromMap(maps[i]));
-  } catch (e) {
-  print('Error getting parts sorted by name: $e');
-  return [];
-  }
-  }
-
-
-  Future<List<PartExercise>> getAllPartExercises() async {final db = await database;
-  try {
-  final List<Map<String, dynamic>> maps = await db.query('PartExercises');
-  return List.generate(maps.length, (i) => PartExercise.fromMap(maps[i]));
-  } catch (e) {
-  print('Error getting all part exercises: $e');
-  return [];
-  }
+    final db = await database;
+    try {
+      final List<Map<String, dynamic>> partMaps = await db.query(
+        'Parts',
+        orderBy: 'Name ${ascending ? 'ASC' : 'DESC'}',
+      );
+      final List<Map<String, dynamic>> partExerciseMaps = await db.query('PartExercises');
+      final List<PartExercise> partExercises = partExerciseMaps.map((map) => PartExercise.fromMap(map)).toList();
+      return partMaps.map((map) => Parts.fromMap(map, partExercises.cast<int>())).toList();
+    } catch (e) {
+      print('Error getting parts sorted by name: $e');
+      return [];
+    }
   }
 
-  Future<PartExercise?> getPartExerciseById(int id) async {final db = await database;
-  try {
-  final List<Map<String, dynamic>> maps = await db.query(
-  'PartExercises',
-  where: 'id = ?',
-  whereArgs: [id],
-  limit: 1,
-  );
-  if (maps.isNotEmpty) {
-  return PartExercise.fromMap(maps.first);
-  }
-  return null;
-  } catch (e) {
-  print('Error getting part exercise by id: $e');
-  return null;
-  }
+  Future<List<PartExercise>> getAllPartExercises() async {
+    final db = await database;
+    try {
+      final List<Map<String, dynamic>> maps = await db.query('PartExercises');
+      return List.generate(maps.length, (i) => PartExercise.fromMap(maps[i]));
+    } catch (e) {
+      print('Error getting all part exercises: $e');
+      return [];
+    }
   }
 
-  Future<List<PartExercise>> getPartExercisesByPartId(int partId) async {final db = await database;
-  try {
-  final List<Map<String, dynamic>> maps = await db.query(
-  'PartExercises',
-  where: 'partId = ?',
-  whereArgs: [partId],
-  );
-  return List.generate(maps.length, (i) => PartExercise.fromMap(maps[i]));
-  } catch (e) {
-  print('Error getting part exercises by part id: $e');
-  return [];
-  }
-  }
-
-  Future<List<PartExercise>> getPartExercisesByExerciseId(int exerciseId) async {final db = await database;
-  try {
-  final List<Map<String, dynamic>> maps = await db.query(
-  'PartExercises',
-  where: 'exerciseId = ?',
-  whereArgs: [exerciseId],
-  );
-  return List.generate(maps.length, (i) => PartExercise.fromMap(maps[i]));
-  } catch (e) {
-  print('Error getting part exercises by exercise id: $e');
-  return [];
-  }
+  Future<PartExercise?> getPartExerciseById(int id) async {
+    final db = await database;
+    try {
+      final List<Map<String, dynamic>> maps = await db.query(
+        'PartExercises',
+        where: 'id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
+      if (maps.isNotEmpty) {
+        return PartExercise.fromMap(maps.first);
+      }
+      return null;
+    } catch (e) {
+      print('Error getting part exercise by id: $e');
+      return null;
+    }
   }
 
-  Future<List<int>> getExerciseIdsForPart(int partId) async {final db = await database;
-  try {
-  final List<Map<String, dynamic>> maps = await db.query(
-  'PartExercises',
-  columns: ['exerciseId'],
-  where: 'partId = ?',
-  whereArgs: [partId],
-  );
-  return List.generate(maps.length, (i) => maps[i]['exerciseId'] as int);
-  } catch (e) {
-  print('Error getting exercise ids for part: $e');
-  return [];
-  }
-  }
-
-  Future<List<int>> getPartIdsForExercise(int exerciseId) async {final db = await database;
-  try {
-  final List<Map<String, dynamic>> maps = await db.query(
-  'PartExercises',
-  columns: ['partId'],
-  where: 'exerciseId = ?',
-  whereArgs: [exerciseId],
-  );
-  return List.generate(maps.length, (i) => maps[i]['partId'] as int);
-  } catch (e) {
-  print('Error getting part ids for exercise: $e');
-  return [];
-  }
+  Future<List<PartExercise>> getPartExercisesByPartId(int partId) async {
+    final db = await database;
+    try {
+      final List<Map<String, dynamic>> maps = await db.query(
+        'PartExercises',
+        where: 'partId = ?',
+        whereArgs: [partId],
+      );
+      return List.generate(maps.length, (i) => PartExercise.fromMap(maps[i]));
+    } catch (e) {
+      print('Error getting part exercises by part id: $e');
+      return [];
+    }
   }
 
-
-  Future<int> getPartExercisesCount() async {final db = await database;
-  try {
-  final result = await db.rawQuery('SELECT COUNT(*) FROM PartExercises');
-  return Sqflite.firstIntValue(result) ?? 0;
-  } catch (e) {
-  print('Error getting part exercises count: $e');
-  return 0;
+  Future<List<PartExercise>> getPartExercisesByExerciseId(int exerciseId) async {
+    final db = await database;
+    try {
+      final List<Map<String, dynamic>> maps = await db.query(
+        'PartExercises',
+        where: 'exerciseId = ?',
+        whereArgs: [exerciseId],
+      );
+      return List.generate(maps.length, (i) => PartExercise.fromMap(maps[i]));
+    } catch (e) {
+      print('Error getting part exercises by exercise id: $e');
+      return [];
+    }
   }
+
+  Future<List<int>> getExerciseIdsForPart(int partId) async {
+    final db = await database;
+    try {
+      final List<Map<String, dynamic>> maps = await db.query(
+        'PartExercises',
+        columns: ['exerciseId'],
+        where: 'partId = ?',
+        whereArgs: [partId],
+      );
+      return List.generate(maps.length, (i) => maps[i]['exerciseId'] as int);
+    } catch (e) {
+      print('Error getting exercise ids for part: $e');
+      return [];
+    }
+  }
+
+  Future<List<int>> getPartIdsForExercise(int exerciseId) async {
+    final db = await database;
+    try {
+      final List<Map<String, dynamic>> maps = await db.query(
+        'PartExercises',
+        columns: ['partId'],
+        where: 'exerciseId = ?',
+        whereArgs: [exerciseId],
+      );
+      return List.generate(maps.length, (i) => maps[i]['partId'] as int);
+    } catch (e) {
+      print('Error getting part ids for exercise: $e');
+      return [];
+    }
+  }
+
+  Future<int> getPartExercisesCount() async {
+    final db = await database;
+    try {
+      final result = await db.rawQuery('SELECT COUNT(*) FROM PartExercises');
+      return Sqflite.firstIntValue(result) ?? 0;
+    } catch (e) {
+      print('Error getting part exercises count: $e');
+      return 0;
+    }
   }
 
 
