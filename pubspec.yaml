@@ -52,7 +52,6 @@ dependencies:
   firebase_ui_database: ^1.5.0
   firebase_ui_firestore: ^1.7.0
   flutter_spinkit: ^5.2.1
-  fluent_ui: ^4.9.2
   flutter_bloc: ^8.1.6
   flutter_confetti: ^0.3.4
   flutter_launcher_icons: ^0.14.1

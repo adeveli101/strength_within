@@ -1,118 +1,105 @@
 import 'package:flutter/material.dart';
-import 'package:workout/models/PartFocusRoutine.dart';
-import 'package:workout/data_bloc/RoutineRepository.dart';
-import 'package:workout/models/BodyPart.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:workout/ui/part_ui/part_detail.dart';
 
-class PartFocusRoutineCard extends StatefulWidget {
+import '../../data_bloc_part/part_bloc.dart';
+import '../../models/PartFocusRoutine.dart';
+
+class PartCard extends StatelessWidget {
   final Parts part;
-  final RoutineRepository repository;
   final String userId;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
-  const PartFocusRoutineCard({
-    Key? key,
-    required this.part,
-    required this.repository,
-    required this.userId,
-    required this.onTap,
-  }) : super(key: key);
+  const PartCard({Key? key, required this.part, required this.userId, this.onTap}) : super(key: key);
 
-  @override
-  _PartFocusRoutineCardState createState() => _PartFocusRoutineCardState();
-}
-
-class _PartFocusRoutineCardState extends State<PartFocusRoutineCard> {
-  bool _isFavorite = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadFavoriteStatus();
-  }
-
-  Future<void> _loadFavoriteStatus() async {
-    _isFavorite = await widget.repository.isPartFavorite(widget.userId, widget.part.id.toString());
-    setState(() {});
-  }
-
-  Future<void> _toggleFavorite() async {
-    setState(() {
-      _isFavorite = !_isFavorite;
-    });
-    try {
-      await widget.repository.togglePartFavorite(widget.userId, widget.part.id.toString(), _isFavorite);
-    } catch (e) {
-      setState(() {
-        _isFavorite = !_isFavorite;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Favori durumu güncellenirken bir hata oluştu')),
-      );
-    }
-  }
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 2,
-      margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       child: InkWell(
-        onTap: widget.onTap,
+        onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(10.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    widget.part.name,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      _isFavorite ? Icons.favorite : Icons.favorite_border,
-                      color: _isFavorite ? Colors.red : null,
+                  Expanded(
+                    child: Text(
+                      part.name,
+                      style: Theme.of(context).textTheme.titleMedium,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    onPressed: _toggleFavorite,
                   ),
+                  _buildFavoriteButton(context),
                 ],
               ),
-              SizedBox(height: 8),
-              FutureBuilder<BodyParts?>(
-                future: widget.repository.getBodyPartById(widget.part.bodyPartId),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return Text('Yükleniyor...');
-                  }
-                  final bodyPart = snapshot.data;
-                  return Text(
-                    'Hedef Bölge: ${bodyPart?.name ?? 'Bilinmiyor'}',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  );
-                },
-              ),
-              SizedBox(height: 8),
-              Text('Set Tipi: ${widget.part.setTypeString}'),
-              SizedBox(height: 8),
-              Text('Egzersiz Sayısı: ${widget.part.exerciseCount}'),
-              if (widget.part.additionalNotes.isNotEmpty) ...[
-                SizedBox(height: 8),
-                Text('Notlar: ${widget.part.additionalNotes}'),
-              ],
-              SizedBox(height: 8),
-              Container(
-                width: double.infinity,
-                height: 10,
-                decoration: BoxDecoration(
-                  color: widget.part.setTypeColor.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(5),
+              SizedBox(height: 2),
+              _buildInfoChip('Body Part', part.bodyPartId.toString()),
+              SizedBox(height: 2),
+              _buildInfoChip('Set Type', part.setTypeString),
+              if (part.additionalNotes.isNotEmpty)
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 3.0),
+                    child: Text(
+                      part.additionalNotes,
+                      style: Theme.of(context).textTheme.bodySmall,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ),
-              ),
+              SizedBox(height: 5),
+              _buildProgressIndicator(),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildFavoriteButton(BuildContext context) {
+    return IconButton(
+      icon: Icon(
+        part.isFavorite ? Icons.favorite : Icons.favorite_border,
+        color: part.isFavorite ? Colors.red : null,
+      ),
+      onPressed: () {
+        context.read<PartsBloc>().add(
+          TogglePartFavorite(
+            userId: userId,
+            partId: part.id.toString(),
+            isFavorite: !part.isFavorite,
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildInfoChip(String label, String value) {
+    return Chip(
+      label: Text('$label: $value'),
+      backgroundColor: Colors.blue.withOpacity(0.1),
+    );
+  }
+
+  Widget _buildProgressIndicator() {
+    final progress = part.userProgress ?? 0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Progress: $progress%'),
+        SizedBox(height: 4),
+        LinearProgressIndicator(
+          value: progress / 100,
+          backgroundColor: Colors.grey[300],
+          valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+        ),
+      ],
     );
   }
 }

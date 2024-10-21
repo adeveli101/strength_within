@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:workout/data_bloc/routines_bloc.dart';
 
 class SettingsPage extends StatefulWidget {
   @override

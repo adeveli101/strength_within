@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:workout/models/routines.dart';
-import 'package:workout/models/exercises.dart';
 import 'package:workout/models/BodyPart.dart';
 import 'package:workout/models/WorkoutType.dart';
-import 'package:workout/data_bloc/routines_bloc.dart';
+
+import '../../data_bloc_routine/routines_bloc.dart';
 
 class RoutineDetails extends StatefulWidget {
-  final Routines routine;
+  final int routineId;
   final String userId;
 
   const RoutineDetails({
     Key? key,
-    required this.routine,
+    required this.routineId,
     required this.userId,
   }) : super(key: key);
 
@@ -22,120 +22,108 @@ class RoutineDetails extends StatefulWidget {
 
 class _RoutineDetailsState extends State<RoutineDetails> {
   late RoutinesBloc _routinesBloc;
-  late Future<Routines?> _routineFuture;
 
   @override
   void initState() {
     super.initState();
     _routinesBloc = BlocProvider.of<RoutinesBloc>(context);
-    _loadData();
+    _routinesBloc.add(FetchRoutineExercises(routineId: widget.routineId));
   }
-
-
-
-  void _loadData() {
-    _routineFuture = _routinesBloc.repository.getRoutineWithUserData(widget.userId, widget.routine.id);
-    _routinesBloc.add(FetchExercises());
-    _routinesBloc.add(FetchBodyParts());
-    _routinesBloc.add(FetchWorkoutTypes());
-  }
-
-
 
   @override
   Widget build(BuildContext context) {
+    return BlocBuilder<RoutinesBloc, RoutinesState>(
+      builder: (context, state) {
+        if (state is RoutinesLoading) {
+          return Scaffold(
+            appBar: AppBar(title: Text('Loading...')),
+            body: Center(child: CircularProgressIndicator()),
+          );
+        } else if (state is RoutineExercisesLoaded) {
+          return _buildRoutineDetails(state.routine, state.exerciseListByBodyPart);
+        } else if (state is RoutinesError) {
+          return Scaffold(
+            appBar: AppBar(title: Text('Error')),
+            body: Center(child: Text('Error: ${state.message}')),
+          );
+        }
+        return Scaffold(
+          appBar: AppBar(title: Text('Unknown State')),
+          body: Center(child: Text('Unknown state')),
+        );
+      },
+    );
+  }
+
+  Widget _buildRoutineDetails(Routines routine, Map<String, List<Map<String, dynamic>>> exerciseListByBodyPart) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.routine.name),
+        title: Text(routine.name),
         actions: [
           IconButton(
             icon: Icon(
-              widget.routine.isFavorite ? Icons.favorite : Icons.favorite_border,
-              color: widget.routine.isFavorite ? Colors.red : null,
+              routine.isFavorite ? Icons.favorite : Icons.favorite_border,
+              color: routine.isFavorite ? Colors.red : null,
             ),
-            onPressed: _toggleFavorite,
+            onPressed: () => _toggleFavorite(routine),
           ),
         ],
       ),
-      body: FutureBuilder<Routines?>(
-        future: _routineFuture,
-        builder: (context, routineSnapshot) {
-          if (routineSnapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator());
-          } else if (routineSnapshot.hasError) {
-            return Center(child: Text('Error: ${routineSnapshot.error}'));
-          } else if (routineSnapshot.hasData) {
-            return BlocBuilder<RoutinesBloc, RoutinesState>(
-              builder: (context, state) {
-                if (state is RoutinesLoaded) {
-                  return _buildRoutineDetails(routineSnapshot.data!, state);
-                } else if (state is RoutinesError) {
-                  return Center(child: Text('Error: ${state.message}'));
-                }
-                return Center(child: CircularProgressIndicator());
-              },
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(routine.name, style: Theme.of(context).textTheme.headlineSmall),
+              SizedBox(height: 8),
+              Text(routine.description, style: Theme.of(context).textTheme.bodyMedium),
+              SizedBox(height: 16),
+              _buildInfoSection(routine),
+              SizedBox(height: 16),
+              _buildProgressSection(routine),
+              SizedBox(height: 16),
+              _buildExerciseList(exerciseListByBodyPart),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoSection(Routines routine) {
+    return FutureBuilder<BodyParts?>(
+      future: _routinesBloc.repository.getBodyPartById(routine.mainTargetedBodyPartId),
+      builder: (context, bodyPartSnapshot) {
+        return FutureBuilder<WorkoutTypes?>(
+          future: _routinesBloc.repository.getWorkoutTypeById(routine.workoutTypeId),
+          builder: (context, workoutTypeSnapshot) {
+            final bodyPart = bodyPartSnapshot.data;
+            final workoutType = workoutTypeSnapshot.data;
+
+            return Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Routine Information', style: Theme.of(context).textTheme.titleLarge),
+                    SizedBox(height: 8),
+                    Text('Target Body Part: ${bodyPart?.name ?? 'Unknown'}'),
+                    Text('Workout Type: ${workoutType?.name ?? 'Unknown'}'),
+                    if (routine.lastUsedDate != null)
+                      Text('Last Used: ${routine.lastUsedDate!.toLocal()}'),
+                  ],
+                ),
+              ),
             );
-          } else {
-            return Center(child: Text('No data available'));
-          }
-        },
-      ),
+          },
+        );
+      },
     );
   }
 
-  Widget _buildRoutineDetails(Routines routine, RoutinesLoaded state) {
-    final bodyPart = state.bodyParts.firstWhere(
-          (bp) => bp.id == routine.mainTargetedBodyPartId,
-      orElse: () => BodyParts(id: 0, name: 'Unknown', mainTargetedBodyPart: MainTargetedBodyPart.abs),
-    );
-    final workoutType = state.workoutTypes.firstWhere(
-          (wt) => wt.id == routine.workoutTypeId,
-      orElse: () => WorkoutTypes(id: 0, name: 'Unknown'),
-    );
-
-    return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(routine.name, style: Theme.of(context).textTheme.headlineSmall),
-            SizedBox(height: 8),
-            Text(routine.description, style: Theme.of(context).textTheme.bodyMedium),
-            SizedBox(height: 16),
-            _buildInfoSection(bodyPart, workoutType),
-            SizedBox(height: 16),
-            _buildProgressSection(),
-            SizedBox(height: 16),
-            _buildExerciseList(routine, state.exercises),
-          ],
-        ),
-      ),
-    );
-  }
-
-
-
-  Widget _buildInfoSection(BodyParts bodyPart, WorkoutTypes workoutType) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Routine Information', style: Theme.of(context).textTheme.titleLarge),
-            SizedBox(height: 8),
-            Text('Target Body Part: ${bodyPart.mainTargetedBodyPartString}'),
-            Text('Workout Type: ${workoutType.name}'),
-            if (widget.routine.lastUsedDate != null)
-              Text('Last Used: ${widget.routine.lastUsedDate!.toLocal()}'),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProgressSection() {
+  Widget _buildProgressSection(Routines routine) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -145,22 +133,20 @@ class _RoutineDetailsState extends State<RoutineDetails> {
             Text('Progress', style: Theme.of(context).textTheme.titleLarge),
             SizedBox(height: 8),
             LinearProgressIndicator(
-              value: widget.routine.userProgress != null ? widget.routine.userProgress! / 100 : 0,
+              value: routine.userProgress != null ? routine.userProgress! / 100 : 0,
               backgroundColor: Colors.grey[300],
               valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
             ),
             SizedBox(height: 4),
-            Text('${widget.routine.userProgress ?? 0}% Complete'),
+            Text('${routine.userProgress ?? 0}% Complete'),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildExerciseList(Routines routine, List<Exercises> allExercises) {
-    final routineExercises = allExercises.where((exercise) => routine.exerciseIds.contains(exercise.id)).toList();
-
-    if (routineExercises.isEmpty) {
+  Widget _buildExerciseList(Map<String, List<Map<String, dynamic>>> exerciseListByBodyPart) {
+    if (exerciseListByBodyPart.isEmpty) {
       return Card(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -169,39 +155,38 @@ class _RoutineDetailsState extends State<RoutineDetails> {
       );
     }
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Exercises', style: Theme.of(context).textTheme.titleLarge),
-            SizedBox(height: 8),
-            ListView.builder(
-              shrinkWrap: true,
-              physics: NeverScrollableScrollPhysics(),
-              itemCount: routineExercises.length,
-              itemBuilder: (context, index) {
-                final exercise = routineExercises[index];
-                return ListTile(
-                  title: Text(exercise.name),
-                  subtitle: Text('${exercise.defaultSets} sets x ${exercise.defaultReps} reps'),
-                  trailing: Text('${exercise.defaultWeight} kg'),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: NeverScrollableScrollPhysics(),
+      itemCount: exerciseListByBodyPart.length,
+      itemBuilder: (context, index) {
+        final bodyPart = exerciseListByBodyPart.keys.elementAt(index);
+        final exercises = exerciseListByBodyPart[bodyPart]!;
+
+        return Card(
+          child: ExpansionTile(
+            title: Text(bodyPart),
+            children: exercises.map((exercise) {
+              return ListTile(
+                title: Text(exercise['name']),
+                subtitle: Text('${exercise['defaultSets']} sets x ${exercise['defaultReps']} reps'),
+                trailing: Text('${exercise['defaultWeight']} kg'),
+                onTap: () {
+                  // Navigate to exercise details page
+                },
+              );
+            }).toList(),
+          ),
+        );
+      },
     );
   }
 
-
-  void _toggleFavorite() {
+  void _toggleFavorite(Routines routine) {
     _routinesBloc.add(ToggleRoutineFavorite(
       userId: widget.userId,
-      routineId: widget.routine.id.toString(),
-      isFavorite: !widget.routine.isFavorite,
+      routineId: routine.id.toString(),
+      isFavorite: !routine.isFavorite,
     ));
   }
 }

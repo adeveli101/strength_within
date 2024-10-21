@@ -5,11 +5,13 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get/get.dart';
 import 'package:workout/ui/home_page.dart';
 import 'package:workout/ui/for_you_page.dart';
-import 'package:workout/data_bloc/RoutineRepository.dart';
-import 'package:workout/data_bloc/routines_bloc.dart';
 import 'package:workout/data_provider/firebase_provider.dart';
 import 'package:workout/data_provider/sql_provider.dart';
 import 'package:workout/ui/setting_pages.dart';
+import 'data_bloc_part/PartRepository.dart';
+import 'data_bloc_part/part_bloc.dart';
+import 'data_bloc_routine/RoutineRepository.dart';
+import 'data_bloc_routine/routines_bloc.dart';
 import 'firebase_options.dart';
 
 Future<void> main() async {
@@ -28,14 +30,21 @@ Future<void> main() async {
 
   final firebaseProvider = FirebaseProvider();
   final routineRepository = RoutineRepository(sqlProvider, firebaseProvider);
+  final partRepository = PartRepository(sqlProvider, firebaseProvider);  // Yeni eklenen satır
   await sqlProvider.testDatabaseContent();
 
   String? userId = await firebaseProvider.signInAnonymously();
 
   if (userId != null) {
     runApp(
-      BlocProvider<RoutinesBloc>(
-        create: (context) => RoutinesBloc(repository: routineRepository, userId: userId),
+      MultiBlocProvider(
+        providers: [
+          BlocProvider<RoutinesBloc>(
+            create: (context) => RoutinesBloc(repository: routineRepository, userId: userId),
+          ),
+          BlocProvider<PartsBloc>(
+            create: (context) => PartsBloc(repository: partRepository, userId: userId)..add(FetchParts()),          ),
+        ],
         child: App(userId: userId),
       ),
     );
@@ -88,6 +97,7 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     final RoutinesBloc routinesBloc = BlocProvider.of<RoutinesBloc>(context);
+    final PartsBloc partsBloc = BlocProvider.of<PartsBloc>(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -134,6 +144,7 @@ class _MainScreenState extends State<MainScreen> {
           });
           if (index == 0) {
             routinesBloc.add(FetchHomeData(userId: widget.userId));
+            partsBloc.add(FetchParts()); // Eklenen satır
           } else if (index == 1) {
             routinesBloc.add(FetchForYouData(userId: widget.userId));
           }

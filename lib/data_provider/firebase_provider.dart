@@ -171,7 +171,7 @@ class FirebaseProvider {
 
   Future<List<FirebaseParts>> getAllParts() async {
     try {
-      QuerySnapshot snapshot = await _firestore.collection('parts').get();
+      QuerySnapshot snapshot = await FirebaseFirestore.instance.collection('parts').get();
       return snapshot.docs.map((doc) => FirebaseParts.fromFirestore(doc)).toList();
     } catch (e) {
       print('Error getting all parts: $e');
@@ -179,31 +179,27 @@ class FirebaseProvider {
     }
   }
 
+
+
   Future<FirebaseParts?> getPartById(String id) async {
     try {
-      DocumentSnapshot doc = await _firestore.collection('parts').doc(id).get();
-      if (doc.exists) {
-        return FirebaseParts.fromFirestore(doc);
-      }
-      return null;
+      DocumentSnapshot doc = await FirebaseFirestore.instance.collection('parts').doc(id).get();
+      return doc.exists ? FirebaseParts.fromFirestore(doc) : null;
     } catch (e) {
       print('Error getting part by id: $e');
       return null;
     }
   }
+
   Future<FirebaseParts?> getUserPart(String userId, String partId) async {
     try {
-      DocumentSnapshot doc = await _firestore
+      DocumentSnapshot doc = await FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
           .collection('parts')
           .doc(partId)
           .get();
-
-      if (doc.exists) {
-        return FirebaseParts.fromMap(doc.data() as Map<String, dynamic>);
-      }
-      return null;
+      return doc.exists ? FirebaseParts.fromFirestore(doc) : null;
     } catch (e) {
       print('Error getting user part: $e');
       return null;
@@ -214,7 +210,7 @@ class FirebaseProvider {
 
   Future<List<FirebaseParts>> getPartsByBodyPart(int bodyPartId) async {
     try {
-      QuerySnapshot snapshot = await _firestore
+      QuerySnapshot snapshot = await FirebaseFirestore.instance
           .collection('parts')
           .where('bodyPartId', isEqualTo: bodyPartId)
           .get();
@@ -227,7 +223,7 @@ class FirebaseProvider {
 
   Future<List<FirebaseParts>> getPartsBySetType(SetType setType) async {
     try {
-      QuerySnapshot snapshot = await _firestore
+      QuerySnapshot snapshot = await FirebaseFirestore.instance
           .collection('parts')
           .where('setType', isEqualTo: setType.index)
           .get();
@@ -238,9 +234,10 @@ class FirebaseProvider {
     }
   }
 
+
   Future<List<FirebaseParts>> searchPartsByName(String name) async {
     try {
-      QuerySnapshot snapshot = await _firestore
+      QuerySnapshot snapshot = await FirebaseFirestore.instance
           .collection('parts')
           .where('name', isGreaterThanOrEqualTo: name)
           .where('name', isLessThan: name + 'z')
@@ -252,9 +249,10 @@ class FirebaseProvider {
     }
   }
 
+
   Future<List<FirebaseParts>> getPartsWithNotes() async {
     try {
-      QuerySnapshot snapshot = await _firestore
+      QuerySnapshot snapshot = await FirebaseFirestore.instance
           .collection('parts')
           .where('additionalNotes', isNotEqualTo: '')
           .get();
@@ -267,7 +265,7 @@ class FirebaseProvider {
 
   Future<List<FirebaseParts>> getPartsSortedByName({bool ascending = true}) async {
     try {
-      QuerySnapshot snapshot = await _firestore
+      QuerySnapshot snapshot = await FirebaseFirestore.instance
           .collection('parts')
           .orderBy('name', descending: !ascending)
           .get();
@@ -277,87 +275,82 @@ class FirebaseProvider {
       return [];
     }
   }
+
 // Kullanıcının parçalarını getir
   Future<List<FirebaseParts>> getUserParts(String userId) async {
     try {
-      final snapshot = await FirebaseFirestore.instance
+      QuerySnapshot snapshot = await FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
           .collection('parts')
           .get();
-
-      return snapshot.docs
-          .map((doc) => FirebaseParts.fromFirestore(doc))
-          .toList();
+      return snapshot.docs.map((doc) => FirebaseParts.fromFirestore(doc)).toList();
     } catch (e) {
       print('Error getting user parts: $e');
-      return []; // Hata durumunda boş liste dön
+      return [];
     }
   }
+
 
   // Kullanıcının parçasını ekle veya güncelle
   Future<void> addOrUpdateUserPart(String userId, FirebaseParts part) async {
     try {
-      await _firestore
+      await FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
           .collection('parts')
           .doc(part.id)
           .set(part.toFirestore());
-
-      print('Parça başarıyla eklendi/güncellendi: ${part.id}');
+      print('Part successfully added/updated: ${part.id}');
     } catch (e) {
-      print('Parça ekleme/güncelleme hatası: $e');
+      print('Error adding/updating part: $e');
       throw e;
     }
   }
 
+
   // Kullanıcının parçasını sil
   Future<void> deleteUserPart(String userId, String partId) async {
     try {
-      await _firestore
+      await FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
           .collection('parts')
           .doc(partId)
           .delete();
-
-      print('Parça başarıyla silindi: $partId');
+      print('Part successfully deleted: $partId');
     } catch (e) {
-      print('Parça silme hatası: $e');
+      print('Error deleting part: $e');
       throw e;
     }
   }
 
 
+
   Future<bool> isPartFavorite(String userId, String partId) async {
     try {
-      DocumentSnapshot doc = await _firestore
+      DocumentSnapshot doc = await FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
           .collection('parts')
           .doc(partId)
           .get();
-
-      if (doc.exists) {
-        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-        return data['isFavorite'] as bool? ?? false;
-      }
-      return false;
+      return doc.exists ? (doc.data() as Map<String, dynamic>)['isFavorite'] ?? false : false;
     } catch (e) {
       print('Error checking if part is favorite: $e');
       return false;
     }
   }
 
+
   Future<void> togglePartFavorite(String userId, String partId, bool isFavorite) async {
     try {
-      await _firestore
+      await FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
           .collection('parts')
           .doc(partId)
-          .update({'isFavorite': isFavorite});
+          .set({'isFavorite': isFavorite}, SetOptions(merge: true));
     } catch (e) {
       print('Error toggling part favorite: $e');
       throw e;

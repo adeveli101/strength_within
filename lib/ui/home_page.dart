@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:workout/data_bloc/routines_bloc.dart';
 import 'package:workout/models/routines.dart';
 import 'package:workout/models/BodyPart.dart';
 import 'package:workout/models/WorkoutType.dart';
-import 'package:workout/models/PartFocusRoutine.dart';
 import 'package:workout/ui/part_ui/part_card.dart';
-import 'package:workout/ui/part_ui/part_description.dart';
+import 'package:workout/ui/part_ui/part_detail.dart';
 import 'package:workout/ui/routine_ui/routine_card.dart';
-import 'package:workout/ui/routine_ui/routine_detail.dart';
-import '../data_bloc/RoutineRepository.dart';
+
+import '../data_bloc_part/part_bloc.dart';
+import '../data_bloc_routine/routines_bloc.dart';
+import '../models/PartFocusRoutine.dart';
 
 class HomePage extends StatefulWidget {
   final String userId;
@@ -22,19 +22,19 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   late RoutinesBloc _routinesBloc;
+  late PartsBloc _partsBloc;
 
   @override
   void initState() {
     super.initState();
     _routinesBloc = BlocProvider.of<RoutinesBloc>(context);
+    _partsBloc = BlocProvider.of<PartsBloc>(context);
     _loadAllData();
   }
 
   void _loadAllData() {
-    _routinesBloc.add(FetchRoutines());
-    _routinesBloc.add(FetchBodyParts());
-    _routinesBloc.add(FetchWorkoutTypes());
-    _routinesBloc.add(FetchParts());
+    _routinesBloc.add(FetchHomeData(userId: widget.userId));
+    _partsBloc.add(FetchParts());
   }
 
   @override
@@ -51,10 +51,26 @@ class _HomePageState extends State<HomePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildRoutines(),
-              _buildBodyParts(),
-              _buildWorkoutTypes(),
-              _buildPartFocusRoutines(),
+              _buildParts(context),
+              BlocBuilder<RoutinesBloc, RoutinesState>(
+                builder: (context, state) {
+                  if (state is RoutinesLoading) {
+                    return Center(child: CircularProgressIndicator());
+                  } else if (state is RoutinesLoaded) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildRoutines(state),
+                        _buildBodyParts(state.bodyParts),
+                        _buildWorkoutTypes(state.workoutTypes),
+                      ],
+                    );
+                  } else if (state is RoutinesError) {
+                    return Center(child: Text('Hata: ${state.message}'));
+                  }
+                  return Center(child: Text('Bilinmeyen durum'));
+                },
+              ),
             ],
           ),
         ),
@@ -62,73 +78,26 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildRoutines() {
-    return BlocBuilder<RoutinesBloc, RoutinesState>(
-      buildWhen: (previous, current) => current is RoutinesLoaded,
-      builder: (context, state) {
-        if (state is RoutinesLoaded) {
-          List<Widget> routineSections = [];
+  Widget _buildRoutines(RoutinesLoaded state) {
+    List<Widget> routineSections = [];
 
-          // Favori Rutinler
-          final favoriteRoutines = state.routines.where((r) => r.isFavorite).toList();
-          if (favoriteRoutines.isNotEmpty) {
-            routineSections.add(_buildRoutineList('Favori Rutinleriniz', favoriteRoutines, state.repository));
-          }
+    final favoriteRoutines = state.routines.where((r) => r.isFavorite).toList();
+    if (favoriteRoutines.isNotEmpty) {
+      routineSections.add(_buildRoutineList('Favori Rutinleriniz', favoriteRoutines));
+    }
 
-          // Son Kullanılan Rutinler
-          final recentlyUsedRoutines = state.routines.where((r) => r.lastUsedDate != null).toList()
-            ..sort((a, b) => b.lastUsedDate!.compareTo(a.lastUsedDate!));
-          if (recentlyUsedRoutines.isNotEmpty) {
-            routineSections.add(_buildRoutineList('Son Kullanılan Rutinler', recentlyUsedRoutines, state.repository));
-          }
+    final recentlyUsedRoutines = state.routines.where((r) => r.lastUsedDate != null).toList()
+      ..sort((a, b) => (b.lastUsedDate ?? DateTime(0)).compareTo(a.lastUsedDate ?? DateTime(0)));
+    if (recentlyUsedRoutines.isNotEmpty) {
+      routineSections.add(_buildRoutineList('Son Kullanılan Rutinler', recentlyUsedRoutines));
+    }
 
-          // Tüm Rutinler
-          routineSections.add(_buildRoutineList('Tüm Rutinler', state.routines, state.repository));
+    routineSections.add(_buildRoutineList('Tüm Rutinler', state.routines));
 
-          return Column(children: routineSections);
-        }
-        return SizedBox.shrink();
-      },
-    );
+    return Column(children: routineSections);
   }
 
-  Widget _buildBodyParts() {
-    return BlocBuilder<RoutinesBloc, RoutinesState>(
-      buildWhen: (previous, current) => current is RoutinesLoaded && current.bodyParts.isNotEmpty,
-      builder: (context, state) {
-        if (state is RoutinesLoaded) {
-          return _buildBodyPartsList(state.bodyParts);
-        }
-        return SizedBox.shrink();
-      },
-    );
-  }
-
-  Widget _buildWorkoutTypes() {
-    return BlocBuilder<RoutinesBloc, RoutinesState>(
-      buildWhen: (previous, current) => current is RoutinesLoaded && current.workoutTypes.isNotEmpty,
-      builder: (context, state) {
-        if (state is RoutinesLoaded) {
-          return _buildWorkoutTypesList(state.workoutTypes);
-        }
-        return SizedBox.shrink();
-      },
-    );
-  }
-
-  Widget _buildPartFocusRoutines() {
-    return BlocBuilder<RoutinesBloc, RoutinesState>(
-      buildWhen: (previous, current) => current is RoutinesLoaded && current.parts.isNotEmpty,
-      builder: (context, state) {
-        if (state is RoutinesLoaded) {
-          return _buildPartFocusRoutinesList(state.parts, state.repository);
-        }
-        return SizedBox.shrink();
-      },
-    );
-  }
-
-  Widget _buildRoutineList(String title, List<Routines> routines, RoutineRepository repository) {
+  Widget _buildRoutineList(String title, List<Routines> routines) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -147,9 +116,7 @@ class _HomePageState extends State<HomePage> {
                 width: 300,
                 child: RoutineCard(
                   routine: routine,
-                  repository: repository,
                   userId: widget.userId,
-
                 ),
               );
             },
@@ -158,7 +125,8 @@ class _HomePageState extends State<HomePage> {
       ],
     );
   }
-  Widget _buildBodyPartsList(List<BodyParts> bodyParts) {
+
+  Widget _buildBodyParts(List<BodyParts> bodyParts) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -175,7 +143,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildWorkoutTypesList(List<WorkoutTypes> workoutTypes) {
+  Widget _buildWorkoutTypes(List<WorkoutTypes> workoutTypes) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -192,41 +160,76 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Widget _buildParts(BuildContext context) {
+    return BlocBuilder<PartsBloc, PartsState>(
+      builder: (context, state) {
+        print('Current PartsBloc state: $state'); // Bu satırı ekleyin
+        if (state is PartsLoading) {
+          return Center(child: CircularProgressIndicator());
+        } else if (state is PartsLoaded) {
+          print('Loaded parts count: ${state.parts.length}');
+          List<Widget> partSections = [];
 
+          final favoriteParts = state.parts.where((p) => p.isFavorite).toList();
+          if (favoriteParts.isNotEmpty) {
+            partSections.add(_buildPartList('Favori Part\'larınız', favoriteParts));
+          }
 
-  Widget _buildPartFocusRoutinesList(List<Parts> parts, RoutineRepository repository) {
+          final recentlyUsedParts = state.parts.where((p) => p.lastUsedDate != null).toList()
+            ..sort((a, b) => (b.lastUsedDate ?? DateTime(0)).compareTo(a.lastUsedDate ?? DateTime(0)));
+          if (recentlyUsedParts.isNotEmpty) {
+            partSections.add(_buildPartList('Son Kullanılan Part\'lar', recentlyUsedParts.take(5).toList()));
+          }
+
+          final allParts = List<Parts>.from(state.parts)..shuffle();
+          partSections.add(_buildPartList('Keşfet', allParts.take(5).toList()));
+
+          return Column(children: partSections);
+        } else if (state is PartsError) {
+          return Center(child: Text('Error: ${state.message}'));
+        }
+        return Center(child: Text('No parts available: $state')); // Bu satırı güncelleyin
+      },
+    );
+  }
+
+  Widget _buildPartList(String title, List<Parts> parts) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Text('Part Odaklı Rutinler', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          child: Text(
+            title,
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
         ),
         SizedBox(
-          height: 220,
+          height: 230, // Yüksekliği biraz artırdık
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: parts.length,
             itemBuilder: (context, index) {
               final part = parts[index];
-              return SizedBox(
-                width: 300,
-                child: PartFocusRoutineCard(
-                  part: part,
-                  repository: repository,
-                  userId: widget.userId,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => PartDescription(
-                          part: part,
-                          repository: repository,
-                          userId: widget.userId,
+              return Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: SizedBox(
+                  width: 180, // Genişliği biraz artırdık
+                  child: PartCard(
+                    part: part,
+                    userId: widget.userId,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => PartDetailPage(
+                            partId: part.id,
+                            userId: widget.userId,
+                          ),
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
               );
             },

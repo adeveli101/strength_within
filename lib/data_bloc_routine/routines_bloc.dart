@@ -1,11 +1,11 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
-import 'package:workout/data_bloc/RoutineRepository.dart';
 import 'package:workout/models/routines.dart';
 import 'package:workout/models/exercises.dart';
 import 'package:workout/models/BodyPart.dart';
 import 'package:workout/models/WorkoutType.dart';
-import '../models/PartFocusRoutine.dart';
+import '../models/PartFocusRoutineExercises.dart';
+import 'RoutineRepository.dart';
 
 // Events
 abstract class RoutinesEvent extends Equatable {
@@ -41,7 +41,6 @@ class FetchBodyParts extends RoutinesEvent {}
 
 class FetchWorkoutTypes extends RoutinesEvent {}
 
-class FetchParts extends RoutinesEvent {}
 
 class ToggleRoutineFavorite extends RoutinesEvent {
   final String userId;
@@ -84,7 +83,6 @@ class RoutinesLoaded extends RoutinesState {
   final List<Exercises> exercises;
   final List<BodyParts> bodyParts;
   final List<WorkoutTypes> workoutTypes;
-  final List<Parts> parts;
 
   const RoutinesLoaded({
     required String userId,
@@ -93,12 +91,13 @@ class RoutinesLoaded extends RoutinesState {
     required this.exercises,
     required this.bodyParts,
     required this.workoutTypes,
-    required this.parts,
   }) : super(userId: userId, repository: repository);
 
   @override
-  List<Object> get props => [userId, repository, routines, exercises, bodyParts, workoutTypes, parts];
+  List<Object> get props => [userId, repository, routines, exercises, bodyParts, workoutTypes];
 }
+
+
 
 class RoutinesError extends RoutinesState {
   final String message;
@@ -109,6 +108,36 @@ class RoutinesError extends RoutinesState {
   @override
   List<Object> get props => [userId, repository, message];
 }
+
+
+
+
+
+class FetchRoutineExercises extends RoutinesEvent {
+  final int routineId;
+  const FetchRoutineExercises({required this.routineId});
+  @override
+  List<Object> get props => [routineId];
+}
+
+
+class RoutineExercisesLoaded extends RoutinesState {
+  final Routines routine;
+  final Map<String, List<Map<String, dynamic>>> exerciseListByBodyPart;
+
+  const RoutineExercisesLoaded({
+    required String userId,
+    required RoutineRepository repository,
+    required this.routine,
+    required this.exerciseListByBodyPart,
+  }) : super(userId: userId, repository: repository);
+
+  @override
+  List<Object> get props => [userId, repository, routine, exerciseListByBodyPart];
+}
+
+
+
 
 // Bloc
 class RoutinesBloc extends Bloc<RoutinesEvent, RoutinesState> {
@@ -123,9 +152,38 @@ class RoutinesBloc extends Bloc<RoutinesEvent, RoutinesState> {
     on<FetchExercises>(_onFetchExercises);
     on<FetchBodyParts>(_onFetchBodyParts);
     on<FetchWorkoutTypes>(_onFetchWorkoutTypes);
-    on<FetchParts>(_onFetchParts);
     on<ToggleRoutineFavorite>(_onToggleRoutineFavorite);
+    on<FetchRoutineExercises>(_onFetchRoutineExercises);
   }
+
+
+
+  Future<void> _onFetchRoutineExercises(FetchRoutineExercises event, Emitter<RoutinesState> emit) async {
+    emit(RoutinesLoading(userId: userId, repository: repository));
+    try {
+      final routine = await repository.getRoutineWithUserData(userId, event.routineId);
+      if (routine != null) {
+        final exerciseListByBodyPart = await repository.buildExerciseListForRoutine(routine);
+        emit(RoutineExercisesLoaded(
+          userId: userId,
+          repository: repository,
+          routine: routine,
+          exerciseListByBodyPart: exerciseListByBodyPart,
+        ));
+      } else {
+        emit(RoutinesError(userId: userId, repository: repository, message: 'Rutin bulunamadı'));
+      }
+    } catch (e) {
+      print("Rutin egzersizleri yüklenirken hata oluştu: $e");
+      emit(RoutinesError(userId: userId, repository: repository, message: e.toString()));
+    }
+  }
+
+
+
+
+
+
 
   Future<void> _onFetchHomeData(FetchHomeData event, Emitter<RoutinesState> emit) async {
     emit(RoutinesLoading(userId: userId, repository: repository));
@@ -134,7 +192,6 @@ class RoutinesBloc extends Bloc<RoutinesEvent, RoutinesState> {
       final exercises = await repository.getAllExercises();
       final bodyParts = await repository.getAllBodyParts();
       final workoutTypes = await repository.getAllWorkoutTypes();
-      final parts = await repository.getPartsWithUserData(userId);
 
       emit(RoutinesLoaded(
         userId: userId,
@@ -143,7 +200,6 @@ class RoutinesBloc extends Bloc<RoutinesEvent, RoutinesState> {
         exercises: exercises,
         bodyParts: bodyParts,
         workoutTypes: workoutTypes,
-        parts: parts.isNotEmpty ? parts : await repository.getAllParts(),
       ));
     } catch (e, stackTrace) {
       print("Veri çekme hatası: $e");
@@ -152,6 +208,7 @@ class RoutinesBloc extends Bloc<RoutinesEvent, RoutinesState> {
     }
   }
 
+
   Future<void> _onFetchForYouData(FetchForYouData event, Emitter<RoutinesState> emit) async {
     emit(RoutinesLoading(userId: userId, repository: repository));
     try {
@@ -159,7 +216,6 @@ class RoutinesBloc extends Bloc<RoutinesEvent, RoutinesState> {
       final exercises = await repository.getAllExercises();
       final bodyParts = await repository.getAllBodyParts();
       final workoutTypes = await repository.getAllWorkoutTypes();
-      final parts = await repository.getPartsWithUserData(userId);
       emit(RoutinesLoaded(
         userId: userId,
         repository: repository,
@@ -167,7 +223,6 @@ class RoutinesBloc extends Bloc<RoutinesEvent, RoutinesState> {
         exercises: exercises,
         bodyParts: bodyParts,
         workoutTypes: workoutTypes,
-        parts: parts,
       ));
     } catch (e) {
       emit(RoutinesError(userId: userId, repository: repository, message: e.toString()));
@@ -178,20 +233,21 @@ class RoutinesBloc extends Bloc<RoutinesEvent, RoutinesState> {
     emit(RoutinesLoading(userId: userId, repository: repository));
     try {
       final routines = await repository.getRoutinesWithUserData(userId);
+      final exercises = await repository.getAllExercises();
       emit(RoutinesLoaded(
         userId: userId,
         repository: repository,
         routines: routines,
-        exercises: [],
+        exercises: exercises,
         bodyParts: [],
         workoutTypes: [],
-        parts: [],
       ));
     } catch (e) {
       print("Rutinler yüklenirken hata oluştu: $e");
       emit(RoutinesError(userId: userId, repository: repository, message: e.toString()));
     }
   }
+
 
   Future<void> _onFetchExercises(FetchExercises event, Emitter<RoutinesState> emit) async {
     emit(RoutinesLoading(userId: userId, repository: repository));
@@ -204,12 +260,12 @@ class RoutinesBloc extends Bloc<RoutinesEvent, RoutinesState> {
         exercises: exercises,
         bodyParts: [],
         workoutTypes: [],
-        parts: [],
       ));
     } catch (e) {
       emit(RoutinesError(userId: userId, repository: repository, message: e.toString()));
     }
   }
+
 
   Future<void> _onFetchBodyParts(FetchBodyParts event, Emitter<RoutinesState> emit) async {
     emit(RoutinesLoading(userId: userId, repository: repository));
@@ -222,7 +278,6 @@ class RoutinesBloc extends Bloc<RoutinesEvent, RoutinesState> {
         exercises: [],
         bodyParts: bodyParts,
         workoutTypes: [],
-        parts: [],
       ));
     } catch (e) {
       emit(RoutinesError(userId: userId, repository: repository, message: e.toString()));
@@ -240,30 +295,12 @@ class RoutinesBloc extends Bloc<RoutinesEvent, RoutinesState> {
         exercises: [],
         bodyParts: [],
         workoutTypes: workoutTypes,
-        parts: [],
       ));
     } catch (e) {
       emit(RoutinesError(userId: userId, repository: repository, message: e.toString()));
     }
   }
 
-  Future<void> _onFetchParts(FetchParts event, Emitter<RoutinesState> emit) async {
-    emit(RoutinesLoading(userId: userId, repository: repository));
-    try {
-      final parts = await repository.getPartsWithUserData(userId);
-      emit(RoutinesLoaded(
-        userId: userId,
-        repository: repository,
-        routines: [],
-        exercises: [],
-        bodyParts: [],
-        workoutTypes: [],
-        parts: parts,
-      ));
-    } catch (e) {
-      emit(RoutinesError(userId: userId, repository: repository, message: e.toString()));
-    }
-  }
 
   Future<void> _onToggleRoutineFavorite(ToggleRoutineFavorite event, Emitter<RoutinesState> emit) async {
     try {
