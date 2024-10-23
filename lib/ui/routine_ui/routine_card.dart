@@ -21,18 +21,28 @@ class RoutineCard extends StatelessWidget {
     if (onTap != null) {
       onTap!();
     } else {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => RoutineDetails(
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (BuildContext context) {
+          return RoutineDetailBottomSheet(
             routineId: routine.id,
             userId: userId,
-          ),
-        ),
-      );
+          );
+        },
+      ).then((_) {
+        // Bottom sheet kapandığında rutin listesini güncelle
+        if (context.mounted) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (context.mounted) {
+              context.read<RoutinesBloc>().add(FetchRoutines());
+            }
+          });
+        }
+      });
     }
   }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);

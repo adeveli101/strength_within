@@ -1,11 +1,10 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:workout/models/routines.dart';
-import 'package:workout/models/exercises.dart';
-import 'package:workout/models/BodyPart.dart';
-import 'package:workout/models/WorkoutType.dart';
-import '../models/PartFocusRoutineExercises.dart';
 import 'RoutineRepository.dart';
+import 'package:logging/logging.dart';
+
+final _logger = Logger('RoutinesBloc');
 
 // Events
 abstract class RoutinesEvent extends Equatable {
@@ -15,9 +14,18 @@ abstract class RoutinesEvent extends Equatable {
   List<Object> get props => [];
 }
 
+
+class UpdateRoutine extends RoutinesEvent {
+
+final Routines updatedRoutine;
+const UpdateRoutine(this.updatedRoutine);
+
+
+}
+
+
 class FetchHomeData extends RoutinesEvent {
   final String userId;
-
   const FetchHomeData({required this.userId});
 
   @override
@@ -26,7 +34,6 @@ class FetchHomeData extends RoutinesEvent {
 
 class FetchForYouData extends RoutinesEvent {
   final String userId;
-
   const FetchForYouData({required this.userId});
 
   @override
@@ -34,13 +41,9 @@ class FetchForYouData extends RoutinesEvent {
 }
 
 class FetchRoutines extends RoutinesEvent {}
-
 class FetchExercises extends RoutinesEvent {}
-
 class FetchBodyParts extends RoutinesEvent {}
-
 class FetchWorkoutTypes extends RoutinesEvent {}
-
 
 class ToggleRoutineFavorite extends RoutinesEvent {
   final String userId;
@@ -55,6 +58,14 @@ class ToggleRoutineFavorite extends RoutinesEvent {
 
   @override
   List<Object> get props => [userId, routineId, isFavorite];
+}
+
+class FetchRoutineExercises extends RoutinesEvent {
+  final int routineId;
+  const FetchRoutineExercises({required this.routineId});
+
+  @override
+  List<Object> get props => [routineId];
 }
 
 // States
@@ -80,24 +91,18 @@ class RoutinesLoading extends RoutinesState {
 
 class RoutinesLoaded extends RoutinesState {
   final List<Routines> routines;
-  final List<Exercises> exercises;
-  final List<BodyParts> bodyParts;
-  final List<WorkoutTypes> workoutTypes;
+
 
   const RoutinesLoaded({
     required String userId,
     required RoutineRepository repository,
     required this.routines,
-    required this.exercises,
-    required this.bodyParts,
-    required this.workoutTypes,
+
   }) : super(userId: userId, repository: repository);
 
   @override
-  List<Object> get props => [userId, repository, routines, exercises, bodyParts, workoutTypes];
+  List<Object> get props => [userId, repository, routines, ];
 }
-
-
 
 class RoutinesError extends RoutinesState {
   final String message;
@@ -108,18 +113,6 @@ class RoutinesError extends RoutinesState {
   @override
   List<Object> get props => [userId, repository, message];
 }
-
-
-
-
-
-class FetchRoutineExercises extends RoutinesEvent {
-  final int routineId;
-  const FetchRoutineExercises({required this.routineId});
-  @override
-  List<Object> get props => [routineId];
-}
-
 
 class RoutineExercisesLoaded extends RoutinesState {
   final Routines routine;
@@ -136,9 +129,6 @@ class RoutineExercisesLoaded extends RoutinesState {
   List<Object> get props => [userId, repository, routine, exerciseListByBodyPart];
 }
 
-
-
-
 // Bloc
 class RoutinesBloc extends Bloc<RoutinesEvent, RoutinesState> {
   final RoutineRepository repository;
@@ -147,14 +137,26 @@ class RoutinesBloc extends Bloc<RoutinesEvent, RoutinesState> {
   RoutinesBloc({required this.repository, required this.userId})
       : super(RoutinesInitial(userId: userId, repository: repository)) {
     on<FetchHomeData>(_onFetchHomeData);
-    on<FetchForYouData>(_onFetchForYouData);
     on<FetchRoutines>(_onFetchRoutines);
     on<FetchExercises>(_onFetchExercises);
     on<FetchBodyParts>(_onFetchBodyParts);
     on<FetchWorkoutTypes>(_onFetchWorkoutTypes);
     on<ToggleRoutineFavorite>(_onToggleRoutineFavorite);
     on<FetchRoutineExercises>(_onFetchRoutineExercises);
+    on<UpdateRoutine>((event, emit) {
+      if (state is RoutinesLoaded) {
+        final currentState = state as RoutinesLoaded;
+        final updatedRoutines = currentState.routines.map((routine) {
+          return routine.id == event.updatedRoutine.id
+              ? event.updatedRoutine
+              : routine;
+        }).toList();
+        emit(RoutinesLoaded(
+            routines: updatedRoutines, userId: userId, repository: repository ));
+      }
+    });
   }
+
 
 
 
@@ -171,143 +173,134 @@ class RoutinesBloc extends Bloc<RoutinesEvent, RoutinesState> {
           exerciseListByBodyPart: exerciseListByBodyPart,
         ));
       } else {
-        emit(RoutinesError(userId: userId, repository: repository, message: 'Rutin bulunamadı'));
+        emit(RoutinesError(userId: userId, repository: repository, message: 'Routine not found'));
       }
-    } catch (e) {
-      print("Rutin egzersizleri yüklenirken hata oluştu: $e");
-      emit(RoutinesError(userId: userId, repository: repository, message: e.toString()));
+    } catch (e, stackTrace) {
+      _logger.severe('Error loading routine exercises', e, stackTrace);
+      emit(RoutinesError(userId: userId, repository: repository, message: 'Failed to load routine exercises'));
     }
   }
-
-
-
-
-
-
 
   Future<void> _onFetchHomeData(FetchHomeData event, Emitter<RoutinesState> emit) async {
     emit(RoutinesLoading(userId: userId, repository: repository));
     try {
       final routines = await repository.getRoutinesWithUserData(userId);
-      final exercises = await repository.getAllExercises();
-      final bodyParts = await repository.getAllBodyParts();
-      final workoutTypes = await repository.getAllWorkoutTypes();
 
       emit(RoutinesLoaded(
         userId: userId,
         repository: repository,
         routines: routines,
-        exercises: exercises,
-        bodyParts: bodyParts,
-        workoutTypes: workoutTypes,
+
       ));
     } catch (e, stackTrace) {
-      print("Veri çekme hatası: $e");
-      print("Stack trace: $stackTrace");
-      emit(RoutinesError(userId: userId, repository: repository, message: e.toString()));
+      _logger.severe('Error loading home data', e, stackTrace);
+      emit(RoutinesError(userId: userId, repository: repository, message: 'Failed to load home data'));
     }
   }
 
 
-  Future<void> _onFetchForYouData(FetchForYouData event, Emitter<RoutinesState> emit) async {
-    emit(RoutinesLoading(userId: userId, repository: repository));
-    try {
-      final routines = await repository.getRoutinesWithUserData(userId);
-      final exercises = await repository.getAllExercises();
-      final bodyParts = await repository.getAllBodyParts();
-      final workoutTypes = await repository.getAllWorkoutTypes();
-      emit(RoutinesLoaded(
-        userId: userId,
-        repository: repository,
-        routines: routines,
-        exercises: exercises,
-        bodyParts: bodyParts,
-        workoutTypes: workoutTypes,
-      ));
-    } catch (e) {
-      emit(RoutinesError(userId: userId, repository: repository, message: e.toString()));
-    }
-  }
 
   Future<void> _onFetchRoutines(FetchRoutines event, Emitter<RoutinesState> emit) async {
+    if (isClosed) return;
     emit(RoutinesLoading(userId: userId, repository: repository));
     try {
       final routines = await repository.getRoutinesWithUserData(userId);
-      final exercises = await repository.getAllExercises();
+
+      if (isClosed) return;
       emit(RoutinesLoaded(
         userId: userId,
         repository: repository,
         routines: routines,
-        exercises: exercises,
-        bodyParts: [],
-        workoutTypes: [],
+
+
       ));
-    } catch (e) {
-      print("Rutinler yüklenirken hata oluştu: $e");
-      emit(RoutinesError(userId: userId, repository: repository, message: e.toString()));
+    } catch (e, stackTrace) {
+      _logger.severe('Error loading routines', e, stackTrace);
+      if (isClosed) return;
+      emit(RoutinesError(userId: userId, repository: repository, message: 'Failed to load routines'));
     }
   }
-
 
   Future<void> _onFetchExercises(FetchExercises event, Emitter<RoutinesState> emit) async {
     emit(RoutinesLoading(userId: userId, repository: repository));
     try {
-      final exercises = await repository.getAllExercises();
       emit(RoutinesLoaded(
         userId: userId,
         repository: repository,
         routines: [],
-        exercises: exercises,
-        bodyParts: [],
-        workoutTypes: [],
+
+
       ));
-    } catch (e) {
-      emit(RoutinesError(userId: userId, repository: repository, message: e.toString()));
+    } catch (e, stackTrace) {
+      _logger.severe('Error loading exercises', e, stackTrace);
+      emit(RoutinesError(userId: userId, repository: repository, message: 'Failed to load exercises'));
     }
   }
-
 
   Future<void> _onFetchBodyParts(FetchBodyParts event, Emitter<RoutinesState> emit) async {
     emit(RoutinesLoading(userId: userId, repository: repository));
     try {
-      final bodyParts = await repository.getAllBodyParts();
       emit(RoutinesLoaded(
         userId: userId,
         repository: repository,
         routines: [],
-        exercises: [],
-        bodyParts: bodyParts,
-        workoutTypes: [],
+
       ));
-    } catch (e) {
-      emit(RoutinesError(userId: userId, repository: repository, message: e.toString()));
+    } catch (e, stackTrace) {
+      _logger.severe('Error loading body parts', e, stackTrace);
+      emit(RoutinesError(userId: userId, repository: repository, message: 'Failed to load body parts'));
     }
   }
 
   Future<void> _onFetchWorkoutTypes(FetchWorkoutTypes event, Emitter<RoutinesState> emit) async {
     emit(RoutinesLoading(userId: userId, repository: repository));
     try {
-      final workoutTypes = await repository.getAllWorkoutTypes();
+
       emit(RoutinesLoaded(
         userId: userId,
         repository: repository,
         routines: [],
-        exercises: [],
-        bodyParts: [],
-        workoutTypes: workoutTypes,
+
+
       ));
-    } catch (e) {
-      emit(RoutinesError(userId: userId, repository: repository, message: e.toString()));
+    } catch (e, stackTrace) {
+      _logger.severe('Error loading workout types', e, stackTrace);
+      emit(RoutinesError(userId: userId, repository: repository, message: 'Failed to load workout types'));
     }
   }
-
-
   Future<void> _onToggleRoutineFavorite(ToggleRoutineFavorite event, Emitter<RoutinesState> emit) async {
-    try {
-      await repository.toggleRoutineFavorite(userId, event.routineId, event.isFavorite);
-      add(FetchRoutines());
-    } catch (e) {
-      emit(RoutinesError(userId: userId, repository: repository, message: e.toString()));
+    if (state is RoutinesLoaded) {
+      final currentState = state as RoutinesLoaded;
+      final updatedRoutines = currentState.routines.map((routine) {
+        if (routine.id.toString() == event.routineId) {
+          return routine.copyWith(isFavorite: event.isFavorite);
+        }
+        return routine;
+      }).toList();
+
+      // Optimistic update
+      emit(RoutinesLoaded(
+        userId: currentState.userId,
+        repository: currentState.repository,
+        routines: updatedRoutines,
+
+      ));
+
+      try {
+        await repository.toggleRoutineFavorite(userId, event.routineId, event.isFavorite);
+        _logger.info('Routine favorite updated');
+        // Database update successful, no need to do anything else
+      } catch (e, stackTrace) {
+        _logger.severe('Error updating routine favorite', e, stackTrace);
+        // Revert to the old state in case of error
+        emit(currentState);
+        emit(RoutinesError(
+          userId: currentState.userId,
+          repository: currentState.repository,
+          message: "Favori durumu güncellenirken bir hata oluştu. Lütfen tekrar deneyin.",
+        ));
+      }
     }
   }
+
 }

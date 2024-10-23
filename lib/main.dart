@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
@@ -13,6 +15,7 @@ import 'data_bloc_part/part_bloc.dart';
 import 'data_bloc_routine/RoutineRepository.dart';
 import 'data_bloc_routine/routines_bloc.dart';
 import 'firebase_options.dart';
+import 'for_you_bloc/for_you_bloc.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,25 +31,41 @@ Future<void> main() async {
   final sqlProvider = SQLProvider();
   await sqlProvider.initDatabase();
 
-  final firebaseProvider = FirebaseProvider();
+  final firebaseProvider = FirebaseProvider(sqlProvider);
   final routineRepository = RoutineRepository(sqlProvider, firebaseProvider);
-  final partRepository = PartRepository(sqlProvider, firebaseProvider);  // Yeni eklenen satır
+  final partRepository = PartRepository(sqlProvider, firebaseProvider);
   await sqlProvider.testDatabaseContent();
 
   String? userId = await firebaseProvider.signInAnonymously();
 
   if (userId != null) {
     runApp(
+      // main.dart içindeki MultiBlocProvider kısmı
       MultiBlocProvider(
         providers: [
           BlocProvider<RoutinesBloc>(
-            create: (context) => RoutinesBloc(repository: routineRepository, userId: userId),
+            create: (context) => RoutinesBloc(
+                repository: routineRepository,
+                userId: userId
+            ),
           ),
           BlocProvider<PartsBloc>(
-            create: (context) => PartsBloc(repository: partRepository, userId: userId)..add(FetchParts()),          ),
+            create: (context) => PartsBloc(
+                repository: partRepository,
+                userId: userId
+            )..add(FetchParts()),
+          ),
+          BlocProvider<ForYouBloc>(
+            create: (context) => ForYouBloc(
+              partRepository: partRepository,
+              routineRepository: routineRepository,
+              userId: userId,
+            ),
+          ),
         ],
         child: App(userId: userId),
       ),
+
     );
   } else {
     print('Anonim giriş başarısız oldu.');
@@ -69,7 +88,6 @@ class App extends StatelessWidget {
           backgroundColor: Colors.transparent,
           elevation: 0.3,
           shape: Border.symmetric(),
-
         ),
         bottomNavigationBarTheme: BottomNavigationBarThemeData(
           backgroundColor: Color(0xFF282828),
@@ -91,76 +109,101 @@ class MainScreen extends StatefulWidget {
   _MainScreenState createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
+
+class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   int _currentIndex = 0;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshData();
+    }
+  }
+
+  Future<void> _refreshData() async {
+    final routinesBloc = context.read<RoutinesBloc>();
+    final partsBloc = context.read<PartsBloc>();
+
+    routinesBloc.add(FetchHomeData(userId: widget.userId));
+    partsBloc.add(FetchParts());
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final RoutinesBloc routinesBloc = BlocProvider.of<RoutinesBloc>(context);
-    final PartsBloc partsBloc = BlocProvider.of<PartsBloc>(context);
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: [
-
-            Icon(Icons.sports_score_rounded, color: Colors.red,), // İkon
-            SizedBox(width: 10), // İkon ve metin arasında boşluk
-            Text('Workout App',selectionColor: Colors.red), // Uygulama başlığı
-
+    return PopScope(
+      canPop: true,
+      onPopInvoked: (didPop) async {
+        if (didPop) {
+          await _refreshData();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              Icon(Icons.sports_score_rounded, color: Colors.red),
+              SizedBox(width: 10),
+              Text('Workout App', style: TextStyle(color: Colors.red)),
+            ],
+          ),
+          actions: [
+            IconButton(
+              icon: Icon(Icons.settings),
+              onPressed: () {
+                showModalBottomSheet(
+                  context: context,
+                  builder: (BuildContext context) {
+                    return SettingsPage();
+                  },
+                  isScrollControlled: true,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
+                );
+              },
+            ),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.settings),
-            onPressed: () {
-              showModalBottomSheet(
-                context: context,
-                builder: (BuildContext context) {
-                  return SettingsPage();
-                },
-                isScrollControlled: true,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-      body: IndexedStack(
-        index: _currentIndex,
-        children: [
-          HomePage(userId: widget.userId),
-          ForYouPage(userId: widget.userId),
-        ],
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-          if (index == 0) {
-            routinesBloc.add(FetchHomeData(userId: widget.userId));
-            partsBloc.add(FetchParts()); // Eklenen satır
-          } else if (index == 1) {
-            routinesBloc.add(FetchForYouData(userId: widget.userId));
-          }
-        },
-        items: [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Ana Sayfa',
-
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.recommend),
-            label: 'Senin İçin',
-          ),
-        ],
-        type: BottomNavigationBarType.fixed,
+        body: IndexedStack(
+          index: _currentIndex,
+          children: [
+            HomePage(userId: widget.userId),
+            ForYouPage(userId: widget.userId),
+          ],
+        ),
+        bottomNavigationBar: BottomNavigationBar(
+          currentIndex: _currentIndex,
+          onTap: (index) {
+            setState(() {
+              _currentIndex = index;
+            });
+            _refreshData();
+          },
+          items: [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.home),
+              label: 'Ana Sayfa',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.recommend),
+              label: 'Senin İçin',
+            ),
+          ],
+          type: BottomNavigationBarType.fixed,
+        ),
       ),
     );
   }

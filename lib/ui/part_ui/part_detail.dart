@@ -1,194 +1,165 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:workout/data_bloc_part/part_bloc.dart';
 import 'package:workout/models/PartFocusRoutine.dart';
+import 'package:workout/ui/part_ui/part_card.dart';
+import 'package:logging/logging.dart';
 
-import '../../data_bloc_part/part_bloc.dart';
-
-class PartDetailPage extends StatefulWidget {
+class PartDetailBottomSheet extends StatefulWidget {
   final int partId;
   final String userId;
 
-  const PartDetailPage({Key? key, required this.partId, required this.userId}) : super(key: key);
+  const PartDetailBottomSheet({
+    Key? key,
+    required this.partId,
+    required this.userId
+  }) : super(key: key);
 
   @override
-  _PartDetailPageState createState() => _PartDetailPageState();
+  _PartDetailBottomSheetState createState() => _PartDetailBottomSheetState();
 }
 
-class _PartDetailPageState extends State<PartDetailPage> {
+
+class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
+
+  late PartsBloc _partsBloc;
+  final _logger = Logger('PartDetailBottomSheet');
+
+
+
+
   @override
   void initState() {
     super.initState();
-    context.read<PartsBloc>().add(FetchPartExercises(partId: widget.partId));
+    _partsBloc = context.read<PartsBloc>();
+    _logger.info("PartDetailBottomSheet initialized with partId: ${widget.partId}");
+
+    if (widget.partId > 0) {
+      _partsBloc.add(FetchPartExercises(partId: widget.partId));
+    } else {
+      _logger.warning("Invalid partId: ${widget.partId}");
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Geçersiz part ID. Lütfen tekrar deneyin.')),
+        );
+        Navigator.of(context).pop();
+      });
+    }
   }
+
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<PartsBloc, PartsState>(
-      builder: (context, state) {
-        if (state is PartsLoading) {
-          return Scaffold(
-            appBar: AppBar(title: Text('Loading...')),
-            body: Center(child: CircularProgressIndicator()),
-          );
-        } else if (state is PartExercisesLoaded) {
-          return Scaffold(
-            appBar: AppBar(
-              title: Text(state.part.name),
-              actions: [
-                IconButton(
-                  icon: Icon(state.part.isFavorite ? Icons.favorite : Icons.favorite_border),
-                  onPressed: () {
-                    context.read<PartsBloc>().add(TogglePartFavorite(
-                      userId: widget.userId,
-                      partId: state.part.id.toString(),
-                      isFavorite: !state.part.isFavorite,
-                    ));
-                  },
-                ),
-              ],
-            ),
-            body: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Body Part: ${state.part.bodyPartId}'),
-                    Text('Set Type: ${state.part.setType}'),
-                    if (state.part.additionalNotes != null && state.part.additionalNotes.isNotEmpty)
-                      Text('Additional Notes: ${state.part.additionalNotes}'),
-                    SizedBox(height: 16),
-                    Text('Exercises', style: Theme.of(context).textTheme.headlineSmall),
-                    SizedBox(height: 8),
-                    _buildExerciseList(context, state.exerciseListByBodyPart),
-                  ],
-                ),
-              ),
-            ),
-          );
-        } else if (state is PartsError) {
-          return Scaffold(
-            appBar: AppBar(title: Text('Error')),
-            body: Center(child: Text('Error: ${state.message}')),
-          );
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, dynamic result) async {
+        if (didPop) return;
+
+        final state = _partsBloc.state;
+        if (state is PartExercisesLoaded) {
+          _partsBloc.add(UpdatePart(state.part));
+          _partsBloc.add(FetchParts());
         }
-        return Scaffold(
-          appBar: AppBar(title: Text('Unknown State')),
-          body: Center(child: Text('Unknown state')),
-        );
+        Navigator.of(context).pop();
       },
-    );
-  }
 
-
-
-
-
-
-
-
-
-  Widget _buildPartDetails(BuildContext context, PartExercisesLoaded state) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(state.part.name),
-        actions: [
-          IconButton(
-            icon: Icon(state.part.isFavorite ? Icons.favorite : Icons.favorite_border),
-            onPressed: () {
-              context.read<PartsBloc>().add(TogglePartFavorite(
-                userId: widget.userId,
-                partId: state.part.id.toString(),
-                isFavorite: !state.part.isFavorite,
-              ));
-            },
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildInfoSection(context, state.part),
-              SizedBox(height: 16),
-              _buildProgressSection(state.part),
-              SizedBox(height: 24),
-              Text('Exercises', style: Theme.of(context).textTheme.titleLarge),
-              SizedBox(height: 8),
-              _buildExerciseList(context, state.exerciseListByBodyPart),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInfoSection(BuildContext context, Parts part) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Body Part: ${part.bodyPartId}'),
-            SizedBox(height: 8),
-            Text('Set Type: ${part.setType}'),
-            if (part.additionalNotes != null && part.additionalNotes.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 8.0),
-                child: Text('Notes: ${part.additionalNotes}'),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProgressSection(Parts part) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Progress: ${part.userProgress}%'),
-            SizedBox(height: 8),
-            LinearProgressIndicator(
-              value: part.userProgress! / 100,
-              backgroundColor: Colors.grey[300],
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-
-  Widget _buildExerciseList(BuildContext context, Map<String, List<Map<String, dynamic>>> exerciseListByBodyPart) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: exerciseListByBodyPart.entries.map((entry) {
-        String bodyPartName = entry.key;
-        List<Map<String, dynamic>> exercises = entry.value;
-
-        return ExpansionTile(
-          title: Text(bodyPartName, style: Theme.of(context).textTheme.titleLarge),
-          children: exercises.map((exercise) {
-            return ListTile(
-              title: Text(exercise['name']),
-              subtitle: Text('Sets: ${exercise['defaultSets']}, Reps: ${exercise['defaultReps']}'),
-              trailing: Text('Weight: ${exercise['defaultWeight']}'),
-              onTap: () {
-                // TODO: Navigate to exercise detail page or show exercise details
-                print('Tapped on exercise: ${exercise['name']}');
-              },
+      child: BlocListener<PartsBloc, PartsState>(
+        listener: (context, state) {
+          if (state is PartsError) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(state.message)),
             );
-          }).toList(),
-        );
-      }).toList(),
+          }
+        },
+        child: DraggableScrollableSheet(
+          initialChildSize: 0.9,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          builder: (_, controller) {
+            return Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).canvasColor,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: BlocBuilder<PartsBloc, PartsState>(
+                builder: (context, state) {
+                  _logger.info('PartDetailBottomSheet state: $state');
+
+                  if (state is PartsLoading) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  if (state is PartExercisesLoaded) {
+                    return _buildLoadedContent(state, controller);
+                  }
+
+                  if (state is PartsError) {
+                    return Center(child: Text('Hata: ${state.message}'));
+                  }
+
+                  return Center(
+                    child: Text('Beklenmeyen durum: ${state.runtimeType}'),
+                  );
+                },
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadedContent(PartExercisesLoaded state, ScrollController controller) {
+    return ListView(
+      controller: controller,
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: PartCard(
+            part: state.part,
+            userId: widget.userId,
+            onTap: () => _partsBloc.add(FetchPartExercises(partId: state.part.id)),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: Text(
+            'Egzersizler',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+        ),
+        ..._buildExerciseList(state.exerciseListByBodyPart),
+      ],
+    );
+  }
+
+  List<Widget> _buildExerciseList(Map<String, List<Map<String, dynamic>>> exerciseListByBodyPart) {
+    return exerciseListByBodyPart.entries.map((entry) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: Text(
+              entry.key,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+          ...entry.value.map((exercise) => _buildExerciseListTile(exercise)).toList(),
+        ],
+      );
+    }).toList();
+  }
+
+  Widget _buildExerciseListTile(Map<String, dynamic> exercise) {
+    return ListTile(
+      title: Text(exercise['name']),
+      subtitle: Text(
+        'Set: ${exercise['defaultSets']}, '
+            'Tekrar: ${exercise['defaultReps']}, '
+            'Ağırlık: ${exercise['defaultWeight']}',
+      ),
+      trailing: Text(exercise['workoutType']),
     );
   }
 }

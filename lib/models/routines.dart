@@ -6,12 +6,13 @@ class Routines {
   final String description;
   final int mainTargetedBodyPartId;
   final int workoutTypeId;
+  final int difficulty;
   bool isFavorite;
   bool isCustom;
   int? userProgress;
   DateTime? lastUsedDate;
   bool? userRecommended;
-  final List<int> exerciseIds;
+  final List<dynamic> exerciseIds;
 
   Routines({
     required this.id,
@@ -19,6 +20,7 @@ class Routines {
     required this.description,
     required this.mainTargetedBodyPartId,
     required this.workoutTypeId,
+    required this.difficulty,
     List<RoutineExercises>? routineExercises,
     this.isFavorite = false,
     this.isCustom = false,
@@ -33,6 +35,7 @@ class Routines {
       name: map['name'] as String? ?? '',
       description: map['description'] as String? ?? '',
       mainTargetedBodyPartId: map['mainTargetedBodyPartId'] as int? ?? 0,
+      difficulty: map['difficulty'] as int,
       workoutTypeId: map['workoutTypeId'] as int? ?? 0,
       routineExercises: [], // Bu kısmı boş bir liste olarak başlatıyoruz
       isFavorite: map['isFavorite'] as bool? ?? false,
@@ -50,6 +53,7 @@ class Routines {
       'Description': description,
       'MainTargetedBodyPartId': mainTargetedBodyPartId,
       'WorkoutTypeId': workoutTypeId,
+      'Difficulty': difficulty,
       'IsFavorite': isFavorite,
       'IsCustom': isCustom,
       'UserProgress': userProgress,
@@ -65,6 +69,7 @@ class Routines {
     String? description,
     int? mainTargetedBodyPartId,
     int? workoutTypeId,
+    int? difficulty,
     bool? isFavorite,
     bool? isCustom,
     int? userProgress,
@@ -78,6 +83,7 @@ class Routines {
       description: description ?? this.description,
       mainTargetedBodyPartId: mainTargetedBodyPartId ?? this.mainTargetedBodyPartId,
       workoutTypeId: workoutTypeId ?? this.workoutTypeId,
+      difficulty: difficulty ?? this.difficulty,
       isFavorite: isFavorite ?? this.isFavorite,
       isCustom: isCustom ?? this.isCustom,
       userProgress: userProgress ?? this.userProgress,
@@ -88,5 +94,5 @@ class Routines {
   }
 
   @override
-  String toString() => 'Routine(id: $id, name: $name, mainTargetedBodyPartId: $mainTargetedBodyPartId, workoutTypeId: $workoutTypeId, isFavorite: $isFavorite, isCustom: $isCustom, userProgress: $userProgress, lastUsedDate: $lastUsedDate, userRecommended: $userRecommended, exerciseIds: $exerciseIds)';
+  String toString() => 'Routine(id: $id, name: $name, mainTargetedBodyPartId: $mainTargetedBodyPartId, workoutTypeId: $workoutTypeId, difficulty: $difficulty, isFavorite: $isFavorite, isCustom: $isCustom, userProgress: $userProgress, lastUsedDate: $lastUsedDate, userRecommended: $userRecommended, exerciseIds: $exerciseIds)';
 }

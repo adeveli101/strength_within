@@ -1,6 +1,5 @@
 import 'dart:ui';
 import '../utils/routine_helpers.dart';
-import 'PartFocusRoutineExercises.dart';
 
 enum SetType { regular, drop, superSet, tri, giant, normal }
 
@@ -10,12 +9,13 @@ class Parts {
   final int bodyPartId;
   final SetType setType;
   final String additionalNotes;
+  final int difficulty;
   bool isFavorite;
   bool isCustom;
   int? userProgress;
   DateTime? lastUsedDate;
   bool? userRecommended;
-  final List<int> exerciseIds;
+  final List<dynamic> exerciseIds;
 
   Parts({
     required this.id,
@@ -23,6 +23,7 @@ class Parts {
     required this.bodyPartId,
     required this.setType,
     required this.additionalNotes,
+    required this.difficulty,
     this.isFavorite = false,
     this.isCustom = false,
     this.userProgress,
@@ -30,21 +31,30 @@ class Parts {
     this.userRecommended,
     required this.exerciseIds,
   });
-  factory Parts.fromMap(Map<String, dynamic> map, List<int> exerciseIds) {
+  factory Parts.fromMap(Map<String, dynamic> map, List<dynamic> exerciseIds) {
+    print("Creating Parts object from map: $map"); // Hata ayıklama için eklendi
+    final id = map['id'] as int?;
+    if (id == null) {
+      throw ArgumentError('Invalid part id: null');
+    }
+
     return Parts(
-      id: map['Id'] as int? ?? 0,
-      name: map['Name'] as String? ?? '',
-      bodyPartId: map['BodyPartId'] as int? ?? 0,
-      setType: SetType.values[(map['SetType'] as int?) ?? 0],
-      additionalNotes: map['AdditionalNotes'] as String? ?? '',
-      isFavorite: (map['IsFavorite'] as int?) == 1,
-      isCustom: (map['IsCustom'] as int?) == 1,
-      userProgress: map['UserProgress'] as int?,
-      lastUsedDate: map['LastUsedDate'] != null ? DateTime.parse(map['LastUsedDate'] as String) : null,
-      userRecommended: (map['UserRecommended'] as int?) == 1,
+      id: id,
+      name: map['name'] as String? ?? '',
+      bodyPartId: map['bodyPartId'] as int? ?? 0,
+      setType: SetType.values[(map['setType'] as int?) ?? 0],
+      additionalNotes: map['additionalNotes'] as String? ?? '',
+      difficulty: map['difficulty'] as int? ?? 2,
+      isFavorite: (map['isFavorite'] as int?) == 1,
+      isCustom: (map['isCustom'] as int?) == 1,
+      userProgress: map['userProgress'] as int?,
+      lastUsedDate: map['lastUsedDate'] != null ? DateTime.parse(map['lastUsedDate'] as String) : null,
+      userRecommended: (map['userRecommended'] as int?) == 1,
       exerciseIds: exerciseIds,
     );
   }
+
+
 
 
   String get setTypeString => setTypeToStringConverter(setType);
@@ -53,11 +63,12 @@ class Parts {
 
   Map<String, dynamic> toMap() {
     return {
-      'Id': id,
+      'id': id,
       'Name': name,
       'BodyPartId': bodyPartId,
       'SetType': setType.index,
       'AdditionalNotes': additionalNotes,
+      'difficulty': difficulty,
       'IsFavorite': isFavorite,
       'IsCustom': isCustom,
       'UserProgress': userProgress,
@@ -72,12 +83,13 @@ class Parts {
     int? bodyPartId,
     SetType? setType,
     String? additionalNotes,
+    int? difficulty,
     bool? isFavorite,
     bool? isCustom,
     int? userProgress,
     DateTime? lastUsedDate,
     bool? userRecommended,
-    List<int>? exerciseIds,
+    List<dynamic>? exerciseIds,
   }) {
     return Parts(
       id: id ?? this.id,
@@ -85,6 +97,7 @@ class Parts {
       bodyPartId: bodyPartId ?? this.bodyPartId,
       setType: setType ?? this.setType,
       additionalNotes: additionalNotes ?? this.additionalNotes,
+      difficulty: difficulty ?? this.difficulty,
       isFavorite: isFavorite ?? this.isFavorite,
       isCustom: isCustom ?? this.isCustom,
       userProgress: userProgress ?? this.userProgress,
@@ -94,8 +107,10 @@ class Parts {
     );
   }
 
-
+  List<int> get safeExerciseIds {
+    return exerciseIds.whereType<int>().toList();
+  }
   @override
   String toString() {
-    return 'Part(id: $id, name: $name, bodyPartId: $bodyPartId, setType: $setTypeString, isFavorite: $isFavorite, isCustom: $isCustom, userProgress: $userProgress, lastUsedDate: $lastUsedDate, userRecommended: $userRecommended, exerciseIds: $exerciseIds)';
+    return 'Part(id: $id, name: $name, bodyPartId: $bodyPartId,difficulty: $difficulty, setType: $setTypeString, isFavorite: $isFavorite, isCustom: $isCustom, userProgress: $userProgress, lastUsedDate: $lastUsedDate, userRecommended: $userRecommended, exerciseIds: $exerciseIds)';
   }}

@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:workout/models/routines.dart';
-import 'package:workout/models/BodyPart.dart';
-import 'package:workout/models/WorkoutType.dart';
 import 'package:workout/ui/part_ui/part_card.dart';
 import 'package:workout/ui/part_ui/part_detail.dart';
 import 'package:workout/ui/routine_ui/routine_card.dart';
-
+import 'package:logging/logging.dart';
 import '../data_bloc_part/part_bloc.dart';
 import '../data_bloc_routine/routines_bloc.dart';
 import '../models/PartFocusRoutine.dart';
@@ -23,25 +21,37 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   late RoutinesBloc _routinesBloc;
   late PartsBloc _partsBloc;
+  // ignore: unused_field
+  final _logger = Logger('HomePage');
 
   @override
   void initState() {
     super.initState();
+    _setupLogging();
     _routinesBloc = BlocProvider.of<RoutinesBloc>(context);
     _partsBloc = BlocProvider.of<PartsBloc>(context);
     _loadAllData();
   }
 
+  void _setupLogging() {
+    hierarchicalLoggingEnabled = true;
+    Logger.root.level = Level.ALL;
+    Logger.root.onRecord.listen((record) {
+      debugPrint('${record.loggerName}: ${record.level.name}: ${record.message}');
+    });
+  }
+
   void _loadAllData() {
+    debugPrint('Loading all data for user: ${widget.userId}');
+    _partsBloc.add(FetchParts());  // Önce part'ları yükle
     _routinesBloc.add(FetchHomeData(userId: widget.userId));
-    _partsBloc.add(FetchParts());
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Ana Sayfa'),
+        title: const Text('Ana Sayfa'),
       ),
       body: RefreshIndicator(
         onRefresh: () async {
@@ -52,25 +62,7 @@ class _HomePageState extends State<HomePage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildParts(context),
-              BlocBuilder<RoutinesBloc, RoutinesState>(
-                builder: (context, state) {
-                  if (state is RoutinesLoading) {
-                    return Center(child: CircularProgressIndicator());
-                  } else if (state is RoutinesLoaded) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildRoutines(state),
-                        _buildBodyParts(state.bodyParts),
-                        _buildWorkoutTypes(state.workoutTypes),
-                      ],
-                    );
-                  } else if (state is RoutinesError) {
-                    return Center(child: Text('Hata: ${state.message}'));
-                  }
-                  return Center(child: Text('Bilinmeyen durum'));
-                },
-              ),
+              _buildRoutines(),
             ],
           ),
         ),
@@ -78,23 +70,115 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildRoutines(RoutinesLoaded state) {
-    List<Widget> routineSections = [];
+  Widget _buildParts(BuildContext context) {
+    return BlocConsumer<PartsBloc, PartsState>(
+      listener: (context, state) {
+        if (state is PartsError) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(state.message)),
+          );
+        }
+      },
+      builder: (context, state) {
+        debugPrint('Building parts with state: ${state.runtimeType}');
 
-    final favoriteRoutines = state.routines.where((r) => r.isFavorite).toList();
-    if (favoriteRoutines.isNotEmpty) {
-      routineSections.add(_buildRoutineList('Favori Rutinleriniz', favoriteRoutines));
-    }
+        if (state is PartsLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-    final recentlyUsedRoutines = state.routines.where((r) => r.lastUsedDate != null).toList()
-      ..sort((a, b) => (b.lastUsedDate ?? DateTime(0)).compareTo(a.lastUsedDate ?? DateTime(0)));
-    if (recentlyUsedRoutines.isNotEmpty) {
-      routineSections.add(_buildRoutineList('Son Kullanılan Rutinler', recentlyUsedRoutines));
-    }
+        // PartExercisesLoaded state'ini de kontrol ediyoruz
+        if (state is PartsLoaded || state is PartExercisesLoaded) {
+          final parts = state is PartsLoaded
+              ? state.parts
+              : (state as PartExercisesLoaded).parts;
 
-    routineSections.add(_buildRoutineList('Tüm Rutinler', state.routines));
+          if (parts.isEmpty) {
+            return const Center(child: Text('Henüz hiç part eklenmemiş.'));
+          }
 
-    return Column(children: routineSections);
+          return Column(
+            children: [
+              if (parts.any((p) => p.isFavorite))
+                _buildPartList('Favori Part\'larınız',
+                    parts.where((p) => p.isFavorite).toList()
+                ),
+
+              if (parts.any((p) => p.lastUsedDate != null))
+                _buildPartList('Son Kullanılan Part\'lar',
+                    _getRecentParts(parts)
+                ),
+
+              _buildPartList('Keşfet',
+                  _getRandomParts(parts)
+              ),
+            ],
+          );
+        }
+
+        return const Center(child: Text('Veriler yüklenirken bir hata oluştu.'));
+      },
+    );
+  }
+
+
+  List<Parts> _getRecentParts(List<Parts> parts) {
+    final recentParts = parts
+        .where((p) => p.lastUsedDate != null)
+        .toList()
+      ..sort((a, b) => (b.lastUsedDate ?? DateTime(0))
+          .compareTo(a.lastUsedDate ?? DateTime(0)));
+    return recentParts.take(5).toList();
+  }
+
+  List<Parts> _getRandomParts(List<Parts> parts) {
+    final randomParts = List<Parts>.from(parts);
+    randomParts.shuffle();
+    return randomParts.take(5).toList();
+  }
+
+  Widget _buildRoutines() {
+    return BlocConsumer<RoutinesBloc, RoutinesState>(
+      listener: (context, state) {
+        if (state is RoutinesError) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(state.message)),
+          );
+        }
+      },
+      builder: (context, state) {
+        if (state is RoutinesLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (state is RoutinesLoaded) {
+          return _buildRoutineSections(state);
+        }
+
+        return const SizedBox.shrink();
+      },
+    );
+  }
+
+  Widget _buildRoutineSections(RoutinesLoaded state) {
+    return Column(
+      children: [
+        if (state.routines.any((r) => r.isFavorite))
+          _buildRoutineList('Favori Rutinleriniz',
+              state.routines.where((r) => r.isFavorite).toList()
+          ),
+
+        if (state.routines.any((r) => r.lastUsedDate != null))
+          _buildRoutineList('Son Kullanılan Rutinler',
+              state.routines
+                  .where((r) => r.lastUsedDate != null)
+                  .toList()
+                ..sort((a, b) => (b.lastUsedDate ?? DateTime(0))
+                    .compareTo(a.lastUsedDate ?? DateTime(0)))
+          ),
+
+        _buildRoutineList('Tüm Rutinler', state.routines),
+      ],
+    );
   }
 
   Widget _buildRoutineList(String title, List<Routines> routines) {
@@ -103,7 +187,7 @@ class _HomePageState extends State<HomePage> {
       children: [
         Padding(
           padding: const EdgeInsets.all(8.0),
-          child: Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         ),
         SizedBox(
           height: 220,
@@ -126,86 +210,16 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildBodyParts(List<BodyParts> bodyParts) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Text('Vücut Bölümleri', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        ),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: bodyParts.map((bodyPart) => Chip(label: Text(bodyPart.name))).toList(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildWorkoutTypes(List<WorkoutTypes> workoutTypes) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Text('Antrenman Türleri', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        ),
-        Wrap(
-          spacing: 8,
-          runSpacing: 5,
-          children: workoutTypes.map((workoutType) => Chip(label: Text(workoutType.name))).toList(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildParts(BuildContext context) {
-    return BlocBuilder<PartsBloc, PartsState>(
-      builder: (context, state) {
-        print('Current PartsBloc state: $state'); // Bu satırı ekleyin
-        if (state is PartsLoading) {
-          return Center(child: CircularProgressIndicator());
-        } else if (state is PartsLoaded) {
-          print('Loaded parts count: ${state.parts.length}');
-          List<Widget> partSections = [];
-
-          final favoriteParts = state.parts.where((p) => p.isFavorite).toList();
-          if (favoriteParts.isNotEmpty) {
-            partSections.add(_buildPartList('Favori Part\'larınız', favoriteParts));
-          }
-
-          final recentlyUsedParts = state.parts.where((p) => p.lastUsedDate != null).toList()
-            ..sort((a, b) => (b.lastUsedDate ?? DateTime(0)).compareTo(a.lastUsedDate ?? DateTime(0)));
-          if (recentlyUsedParts.isNotEmpty) {
-            partSections.add(_buildPartList('Son Kullanılan Part\'lar', recentlyUsedParts.take(5).toList()));
-          }
-
-          final allParts = List<Parts>.from(state.parts)..shuffle();
-          partSections.add(_buildPartList('Keşfet', allParts.take(5).toList()));
-
-          return Column(children: partSections);
-        } else if (state is PartsError) {
-          return Center(child: Text('Error: ${state.message}'));
-        }
-        return Center(child: Text('No parts available: $state')); // Bu satırı güncelleyin
-      },
-    );
-  }
-
   Widget _buildPartList(String title, List<Parts> parts) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-          child: Text(
-            title,
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
+          child: Text(title, style: Theme.of(context).textTheme.titleLarge),
         ),
         SizedBox(
-          height: 230, // Yüksekliği biraz artırdık
+          height: 230,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: parts.length,
@@ -214,21 +228,12 @@ class _HomePageState extends State<HomePage> {
               return Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: SizedBox(
-                  width: 180, // Genişliği biraz artırdık
+                  width: 220,
                   child: PartCard(
+                    key: ValueKey(part.id),
                     part: part,
                     userId: widget.userId,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => PartDetailPage(
-                            partId: part.id,
-                            userId: widget.userId,
-                          ),
-                        ),
-                      );
-                    },
+                    onTap: () => _showPartDetailBottomSheet(part.id),
                   ),
                 ),
               );
@@ -239,4 +244,16 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Future<void> _showPartDetailBottomSheet(int partId) async {
+    debugPrint('Showing part detail bottom sheet for partId: $partId');
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => PartDetailBottomSheet(
+        partId: partId,
+        userId: widget.userId,
+      ),
+    );
+  }
 }
