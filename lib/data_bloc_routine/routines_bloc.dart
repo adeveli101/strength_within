@@ -4,6 +4,7 @@ import 'package:workout/models/routines.dart';
 import 'RoutineRepository.dart';
 import 'package:logging/logging.dart';
 
+// ignore: unused_element
 final _logger = Logger('RoutinesBloc');
 
 // Events
@@ -24,21 +25,6 @@ const UpdateRoutine(this.updatedRoutine);
 }
 
 
-class FetchHomeData extends RoutinesEvent {
-  final String userId;
-  const FetchHomeData({required this.userId});
-
-  @override
-  List<Object> get props => [userId];
-}
-
-class FetchForYouData extends RoutinesEvent {
-  final String userId;
-  const FetchForYouData({required this.userId});
-
-  @override
-  List<Object> get props => [userId];
-}
 
 class FetchRoutines extends RoutinesEvent {}
 class FetchExercises extends RoutinesEvent {}
@@ -117,26 +103,35 @@ class RoutinesError extends RoutinesState {
 class RoutineExercisesLoaded extends RoutinesState {
   final Routines routine;
   final Map<String, List<Map<String, dynamic>>> exerciseListByBodyPart;
+  final List<Routines> routines; // Eklendi
 
   const RoutineExercisesLoaded({
     required String userId,
     required RoutineRepository repository,
     required this.routine,
     required this.exerciseListByBodyPart,
+    this.routines = const [], // Varsayılan değer
   }) : super(userId: userId, repository: repository);
 
   @override
-  List<Object> get props => [userId, repository, routine, exerciseListByBodyPart];
+  List<Object> get props => [userId, repository, routine, exerciseListByBodyPart, routines];
 }
 
-// Bloc
+
+
+/// BLOC/// BLOC/// BLOC/// BLOC/// BLOC
+/// BLOC/// BLOC/// BLOC/// BLOC/// BLOC
+/// BLOC/// BLOC/// BLOC/// BLOC/// BLOC
+///
+///
+///
 class RoutinesBloc extends Bloc<RoutinesEvent, RoutinesState> {
+  final _logger = Logger('RoutinesBloc');
   final RoutineRepository repository;
   final String userId;
 
   RoutinesBloc({required this.repository, required this.userId})
       : super(RoutinesInitial(userId: userId, repository: repository)) {
-    on<FetchHomeData>(_onFetchHomeData);
     on<FetchRoutines>(_onFetchRoutines);
     on<FetchExercises>(_onFetchExercises);
     on<FetchBodyParts>(_onFetchBodyParts);
@@ -160,66 +155,67 @@ class RoutinesBloc extends Bloc<RoutinesEvent, RoutinesState> {
 
 
 
-  Future<void> _onFetchRoutineExercises(FetchRoutineExercises event, Emitter<RoutinesState> emit) async {
+  Future<void> _onFetchRoutineExercises(
+      FetchRoutineExercises event,
+      Emitter<RoutinesState> emit,
+      ) async {
+    final currentState = state;
+    List<Routines> currentRoutines = [];
+
+    if (currentState is RoutinesLoaded) {
+      currentRoutines = currentState.routines;
+    }
+
     emit(RoutinesLoading(userId: userId, repository: repository));
+
     try {
       final routine = await repository.getRoutineWithUserData(userId, event.routineId);
       if (routine != null) {
         final exerciseListByBodyPart = await repository.buildExerciseListForRoutine(routine);
+
         emit(RoutineExercisesLoaded(
           userId: userId,
           repository: repository,
           routine: routine,
           exerciseListByBodyPart: exerciseListByBodyPart,
+          routines: currentRoutines, // Mevcut rutinleri koru
         ));
-      } else {
-        emit(RoutinesError(userId: userId, repository: repository, message: 'Routine not found'));
       }
     } catch (e, stackTrace) {
       _logger.severe('Error loading routine exercises', e, stackTrace);
-      emit(RoutinesError(userId: userId, repository: repository, message: 'Failed to load routine exercises'));
-    }
-  }
-
-  Future<void> _onFetchHomeData(FetchHomeData event, Emitter<RoutinesState> emit) async {
-    emit(RoutinesLoading(userId: userId, repository: repository));
-    try {
-      final routines = await repository.getRoutinesWithUserData(userId);
-
-      emit(RoutinesLoaded(
+      emit(RoutinesError(
         userId: userId,
         repository: repository,
-        routines: routines,
-
+        message: 'Failed to load routine exercises',
       ));
-    } catch (e, stackTrace) {
-      _logger.severe('Error loading home data', e, stackTrace);
-      emit(RoutinesError(userId: userId, repository: repository, message: 'Failed to load home data'));
     }
   }
 
-
-
-  Future<void> _onFetchRoutines(FetchRoutines event, Emitter<RoutinesState> emit) async {
-    if (isClosed) return;
+  Future<void> _onFetchRoutines(
+      FetchRoutines event,
+      Emitter<RoutinesState> emit,
+      ) async {
     emit(RoutinesLoading(userId: userId, repository: repository));
+
     try {
       final routines = await repository.getRoutinesWithUserData(userId);
-
-      if (isClosed) return;
       emit(RoutinesLoaded(
         userId: userId,
         repository: repository,
         routines: routines,
-
-
       ));
     } catch (e, stackTrace) {
       _logger.severe('Error loading routines', e, stackTrace);
-      if (isClosed) return;
-      emit(RoutinesError(userId: userId, repository: repository, message: 'Failed to load routines'));
+      emit(RoutinesError(
+        userId: userId,
+        repository: repository,
+        message: 'Failed to load routines',
+      ));
     }
   }
+
+
+
 
   Future<void> _onFetchExercises(FetchExercises event, Emitter<RoutinesState> emit) async {
     emit(RoutinesLoading(userId: userId, repository: repository));

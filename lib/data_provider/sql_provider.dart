@@ -143,13 +143,28 @@ class SQLProvider {
       );
       if (maps.isNotEmpty) {
         return Exercises.fromMap(maps.first);
+      } else {
+        _logger.warning('No exercise found for ID: $id');
+        return null;
       }
-      return null;
     } catch (e) {
       _logger.severe('Error getting exercise by id', e);
-      return null;
+      return null; // Hata durumunda null döndür
     }
   }
+  Future<List<Exercises>> getExercisesByIds(List<int> ids) async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        'Exercises',
+        where: 'id IN (${ids.join(",")})',
+      );
+      return List.generate(maps.length, (i) => Exercises.fromMap(maps[i]));
+    } catch (e) {
+      throw Exception("Egzersizler alınırken hata oluştu: $e");
+    }
+  }
+
 
   Future<List<Exercises>> getExercisesByWorkoutType(int workoutTypeId) async {
     try {
@@ -280,17 +295,31 @@ class SQLProvider {
       final db = await database;
       final List<Map<String, dynamic>> maps = await db.query('Routines');
       _logger.fine("Routines ham veri: $maps");
+
       List<Routines> routines = [];
       for (var map in maps) {
-        List<RoutineExercises> routineExercises = await getRoutineExercisesByRoutineId(map['id']);
-        routines.add(Routines.fromMap({...map, 'routineExercises': routineExercises}));
+        try {
+          // RoutineExercises olmadan önce rutin oluştur
+          routines.add(Routines.fromMap(map));
+          _logger.info("Rutin başarıyla oluşturuldu: ${map['id']}");
+        } catch (e, stackTrace) {
+          _logger.warning(
+              'Rutin işlenirken hata: ${map['id']}, Hata: $e',
+              e,
+              stackTrace
+          );
+          continue;
+        }
       }
+
+      _logger.info("${routines.length} rutin başarıyla yüklendi");
       return routines;
-    } catch (e) {
-      _logger.severe('Error getting all routines', e);
-      return [];
+    } catch (e, stackTrace) {
+      _logger.severe('Error getting all routines', e, stackTrace);
+      rethrow; // Hatayı yukarı fırlat
     }
   }
+
 
   Future<Routines?> getRoutineById(int id) async {
     try {

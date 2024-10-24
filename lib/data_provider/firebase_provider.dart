@@ -13,6 +13,8 @@ import '../firebase_class/firebase_routines.dart';
 import '../firebase_class/users.dart';
 import 'package:logging/logging.dart';
 
+import '../models/RoutineExercises.dart';
+
 final _logger = Logger('FirebaseProvider');
 
 class FirebaseProvider {
@@ -307,6 +309,124 @@ class FirebaseProvider {
       throw Exception('Favori durumu güncellenirken bir hata oluştu');
     }
   }
+
+
+  Future<void> syncRoutineExercises(String userId, int routineId, List<RoutineExercises> routineExercises) async {
+    try {
+      // Önce mevcut rutini al
+      final routineDoc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('routines')
+          .doc(routineId.toString())
+          .get();
+
+      if (!routineDoc.exists) {
+        // Eğer rutin yoksa, SQLProvider'dan bilgileri al
+        final routine = await sqlProvider.getRoutineById(routineId);
+        if (routine == null) {
+          throw Exception('Rutin bulunamadı: $routineId');
+        }
+
+        // Yeni FirebaseRoutines oluştur
+        final firebaseRoutine = FirebaseRoutines(
+          id: routineId.toString(),
+          name: routine.name,
+          description: routine.description,
+          mainTargetedBodyPartId: routine.mainTargetedBodyPartId,
+          workoutTypeId: routine.workoutTypeId,
+          exerciseIds: routineExercises.map((e) => e.exerciseId).toList(),
+        );
+
+        // Rutini Firebase'e kaydet
+        await _firestore
+            .collection('users')
+            .doc(userId)
+            .collection('routines')
+            .doc(routineId.toString())
+            .set(firebaseRoutine.toFirestore());
+
+        _logger.info('Yeni rutin Firebase\'e eklendi: $routineId');
+      } else {
+        // Mevcut rutinin exerciseIds listesini güncelle
+        await _firestore
+            .collection('users')
+            .doc(userId)
+            .collection('routines')
+            .doc(routineId.toString())
+            .update({
+          'exerciseIds': routineExercises.map((e) => e.exerciseId).toList(),
+          'lastUsedDate': Timestamp.now(),
+        });
+
+        _logger.info('Mevcut rutin güncellendi: $routineId');
+      }
+
+      _logger.info('Rutin egzersizleri başarıyla senkronize edildi');
+    } catch (e) {
+      _logger.severe('Rutin egzersizleri senkronizasyon hatası', e);
+      throw e;
+    }
+  }
+
+  Future<void> syncRoutineExercise(String userId, RoutineExercises routineExercise) async {
+    try {
+      final routineDoc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('routines')
+          .doc(routineExercise.routineId.toString())
+          .get();
+
+      if (!routineDoc.exists) {
+        // Rutin yoksa oluştur
+        final routine = await sqlProvider.getRoutineById(routineExercise.routineId);
+        if (routine == null) {
+          throw Exception('Rutin bulunamadı: ${routineExercise.routineId}');
+        }
+
+        final firebaseRoutine = FirebaseRoutines(
+          id: routineExercise.routineId.toString(),
+          name: routine.name,
+          description: routine.description,
+          mainTargetedBodyPartId: routine.mainTargetedBodyPartId,
+          workoutTypeId: routine.workoutTypeId,
+          exerciseIds: [routineExercise.exerciseId],
+        );
+
+        await _firestore
+            .collection('users')
+            .doc(userId)
+            .collection('routines')
+            .doc(routineExercise.routineId.toString())
+            .set(firebaseRoutine.toFirestore());
+      } else {
+        // Mevcut rutinin exerciseIds listesini güncelle
+        FirebaseRoutines existingRoutine = FirebaseRoutines.fromFirestore(routineDoc);
+        List<dynamic> updatedExerciseIds = List.from(existingRoutine.exerciseIds);
+
+        if (!updatedExerciseIds.contains(routineExercise.exerciseId)) {
+          updatedExerciseIds.add(routineExercise.exerciseId);
+        }
+
+        await _firestore
+            .collection('users')
+            .doc(userId)
+            .collection('routines')
+            .doc(routineExercise.routineId.toString())
+            .update({
+          'exerciseIds': updatedExerciseIds,
+          'lastUsedDate': Timestamp.now(),
+        });
+      }
+
+      _logger.info('Rutin egzersizi başarıyla senkronize edildi: ${routineExercise.id}');
+    } catch (e) {
+      _logger.severe('Rutin egzersizi senkronizasyon hatası', e);
+      throw e;
+    }
+  }
+
 
 
   Future<void> setWeeklyChallenge({
