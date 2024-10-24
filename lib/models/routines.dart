@@ -51,6 +51,7 @@ class Routines {
         userRecommended: map['userRecommended'] as bool?,
         routineExercises: [],  // Başlangıçta boş liste
       );
+    // ignore: unused_catch_stack
     } catch (e, stackTrace) {
       print('Error creating Routines from map: $e\nMap: $map');
       rethrow;
