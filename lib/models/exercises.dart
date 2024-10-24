@@ -22,16 +22,19 @@ class Exercises {
 
   factory Exercises.fromMap(Map<String, dynamic> map) {
     print('Exercise fromMap çağrıldı: $map'); // Hata ayıklama için
+
     return Exercises(
-      id: map['Id'] as int? ?? 0,
-      name: map['Name'] as String? ?? '',
-      defaultWeight: (map['DefaultWeight'] as num?)?.toDouble() ?? 0.0,
-      defaultSets: map['DefaultSets'] as int? ?? 0,
-      defaultReps: map['DefaultReps'] as int? ?? 0,
-      workoutTypeId: map['WorkoutTypeId'] as int? ?? 0,
-      mainTargetedBodyPartId: map['MainTargetedBodyPartId'] as int? ?? 0, description: map['desciption'] as String,
+      id: map['id'] as int? ?? 0,
+      name: map['name'] as String? ?? '',
+      defaultWeight: (map['defaultWeight'] as num?)?.toDouble() ?? 0.0,
+      defaultSets: map['defaultSets'] as int? ?? 0,
+      defaultReps: map['defaultReps'] as int? ?? 0,
+      workoutTypeId: map['workoutTypeId'] as int? ?? 0,
+      mainTargetedBodyPartId: map['mainTargetedBodyPartId'] as int? ?? 0,
+      description: map['description'] as String? ?? '',
     );
   }
+
   Map<String, dynamic> toMap() {
     return {
       'Id': id,

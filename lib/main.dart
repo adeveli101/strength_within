@@ -9,67 +9,78 @@ import 'package:workout/ui/home_page.dart';
 import 'package:workout/ui/for_you_page.dart';
 import 'package:workout/data_provider/firebase_provider.dart';
 import 'package:workout/data_provider/sql_provider.dart';
+import 'package:workout/ui/library.dart';
 import 'package:workout/ui/setting_pages.dart';
+import 'blocs/for_you_bloc.dart';
 import 'data_bloc_part/PartRepository.dart';
 import 'data_bloc_part/part_bloc.dart';
 import 'data_bloc_routine/RoutineRepository.dart';
 import 'data_bloc_routine/routines_bloc.dart';
+import 'data_exercise_bloc/ExerciseRepository.dart';
 import 'firebase_options.dart';
-import 'for_you_bloc/for_you_bloc.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-
   await FirebaseAppCheck.instance.activate(
     androidProvider: AndroidProvider.playIntegrity,
   );
 
   final sqlProvider = SQLProvider();
   await sqlProvider.initDatabase();
-
   final firebaseProvider = FirebaseProvider(sqlProvider);
+
+  // Repository'leri oluştur
   final routineRepository = RoutineRepository(sqlProvider, firebaseProvider);
   final partRepository = PartRepository(sqlProvider, firebaseProvider);
-  await sqlProvider.testDatabaseContent();
+  final exerciseRepository = ExerciseRepository(sqlProvider: sqlProvider, firebaseProvider: firebaseProvider);
 
   String? userId = await firebaseProvider.signInAnonymously();
 
   if (userId != null) {
     runApp(
-      // main.dart içindeki MultiBlocProvider kısmı
-      MultiBlocProvider(
+      MultiRepositoryProvider(
         providers: [
-          BlocProvider<RoutinesBloc>(
-            create: (context) => RoutinesBloc(
-                repository: routineRepository,
-                userId: userId
-            ),
+          RepositoryProvider<SQLProvider>(
+            create: (context) => sqlProvider,
           ),
-          BlocProvider<PartsBloc>(
-            create: (context) => PartsBloc(
-                repository: partRepository,
-                userId: userId
-            )..add(FetchParts()),
+          RepositoryProvider<FirebaseProvider>(
+            create: (context) => firebaseProvider,
           ),
-          BlocProvider<ForYouBloc>(
-            create: (context) => ForYouBloc(
-              partRepository: partRepository,
-              routineRepository: routineRepository,
-              userId: userId,
-            ),
+          RepositoryProvider<ExerciseRepository>(
+            create: (context) => exerciseRepository,
           ),
         ],
-        child: App(userId: userId),
+        child: MultiBlocProvider(
+          providers: [
+            BlocProvider(
+              create: (context) => RoutinesBloc(
+                repository: routineRepository,
+                userId: userId,
+              ),
+            ),
+            BlocProvider(
+              create: (context) => PartsBloc(
+                repository: partRepository,
+                userId: userId,
+              )..add(FetchParts()),
+            ),
+            BlocProvider(
+              create: (context) => ForYouBloc(
+                partRepository: partRepository,
+                routineRepository: routineRepository,
+                userId: userId,
+              ),
+            ),
+          ],
+          child: App(userId: userId),
+        ),
       ),
-
     );
   } else {
     print('Anonim giriş başarısız oldu.');
-    // TODO: Anonim giriş başarısız olduğunda yapılacaklar
   }
 }
 
@@ -109,7 +120,6 @@ class MainScreen extends StatefulWidget {
   _MainScreenState createState() => _MainScreenState();
 }
 
-
 class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   int _currentIndex = 0;
 
@@ -132,23 +142,17 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _refreshData() async {
+  Future _refreshData() async {
     final routinesBloc = context.read<RoutinesBloc>();
     final partsBloc = context.read<PartsBloc>();
-
-    routinesBloc.add(FetchHomeData(userId: widget.userId));
+    routinesBloc.add(FetchRoutines());
     partsBloc.add(FetchParts());
   }
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: true,
-      onPopInvoked: (didPop) async {
-        if (didPop) {
-          await _refreshData();
-        }
-      },
+    return WillPopScope(
+      onWillPop: () async => true,
       child: Scaffold(
         appBar: AppBar(
           title: Row(
@@ -170,7 +174,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                   },
                   isScrollControlled: true,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                    borderRadius:
+                    BorderRadius.vertical(top: Radius.circular(20)),
                   ),
                 );
               },
@@ -182,6 +187,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           children: [
             HomePage(userId: widget.userId),
             ForYouPage(userId: widget.userId),
+            LibraryPage(),
           ],
         ),
         bottomNavigationBar: BottomNavigationBar(
@@ -200,6 +206,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             BottomNavigationBarItem(
               icon: Icon(Icons.recommend),
               label: 'Senin İçin',
+            ),
+            BottomNavigationBarItem( // Kütüphane sekmesi
+              icon: Icon(Icons.library_books),
+              label: 'Kütüphane',
             ),
           ],
           type: BottomNavigationBarType.fixed,
