@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:workout/models/routines.dart';
-import 'package:workout/ui/routine_ui/routine_detail.dart';
-
 import '../../data_bloc_routine/routines_bloc.dart';
+import '../../models/routines.dart';
 
-class RoutineCard extends StatelessWidget {
+class RoutineCard extends StatefulWidget {
   final Routines routine;
   final String userId;
   final VoidCallback? onTap;
@@ -17,157 +15,382 @@ class RoutineCard extends StatelessWidget {
     this.onTap,
   }) : super(key: key);
 
-  void _handleTap(BuildContext context) {
-    if (onTap != null) {
-      onTap!();
-    } else {
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (BuildContext context) {
-          return RoutineDetailBottomSheet(
-            routineId: routine.id,
-            userId: userId,
-          );
-        },
-      ).then((_) {
-        // Bottom sheet kapandığında rutin listesini güncelle
-        if (context.mounted) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (context.mounted) {
-              context.read<RoutinesBloc>().add(FetchRoutines());
-            }
-          });
-        }
-      });
-    }
+  @override
+  _RoutineCardState createState() => _RoutineCardState();
+}
+
+class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    _animation = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
   }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      child: InkWell(
-        onTap: () => _handleTap(context),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      routine.name,
-                      style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      routine.isFavorite ? Icons.favorite : Icons.favorite_border,
-                      color: routine.isFavorite ? theme.colorScheme.secondary : null,
-                    ),
-                    onPressed: () => _toggleFavorite(context),
-                  ),
-                ],
-              ),
-              SizedBox(height: 8),
-              Text(
-                routine.description,
-                style: theme.textTheme.bodyMedium,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(child: _buildInfoChip(context, Icons.fitness_center, routine.mainTargetedBodyPartId, 'Hedef Bölge')),
-                  SizedBox(width: 8),
-                  Expanded(child: _buildInfoChip(context, Icons.schedule, routine.workoutTypeId, 'Antrenman Türü')),
-                ],
-              ),
-              SizedBox(height: 12),
-              LinearProgressIndicator(
-                value: routine.userProgress != null ? routine.userProgress! / 100 : 0,
-                backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
-              ),
-              SizedBox(height: 4),
-              Text(
-                'İlerleme: ${routine.userProgress ?? 0}%',
-                style: theme.textTheme.bodySmall,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInfoChip(BuildContext context, IconData icon, int id, String label) {
-    return FutureBuilder<String>(
-      future: _getInfoName(context, label, id),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildChip(context, icon, 'Yükleniyor...');
-        } else if (snapshot.hasError) {
-          return _buildChip(context, Icons.error, 'Hata', isError: true);
-        } else {
-          return _buildChip(context, icon, snapshot.data ?? 'Bilinmiyor');
+    return BlocListener<RoutinesBloc, RoutinesState>(
+      listener: (context, state) {
+        if (state is RoutinesError) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(state.message)),
+          );
         }
       },
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final cardWidth = constraints.maxWidth > 600 ? 300.0 : 200.0;
+
+          return AnimatedBuilder(
+            animation: _animation,
+            builder: (context, child) {
+              return Transform.scale(
+                scale: 1 + (_animation.value * 0.05),
+                child: Card(
+                  elevation: 4 + (_animation.value * 4),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: InkWell(
+                    onTap: () {
+                      if (widget.routine.id > 0) {
+                        context.read<RoutinesBloc>().add(
+                          FetchRoutineExercises(routineId: widget.routine.id),
+                        );
+                        widget.onTap?.call();
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Geçersiz rutin ID. Lütfen tekrar deneyin.'),
+                          ),
+                        );
+                      }
+                    },
+                    onHover: (isHovering) {
+                      isHovering ? _controller.forward() : _controller.reverse();
+                    },
+                    child: Container(
+                      width: cardWidth,
+                      height: cardWidth * 1.5,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(15),
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Colors.blue.withOpacity(0.7),
+                            Colors.blue.withOpacity(0.3),
+                          ],
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          _buildHeader(),
+                          _buildBody(),
+                          _buildFooter(),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
-  Widget _buildChip(BuildContext context, IconData icon, String label, {bool isError = false}) {
+  Widget _buildHeader() {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: isError ? Theme.of(context).colorScheme.error.withOpacity(0.1) : Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(16),
+      padding: const EdgeInsets.all(6),
+      decoration: const BoxDecoration(
+        color: Colors.black26,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(15),
+          topRight: Radius.circular(15),
+        ),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Icon(icon, size: 16, color: isError ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.primary),
-          SizedBox(width: 4),
-          Flexible(
+          Expanded(
             child: Text(
-              label,
-              style: TextStyle(fontSize: 12),
+              widget.routine.name,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
           ),
+          _buildFavoriteButton(),
         ],
       ),
     );
   }
 
-  Future<String> _getInfoName(BuildContext context, String type, int id) async {
-    final repository = BlocProvider.of<RoutinesBloc>(context).repository;
-    if (type == 'Hedef Bölge') {
-      final bodyPart = await repository.getBodyPartById(id);
-      return bodyPart?.name ?? 'Bilinmiyor';
-    } else if (type == 'Antrenman Türü') {
-      final workoutType = await repository.getWorkoutTypeById(id);
-      return workoutType?.name ?? 'Bilinmiyor';
-    }
-    return 'Bilinmiyor';
+  Widget _buildBody() {
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min, // Bu satırı ekleyin
+          children: [
+            _buildInfoRow(
+              'Vücut Bölgesi',
+              _getBodyPartName(widget.routine.mainTargetedBodyPartId),
+              Icons.fitness_center,
+            ),
+            const SizedBox(height: 5),
+            _buildInfoRow(
+              'Egzersiz Türü',
+              widget.routine.workoutTypeId.toString(),
+              Icons.category,
+            ),
+            const SizedBox(height: 5),
+            _buildDifficultyIndicator(),
+            if (widget.routine.description.isNotEmpty) ...[
+              const SizedBox(height: 5),
+              Flexible( // Expanded yerine Flexible kullanın
+                child: Text(
+                  widget.routine.description,
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  maxLines: 2, // Maksimum satır sayısını sınırlayın
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
-  void _toggleFavorite(BuildContext context) {
-    final routinesBloc = BlocProvider.of<RoutinesBloc>(context);
-    routinesBloc.add(ToggleRoutineFavorite(
-      userId: userId,
-      routineId: routine.id.toString(),
-      isFavorite: !routine.isFavorite,
-    ));
+
+  Widget _buildFooter() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: const BoxDecoration(
+        color: Colors.black26,
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(8),
+          bottomRight: Radius.circular(12),
+        ),
+      ),
+      child: _buildProgressIndicator(),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, color: Colors.white, size: 16),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Text(
+            '$label: $value',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDifficultyIndicator() {
+    return Row(
+      children: [
+        const Icon(Icons.fitness_center, color: Colors.white, size: 16),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Zorluk: ${_getDifficultyText(widget.routine.difficulty)}',
+                style: const TextStyle(color: Colors.white, fontSize: 12),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: List.generate(5, (index) {
+                  return Icon(
+                    index < widget.routine.difficulty
+                        ? Icons.star_rounded
+                        : Icons.star_outline_rounded,
+                    color: index < widget.routine.difficulty
+                        ? _getDifficultyColor(widget.routine.difficulty)
+                        : Colors.white24,
+                    size: 16,
+                  );
+                }),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+
+
+
+
+  Widget _buildFavoriteButton() {
+    return BlocBuilder<RoutinesBloc, RoutinesState>(
+      builder: (context, state) {
+        return IconButton(
+          icon: Icon(
+            widget.routine.isFavorite ? Icons.favorite : Icons.favorite_border,
+            color: widget.routine.isFavorite ? Colors.red : Colors.white,
+            size: 20,
+          ),
+          onPressed: () {
+            if (widget.routine.id > 0) {
+              context.read<RoutinesBloc>().add(
+                ToggleRoutineFavorite(
+                  userId: widget.userId,
+                  routineId: widget.routine.id.toString(),
+                  isFavorite: !widget.routine.isFavorite,
+                ),
+              );
+            }
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildProgressIndicator() {
+    return BlocBuilder<RoutinesBloc, RoutinesState>(
+      builder: (context, state) {
+        final progress = widget.routine.userProgress ?? 0;
+
+        if (progress <= 0) {
+          return Container(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.lock_open_rounded,
+                  color: Colors.white.withOpacity(0.7),
+                  size: 16,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Başlamak için hazır',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.7),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(
+                  Icons.trending_up_rounded,
+                  color: Colors.white,
+                  size: 16,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'İlerleme: $progress%',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            LinearProgressIndicator(
+              value: progress / 100,
+              backgroundColor: Colors.white24,
+              valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  String _getBodyPartName(int bodyPartId) {
+    switch (bodyPartId) {
+      case 1:
+        return 'Göğüs';
+      case 2:
+        return 'Sırt';
+      case 3:
+        return 'Bacak';
+      case 4:
+        return 'Omuz';
+      case 5:
+        return 'Kol';
+      case 6:
+        return 'Karın';
+      default:
+        return 'Bilinmeyen';
+    }
+  }
+
+  String _getDifficultyText(int difficulty) {
+    switch (difficulty) {
+      case 1:
+        return 'Başlangıç';
+      case 2:
+        return 'Orta Başlangıç';
+      case 3:
+        return 'Orta';
+      case 4:
+        return 'Orta İleri';
+      case 5:
+        return 'İleri';
+      default:
+        return 'Belirsiz';
+    }
+  }
+
+  Color _getDifficultyColor(int difficulty) {
+    switch (difficulty) {
+      case 1:
+        return Colors.green;
+      case 2:
+        return Colors.lightGreen;
+      case 3:
+        return Colors.orange;
+      case 4:
+        return Colors.deepOrange;
+      case 5:
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
   }
 }
