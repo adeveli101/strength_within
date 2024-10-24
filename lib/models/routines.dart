@@ -1,3 +1,4 @@
+// routines.dart
 import 'RoutineExercises.dart';
 
 class Routines {
@@ -7,12 +8,12 @@ class Routines {
   final int mainTargetedBodyPartId;
   final int workoutTypeId;
   final int difficulty;
-  bool isFavorite;
-  bool isCustom;
-  int? userProgress;
-  DateTime? lastUsedDate;
-  bool? userRecommended;
-  final List<dynamic> exerciseIds;
+  final bool isFavorite;
+  final bool isCustom;
+  final int? userProgress;
+  final DateTime? lastUsedDate;
+  final bool? userRecommended;
+  late final List<dynamic> exerciseIds;
 
   Routines({
     required this.id,
@@ -21,45 +22,56 @@ class Routines {
     required this.mainTargetedBodyPartId,
     required this.workoutTypeId,
     required this.difficulty,
-    List<RoutineExercises>? routineExercises,
+    List? routineExercises,
     this.isFavorite = false,
     this.isCustom = false,
     this.userProgress,
     this.lastUsedDate,
     this.userRecommended,
-  }) : exerciseIds = routineExercises?.map((re) => re.exerciseId).toList() ?? [];
+  }) {
+    exerciseIds = routineExercises?.map((re) => re.exerciseId).toList() ?? [];
+  }
+
 
   factory Routines.fromMap(Map<String, dynamic> map) {
-    return Routines(
-      id: map['id'] as int? ?? 0,
-      name: map['name'] as String? ?? '',
-      description: map['description'] as String? ?? '',
-      mainTargetedBodyPartId: map['mainTargetedBodyPartId'] as int? ?? 0,
-      difficulty: map['difficulty'] as int,
-      workoutTypeId: map['workoutTypeId'] as int? ?? 0,
-      routineExercises: [], // Bu kısmı boş bir liste olarak başlatıyoruz
-      isFavorite: map['isFavorite'] as bool? ?? false,
-      isCustom: map['isCustom'] as bool? ?? false,
-      userProgress: map['userProgress'] as int?,
-      lastUsedDate: map['lastUsedDate'] != null ? DateTime.parse(map['lastUsedDate']) : null,
-      userRecommended: map['userRecommended'] as bool?,
-    );
+    try {
+      return Routines(
+        id: map['id'] as int? ?? 0,
+        name: map['name'] as String? ?? '',
+        description: map['description'] as String? ?? '',
+        mainTargetedBodyPartId: map['mainTargetedBodyPartId'] as int? ?? 0,
+        workoutTypeId: map['workoutTypeId'] as int? ?? 0,
+        difficulty: map['difficulty'] as int? ?? 1,
+        isFavorite: map['isFavorite'] as bool? ?? false,
+        isCustom: map['isCustom'] as bool? ?? false,
+        userProgress: map['userProgress'] as int?,
+        lastUsedDate: map['lastUsedDate'] != null
+            ? DateTime.parse(map['lastUsedDate'] as String)
+            : null,
+        userRecommended: map['userRecommended'] as bool?,
+        routineExercises: [],  // Başlangıçta boş liste
+      );
+    } catch (e, stackTrace) {
+      print('Error creating Routines from map: $e\nMap: $map');
+      rethrow;
+    }
   }
+
 
   Map<String, dynamic> toMap() {
     return {
-      'Id': id,
-      'Name': name,
-      'Description': description,
-      'MainTargetedBodyPartId': mainTargetedBodyPartId,
-      'WorkoutTypeId': workoutTypeId,
-      'Difficulty': difficulty,
-      'IsFavorite': isFavorite,
-      'IsCustom': isCustom,
-      'UserProgress': userProgress,
-      'LastUsedDate': lastUsedDate?.toIso8601String(),
-      'UserRecommended': userRecommended,
-      'ExerciseIds': exerciseIds,
+      'id': id,
+      'name': name,
+      'description': description,
+      'mainTargetedBodyPartId': mainTargetedBodyPartId,
+      'workoutTypeId': workoutTypeId,
+      'difficulty': difficulty,
+      'isFavorite': isFavorite,
+      'isCustom': isCustom,
+      'userProgress': userProgress,
+      'lastUsedDate': lastUsedDate?.toIso8601String(),
+      'userRecommended': userRecommended,
+      'exerciseIds': exerciseIds,
     };
   }
 
@@ -89,10 +101,18 @@ class Routines {
       userProgress: userProgress ?? this.userProgress,
       lastUsedDate: lastUsedDate ?? this.lastUsedDate,
       userRecommended: userRecommended ?? this.userRecommended,
-      routineExercises: routineExercises ?? (this.exerciseIds.map((id) => RoutineExercises(id: 0, routineId: this.id, exerciseId: id)).toList()),
+      routineExercises: routineExercises ?? exerciseIds.map(
+              (id) => RoutineExercises(
+            id: 0,
+            routineId: this.id,
+            exerciseId: id,
+          )
+      ).toList(),
     );
   }
 
   @override
-  String toString() => 'Routine(id: $id, name: $name, mainTargetedBodyPartId: $mainTargetedBodyPartId, workoutTypeId: $workoutTypeId, difficulty: $difficulty, isFavorite: $isFavorite, isCustom: $isCustom, userProgress: $userProgress, lastUsedDate: $lastUsedDate, userRecommended: $userRecommended, exerciseIds: $exerciseIds)';
+  String toString() {
+    return 'Routines(id: $id, name: $name, description: $description, mainTargetedBodyPartId: $mainTargetedBodyPartId, workoutTypeId: $workoutTypeId, difficulty: $difficulty, isFavorite: $isFavorite, isCustom: $isCustom, userProgress: $userProgress, lastUsedDate: $lastUsedDate, userRecommended: $userRecommended, exerciseIds: $exerciseIds)';
+  }
 }
