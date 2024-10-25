@@ -3,6 +3,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../data_bloc_routine/routines_bloc.dart';
 import '../../models/routines.dart';
 
+
+
 class RoutineCard extends StatefulWidget {
   final Routines routine;
   final String userId;
@@ -21,7 +23,7 @@ class RoutineCard extends StatefulWidget {
 
 class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  late Animation<double> _animation;
+  late Animation _animation;
 
   @override
   void initState() {
@@ -51,15 +53,19 @@ class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStat
       },
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final cardWidth = constraints.maxWidth > 600 ? 300.0 : 200.0;
+          // Ekran genişliğine göre kart boyutunu ayarla
+          final cardWidth = constraints.maxWidth * 0.9;
+          final cardHeight = cardWidth * 1.5;
+          final fontSize = cardWidth * 0.05;
 
           return AnimatedBuilder(
             animation: _animation,
             builder: (context, child) {
               return Transform.scale(
-                scale: 1 + (_animation.value * 0.05),
+                scale: (1 + (_animation.value * 0.05)).toDouble(),
+
                 child: Card(
-                  elevation: 4 + (_animation.value * 4),
+                  elevation: (4 + (_animation.value * 4)).toDouble(),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(15),
                   ),
@@ -82,24 +88,24 @@ class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStat
                       isHovering ? _controller.forward() : _controller.reverse();
                     },
                     child: Container(
-                      width: cardWidth,
-                      height: cardWidth * 1.5,
+                      width: cardWidth.toDouble(),
+                      height: cardHeight.toDouble(),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(15),
                         gradient: LinearGradient(
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                           colors: [
-                            Colors.blue.withOpacity(0.7),
-                            Colors.blue.withOpacity(0.3),
+                            _getDifficultyColor(widget.routine.difficulty),
+                            _getDifficultyColor(widget.routine.difficulty).withOpacity(0.3),
                           ],
                         ),
                       ),
                       child: Column(
                         children: [
-                          _buildHeader(),
-                          _buildBody(),
-                          _buildFooter(),
+                          _buildHeader(fontSize.toDouble()),
+                          _buildBody(fontSize.toDouble()),
+                          _buildFooter(fontSize.toDouble()),
                         ],
                       ),
                     ),
@@ -113,9 +119,11 @@ class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStat
     );
   }
 
-  Widget _buildHeader() {
+
+
+  Widget _buildHeader(double fontSize) {
     return Container(
-      padding: const EdgeInsets.all(6),
+      padding: EdgeInsets.all(fontSize * 0.5),
       decoration: const BoxDecoration(
         color: Colors.black26,
         borderRadius: BorderRadius.only(
@@ -129,63 +137,47 @@ class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStat
           Expanded(
             child: Text(
               widget.routine.name,
-              style: const TextStyle(
+              style: TextStyle(
                 color: Colors.white,
-                fontSize: 18,
+                fontSize: fontSize * 1.2,
                 fontWeight: FontWeight.bold,
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          _buildFavoriteButton(),
+          _buildFavoriteButton(fontSize),
         ],
       ),
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(double fontSize) {
     return Expanded(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 6),
+        padding: EdgeInsets.all(fontSize),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min, // Bu satırı ekleyin
+          mainAxisSize: MainAxisSize.min,
           children: [
-            _buildInfoRow(
-              'Vücut Bölgesi',
-              _getBodyPartName(widget.routine.mainTargetedBodyPartId),
-              Icons.fitness_center,
-            ),
-            const SizedBox(height: 5),
+            SizedBox(height: fontSize * 0.5),
             _buildInfoRow(
               'Egzersiz Türü',
-              widget.routine.workoutTypeId.toString(),
-              Icons.category,
+              _getWorkoutTypeName(widget.routine.workoutTypeId),
+              Icons.category_outlined,
+              fontSize,
             ),
-            const SizedBox(height: 5),
-            _buildDifficultyIndicator(),
-            if (widget.routine.description.isNotEmpty) ...[
-              const SizedBox(height: 5),
-              Flexible( // Expanded yerine Flexible kullanın
-                child: Text(
-                  widget.routine.description,
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
-                  maxLines: 2, // Maksimum satır sayısını sınırlayın
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
+            SizedBox(height: fontSize * 0.5),
+            _buildDifficultyIndicator(fontSize),
           ],
         ),
       ),
     );
   }
 
-
-  Widget _buildFooter() {
+  Widget _buildFooter(double fontSize) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: EdgeInsets.all(fontSize),
       decoration: const BoxDecoration(
         color: Colors.black26,
         borderRadius: BorderRadius.only(
@@ -193,21 +185,21 @@ class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStat
           bottomRight: Radius.circular(12),
         ),
       ),
-      child: _buildProgressIndicator(),
+      child: _buildProgressIndicator(fontSize),
     );
   }
 
-  Widget _buildInfoRow(String label, String value, IconData icon) {
+  Widget _buildInfoRow(String label, String value, IconData icon, double fontSize) {
     return Row(
       children: [
-        Icon(icon, color: Colors.white, size: 16),
-        const SizedBox(width: 16),
+        Icon(icon, color: Colors.white, size: fontSize),
+        SizedBox(width: fontSize),
         Expanded(
           child: Text(
             '$label: $value',
-            style: const TextStyle(
+            style: TextStyle(
               color: Colors.white,
-              fontSize: 12,
+              fontSize: fontSize * 0.8,
             ),
           ),
         ),
@@ -215,20 +207,20 @@ class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStat
     );
   }
 
-  Widget _buildDifficultyIndicator() {
+  Widget _buildDifficultyIndicator(double fontSize) {
     return Row(
       children: [
-        const Icon(Icons.fitness_center, color: Colors.white, size: 16),
-        const SizedBox(width: 16),
+        Icon(Icons.fitness_center, color: Colors.white, size: fontSize),
+        SizedBox(width: fontSize),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 'Zorluk: ${_getDifficultyText(widget.routine.difficulty)}',
-                style: const TextStyle(color: Colors.white, fontSize: 12),
+                style: TextStyle(color: Colors.white, fontSize: fontSize * 0.8),
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: fontSize * 0.2),
               Row(
                 children: List.generate(5, (index) {
                   return Icon(
@@ -236,9 +228,9 @@ class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStat
                         ? Icons.star_rounded
                         : Icons.star_outline_rounded,
                     color: index < widget.routine.difficulty
-                        ? _getDifficultyColor(widget.routine.difficulty)
+                        ? Colors.red.shade500
                         : Colors.white24,
-                    size: 16,
+                    size: fontSize,
                   );
                 }),
               ),
@@ -249,18 +241,14 @@ class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStat
     );
   }
 
-
-
-
-
-  Widget _buildFavoriteButton() {
+  Widget _buildFavoriteButton(double fontSize) {
     return BlocBuilder<RoutinesBloc, RoutinesState>(
       builder: (context, state) {
         return IconButton(
           icon: Icon(
             widget.routine.isFavorite ? Icons.favorite : Icons.favorite_border,
             color: widget.routine.isFavorite ? Colors.red : Colors.white,
-            size: 20,
+            size: fontSize,
           ),
           onPressed: () {
             if (widget.routine.id > 0) {
@@ -278,28 +266,27 @@ class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStat
     );
   }
 
-  Widget _buildProgressIndicator() {
+  Widget _buildProgressIndicator(double fontSize) {
     return BlocBuilder<RoutinesBloc, RoutinesState>(
       builder: (context, state) {
         final progress = widget.routine.userProgress ?? 0;
-
         if (progress <= 0) {
           return Container(
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            padding: EdgeInsets.symmetric(vertical: fontSize * 0.5),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
                   Icons.lock_open_rounded,
                   color: Colors.white.withOpacity(0.7),
-                  size: 16,
+                  size: fontSize,
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: fontSize * 0.5),
                 Text(
                   'Başlamak için hazır',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.7),
-                    fontSize: 12,
+                    fontSize: fontSize * 0.8,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -313,27 +300,27 @@ class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStat
           children: [
             Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.trending_up_rounded,
                   color: Colors.white,
-                  size: 16,
+                  size: fontSize,
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: fontSize * 0.5),
                 Text(
                   'İlerleme: $progress%',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
-                    fontSize: 12,
+                    fontSize: fontSize * 0.8,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 4),
+            SizedBox(height: fontSize * 0.2),
             LinearProgressIndicator(
               value: progress / 100,
               backgroundColor: Colors.white24,
-              valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+              valueColor: const AlwaysStoppedAnimation(Colors.white),
             ),
           ],
         );
@@ -341,6 +328,10 @@ class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStat
     );
   }
 
+
+
+
+  // ignore: unused_element
   String _getBodyPartName(int bodyPartId) {
     switch (bodyPartId) {
       case 1:
@@ -359,6 +350,25 @@ class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStat
         return 'Bilinmeyen';
     }
   }
+
+  String _getWorkoutTypeName(int workoutTypeId) {
+    switch (workoutTypeId) {
+      case 1:
+        return 'Strength';
+      case 2:
+        return 'Hypertrophy';
+      case 3:
+        return 'Endurance';
+      case 4:
+        return 'Power';
+      case 5:
+        return 'Flexibility';
+      default:
+        return 'Bilinmeyen';
+    }
+  }
+
+
 
   String _getDifficultyText(int difficulty) {
     switch (difficulty) {
