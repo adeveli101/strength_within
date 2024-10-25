@@ -51,8 +51,9 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
       },
       child: LayoutBuilder(
         builder: (context, constraints) {
-          // Responsive genişlik hesaplama
-          final cardWidth = constraints.maxWidth > 600 ? 300.0 : 200.0;
+          final cardWidth = constraints.maxWidth;
+          final cardHeight = constraints.maxHeight;
+          final isSmallScreen = cardWidth < 300;
 
           return AnimatedBuilder(
             animation: _animation,
@@ -84,7 +85,7 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
                     },
                     child: Container(
                       width: cardWidth,
-                      height: cardWidth * 1.5, // Aspect ratio koruma
+                      height: cardHeight,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(15),
                         gradient: LinearGradient(
@@ -98,9 +99,9 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
                       ),
                       child: Column(
                         children: [
-                          _buildHeader(),
-                          _buildBody(),
-                          _buildFooter(),
+                          _buildHeader(isSmallScreen),
+                          Expanded(child: _buildBody(isSmallScreen)),
+                          _buildFooter(isSmallScreen),
                         ],
                       ),
                     ),
@@ -114,14 +115,14 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(bool isSmallScreen) {
     return Container(
-      padding: const EdgeInsets.all(6),
+      padding: EdgeInsets.all(isSmallScreen ? 2 : 4),
       decoration: BoxDecoration(
         color: Colors.black26,
         borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(15),
-          topRight: Radius.circular(15),
+          topLeft: Radius.circular(18),
+          topRight: Radius.circular(18),
         ),
       ),
       child: Row(
@@ -130,10 +131,11 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
           Expanded(
             child: Text(
               widget.part.name,
-              style: const TextStyle(
+              style: TextStyle(
                 color: Colors.white,
-                fontSize: 18,
+                fontSize: isSmallScreen ? 16 : 21,
                 fontWeight: FontWeight.bold,
+
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -145,49 +147,49 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
     );
   }
 
-  Widget _buildBody() {
-    return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildInfoRow(
-              'Vücut Bölgesi',
-              _getBodyPartName(widget.part.bodyPartId),
-              Icons.fitness_center,
-            ),
+  Widget _buildBody(bool isSmallScreen) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? 10 : 14, vertical: isSmallScreen ? 15 : 25),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildInfoRow(
+            'Vücut Bölgesi',
+            _getBodyPartName(widget.part.bodyPartId),
+            Icons.fitness_center,
+            isSmallScreen,
+          ),
+          SizedBox(height: isSmallScreen ? 3 : 5),
+          _buildInfoRow(
+            'Set Tipi',
+            widget.part.setTypeString,
+            Icons.repeat,
+            isSmallScreen,
+          ),
+          SizedBox(height: isSmallScreen ? 3 : 5),
+          _buildDifficultyIndicator(isSmallScreen),
+          if (widget.part.additionalNotes.isNotEmpty && !isSmallScreen) ...[
             const SizedBox(height: 5),
-            _buildInfoRow(
-              'Set Tipi',
-              widget.part.setTypeString,
-              Icons.repeat,
-            ),
-            const SizedBox(height: 5),
-            _buildDifficultyIndicator(),
-            if (widget.part.additionalNotes.isNotEmpty) ...[
-              const SizedBox(height: 5),
-              Expanded(
-                child: Text(
-                  widget.part.additionalNotes,
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
-                  ),
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
+            Expanded(
+              child: Text(
+                widget.part.additionalNotes,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 12,
                 ),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
               ),
-            ],
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildFooter() {
+  Widget _buildFooter(bool isSmallScreen) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: EdgeInsets.all(isSmallScreen ? 8 : 12),
       decoration: const BoxDecoration(
         color: Colors.black26,
         borderRadius: BorderRadius.only(
@@ -195,21 +197,21 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
           bottomRight: Radius.circular(12),
         ),
       ),
-      child: _buildProgressIndicator(),
+      child: _buildProgressIndicator(isSmallScreen),
     );
   }
 
-  Widget _buildInfoRow(String label, String value, IconData icon) {
+  Widget _buildInfoRow(String label, String value, IconData icon, bool isSmallScreen) {
     return Row(
       children: [
-        Icon(icon, color: Colors.white, size: 16),
-        const SizedBox(width: 16),
+        Icon(icon, color: Colors.white, size: isSmallScreen ? 14 : 16),
+        SizedBox(width: isSmallScreen ? 8 : 16),
         Expanded(
           child: Text(
             '$label: $value',
-            style: const TextStyle(
+            style: TextStyle(
               color: Colors.white,
-              fontSize: 12,
+              fontSize: isSmallScreen ? 10 : 12,
             ),
           ),
         ),
@@ -217,26 +219,37 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
     );
   }
 
-  Widget _buildDifficultyIndicator() {
+  Widget _buildDifficultyIndicator(bool isSmallScreen) {
     return Row(
       children: [
-        const Icon(Icons.speed, color: Colors.white, size: 16),
-        const SizedBox(width: 16),
+        Icon(Icons.fitness_center,
+            color: Colors.white,
+            size: isSmallScreen ? 14 : 16),
+        SizedBox(width: isSmallScreen ? 8 : 16),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 'Zorluk: ${_getDifficultyText(widget.part.difficulty)}',
-                style: const TextStyle(color: Colors.white, fontSize: 12),
-              ),
-              const SizedBox(height: 7),
-              LinearProgressIndicator(
-                value: widget.part.difficulty / 3.8,
-                backgroundColor: Colors.white24,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  _getDifficultyColor(widget.part.difficulty),
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: isSmallScreen ? 10 : 12
                 ),
+              ),
+              SizedBox(height: isSmallScreen ? 2 : 4),
+              Row(
+                children: List.generate(5, (index) {
+                  return Icon(
+                    index < widget.part.difficulty
+                        ? Icons.star_rounded
+                        : Icons.star_outline_rounded,
+                    color: index < widget.part.difficulty
+                        ? _getDifficultyColor(widget.part.difficulty)
+                        : Colors.white24,
+                    size: isSmallScreen ? 14 : 16,
+                  );
+                }),
               ),
             ],
           ),
@@ -244,6 +257,7 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
       ],
     );
   }
+
 
   Widget _buildFavoriteButton() {
     return BlocBuilder<PartsBloc, PartsState>(
@@ -253,7 +267,7 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
           icon: Icon(
             widget.part.isFavorite ? Icons.favorite : Icons.favorite_border,
             color: widget.part.isFavorite ? Colors.red : Colors.white,
-            size: 20,
+            size: 18,
           ),
           onPressed: () {
             if (widget.part.id > 0) {
@@ -271,7 +285,7 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
     );
   }
 
-  Widget _buildProgressIndicator() {
+  Widget _buildProgressIndicator(bool isSmallScreen) {
     return BlocBuilder<PartsBloc, PartsState>(
       buildWhen: (previous, current) {
         if (current is PartsLoaded) {
@@ -281,24 +295,23 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
       },
       builder: (context, state) {
         final progress = widget.part.userProgress ?? 0;
-
         if (progress <= 0) {
           return Container(
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            padding: EdgeInsets.symmetric(vertical: isSmallScreen ? 4 : 8),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
                   Icons.lock_open_rounded,
                   color: Colors.white.withOpacity(0.7),
-                  size: 16,
+                  size: isSmallScreen ? 14 : 16,
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: isSmallScreen ? 4 : 8),
                 Text(
                   'Başlamak için hazır',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.7),
-                    fontSize: 12,
+                    fontSize: isSmallScreen ? 10 : 12,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -315,14 +328,14 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
                 Icon(
                   Icons.trending_up_rounded,
                   color: Colors.white,
-                  size: 16,
+                  size: isSmallScreen ? 14 : 16,
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: isSmallScreen ? 4 : 8),
                 Text(
                   'İlerleme: $progress%',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
-                    fontSize: 12,
+                    fontSize: isSmallScreen ? 10 : 12,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -332,7 +345,7 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
             LinearProgressIndicator(
               value: progress / 100,
               backgroundColor: Colors.white24,
-              valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+              valueColor: const AlwaysStoppedAnimation(Colors.white),
             ),
           ],
         );
@@ -354,19 +367,35 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
 
   String _getDifficultyText(int difficulty) {
     switch (difficulty) {
-      case 1: return 'Başlangıç';
-      case 2: return 'Orta';
-      case 3: return 'İleri';
-      default: return 'Belirsiz';
+      case 1:
+        return 'Başlangıç';
+      case 2:
+        return 'Orta Başlangıç';
+      case 3:
+        return 'Orta';
+      case 4:
+        return 'Orta İleri';
+      case 5:
+        return 'İleri';
+      default:
+        return 'Belirsiz';
     }
   }
 
   Color _getDifficultyColor(int difficulty) {
     switch (difficulty) {
-      case 1: return Colors.green;
-      case 2: return Colors.orange;
-      case 3: return Colors.red;
-      default: return Colors.grey;
+      case 1:
+        return Colors.green;
+      case 2:
+        return Colors.lightGreen;
+      case 3:
+        return Colors.orange;
+      case 4:
+        return Colors.deepOrange;
+      case 5:
+        return Colors.red;
+      default:
+        return Colors.grey;
     }
   }
 }
