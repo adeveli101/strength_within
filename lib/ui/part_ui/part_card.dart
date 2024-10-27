@@ -7,12 +7,14 @@ class PartCard extends StatefulWidget {
   final Parts part;
   final String userId;
   final VoidCallback? onTap;
+  final bool isSmall;
 
   const PartCard({
     Key? key,
     required this.part,
     required this.userId,
     this.onTap,
+    this.isSmall = false,
   }) : super(key: key);
 
   @override
@@ -22,15 +24,16 @@ class PartCard extends StatefulWidget {
 class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
+  bool _isExpanded = false;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 200),
       vsync: this,
     );
-    _animation = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
+    _animation = Tween(begin: 0.0, end: 1.0).animate(_controller);
   }
 
   @override
@@ -51,78 +54,130 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
       },
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final cardWidth = constraints.maxWidth;
-          final cardHeight = constraints.maxHeight;
-          final isSmallScreen = cardWidth < 300;
+          final screenWidth = MediaQuery.of(context).size.width;
+          double cardWidth;
+          double cardHeight;
+          double fontSize;
 
-          return AnimatedBuilder(
-            animation: _animation,
-            builder: (context, child) {
-              return Transform.scale(
-                scale: 1 + (_animation.value * 0.05),
-                child: Card(
-                  elevation: 4 + (_animation.value * 4),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  child: InkWell(
-                    onTap: () {
-                      if (widget.part.id > 0) {
-                        context.read<PartsBloc>().add(
-                          FetchPartExercises(partId: widget.part.id),
-                        );
-                        widget.onTap?.call();
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Geçersiz part ID. Lütfen tekrar deneyin.'),
-                          ),
-                        );
-                      }
-                    },
-                    onHover: (isHovering) {
-                      isHovering ? _controller.forward() : _controller.reverse();
-                    },
-                    child: Container(
-                      width: cardWidth,
-                      height: cardHeight,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(15),
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            widget.part.setTypeColor.withOpacity(0.7),
-                            widget.part.setTypeColor.withOpacity(0.3),
-                          ],
-                        ),
-                      ),
-                      child: Column(
-                        children: [
-                          _buildHeader(isSmallScreen),
-                          Expanded(child: _buildBody(isSmallScreen)),
-                          _buildFooter(isSmallScreen),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
-          );
+          if (screenWidth > 1200) {
+            cardWidth = widget.isSmall ? 70.0 : constraints.maxWidth * 0.3;
+            cardHeight = widget.isSmall ? 70.0 : 280.0;
+            fontSize = 20.0;
+          } else if (screenWidth > 800) {
+            cardWidth = widget.isSmall ? 60.0 : constraints.maxWidth * 0.45;
+            cardHeight = widget.isSmall ? 60.0 : 260.0;
+            fontSize = 18.0;
+          } else {
+            cardWidth = widget.isSmall ? 56.0 : constraints.maxWidth * 0.9;
+            cardHeight = widget.isSmall ? 56.0 : 240.0;
+            fontSize = 16.0;
+          }
+
+          if (_isExpanded && !widget.isSmall) {
+            cardHeight *= 1.2;
+          }
+
+          return _buildCard(cardWidth, cardHeight, fontSize);
         },
       ),
     );
   }
 
-  Widget _buildHeader(bool isSmallScreen) {
+  Widget _buildCard(double width, double height, double fontSize) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return GestureDetector(
+          onVerticalDragUpdate: widget.isSmall ? null : (details) {
+            if (details.primaryDelta! < -20 && !_isExpanded) {
+              setState(() => _isExpanded = true);
+            } else if (details.primaryDelta! > 20 && _isExpanded) {
+              setState(() => _isExpanded = false);
+            }
+          },
+          child: Transform.scale(
+            scale: widget.isSmall ? 1 : (1 + (_animation.value * 0.05)),
+            child: Card(
+              elevation: widget.isSmall ? 2 : (4 + (_animation.value * 4)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(widget.isSmall ? 8 : 15),
+              ),
+              child: InkWell(
+                onTap: () {
+                  if (widget.part.id > 0) {
+                    context.read<PartsBloc>().add(
+                      FetchPartExercises(partId: widget.part.id),
+                    );
+                    widget.onTap?.call();
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Geçersiz part ID. Lütfen tekrar deneyin.'),
+                      ),
+                    );
+                  }
+                },
+                onHover: widget.isSmall ? null : (isHovering) {
+                  isHovering ? _controller.forward() : _controller.reverse();
+                },
+                child: Container(
+                  width: width,
+                  height: height,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(widget.isSmall ? 8 : 15),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        widget.part.setTypeColor.withOpacity(0.7),
+                        widget.part.setTypeColor.withOpacity(0.3),
+                      ],
+                    ),
+                  ),
+                  child: widget.isSmall
+                      ? _buildSmallBody()
+                      : _buildResponsiveBody(fontSize),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSmallBody() {
+    return Center(
+      child: Text(
+        widget.part.name.substring(0, 1),
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResponsiveBody(double fontSize) {
+    return Column(
+      children: [
+        _buildHeader(fontSize),
+        Expanded(child: _buildBody(fontSize)),
+        if (_isExpanded) _buildExpandedContent(fontSize),
+        _buildFooter(),
+      ],
+    );
+  }
+
+  Widget _buildHeader(double fontSize) {
     return Container(
-      padding: EdgeInsets.all(isSmallScreen ? 2 : 4),
+      padding: EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.black26,
         borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(18),
-          topRight: Radius.circular(18),
+          topLeft: Radius.circular(15),
+          topRight: Radius.circular(15),
         ),
       ),
       child: Row(
@@ -133,9 +188,8 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
               widget.part.name,
               style: TextStyle(
                 color: Colors.white,
-                fontSize: isSmallScreen ? 16 : 21,
+                fontSize: fontSize,
                 fontWeight: FontWeight.bold,
-
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -147,9 +201,9 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
     );
   }
 
-  Widget _buildBody(bool isSmallScreen) {
+  Widget _buildBody(double fontSize) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? 10 : 14, vertical: isSmallScreen ? 15 : 25),
+      padding: EdgeInsets.all(6),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -157,97 +211,101 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
             'Vücut Bölgesi',
             _getBodyPartName(widget.part.bodyPartId),
             Icons.fitness_center,
-            isSmallScreen,
+            fontSize: fontSize,
           ),
-          SizedBox(height: isSmallScreen ? 3 : 5),
+          SizedBox(height: 1),
           _buildInfoRow(
             'Set Tipi',
             widget.part.setTypeString,
             Icons.repeat,
-            isSmallScreen,
+            fontSize: fontSize,
           ),
-          SizedBox(height: isSmallScreen ? 3 : 5),
-          _buildDifficultyIndicator(isSmallScreen),
-          if (widget.part.additionalNotes.isNotEmpty && !isSmallScreen) ...[
-            const SizedBox(height: 5),
-            Expanded(
-              child: Text(
-                widget.part.additionalNotes,
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 12,
-                ),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
+          SizedBox(height: 1),
+          _buildDifficultyIndicator(fontSize),
         ],
       ),
     );
   }
 
-  Widget _buildFooter(bool isSmallScreen) {
+  Widget _buildExpandedContent(double fontSize) {
     return Container(
-      padding: EdgeInsets.all(isSmallScreen ? 8 : 12),
-      decoration: const BoxDecoration(
-        color: Colors.black26,
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(8),
-          bottomRight: Radius.circular(12),
-        ),
+      padding: EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Ek Bilgiler',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: fontSize,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          SizedBox(height: 8),
+          if (widget.part.additionalNotes.isNotEmpty)
+            Text(
+              widget.part.additionalNotes,
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: fontSize - 2,
+              ),
+            ),
+        ],
       ),
-      child: _buildProgressIndicator(isSmallScreen),
     );
   }
 
-  Widget _buildInfoRow(String label, String value, IconData icon, bool isSmallScreen) {
+  Widget _buildFooter() {
+    return Container(
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.black26,
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(15),
+          bottomRight: Radius.circular(15),
+        ),
+      ),
+      child: _buildProgressIndicator(),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value, IconData icon, {required double fontSize}) {
     return Row(
       children: [
-        Icon(icon, color: Colors.white, size: isSmallScreen ? 14 : 16),
-        SizedBox(width: isSmallScreen ? 8 : 16),
+        Icon(icon, color: Colors.white, size: fontSize),
+        SizedBox(width: 10),
         Expanded(
           child: Text(
             '$label: $value',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: isSmallScreen ? 10 : 12,
-            ),
+            style: TextStyle(color: Colors.white, fontSize: fontSize - 2),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildDifficultyIndicator(bool isSmallScreen) {
+  Widget _buildDifficultyIndicator(double fontSize) {
     return Row(
       children: [
-        Icon(Icons.fitness_center,
-            color: Colors.white,
-            size: isSmallScreen ? 14 : 16),
-        SizedBox(width: isSmallScreen ? 8 : 16),
+        Icon(Icons.fitness_center, color: Colors.white, size: fontSize),
+        SizedBox(width: 10),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 'Zorluk: ${_getDifficultyText(widget.part.difficulty)}',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: isSmallScreen ? 10 : 12
-                ),
+                style: TextStyle(color: Colors.white, fontSize: fontSize - 2),
               ),
-              SizedBox(height: isSmallScreen ? 2 : 4),
+              SizedBox(height: 4),
               Row(
                 children: List.generate(5, (index) {
                   return Icon(
-                    index < widget.part.difficulty
-                        ? Icons.star_rounded
-                        : Icons.star_outline_rounded,
+                    index < widget.part.difficulty ? Icons.star_rounded : Icons.star_outline_rounded,
                     color: index < widget.part.difficulty
                         ? _getDifficultyColor(widget.part.difficulty)
                         : Colors.white24,
-                    size: isSmallScreen ? 14 : 16,
+                    size: fontSize - 6,
                   );
                 }),
               ),
@@ -258,7 +316,6 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
     );
   }
 
-
   Widget _buildFavoriteButton() {
     return BlocBuilder<PartsBloc, PartsState>(
       buildWhen: (previous, current) => true,
@@ -267,7 +324,7 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
           icon: Icon(
             widget.part.isFavorite ? Icons.favorite : Icons.favorite_border,
             color: widget.part.isFavorite ? Colors.red : Colors.white,
-            size: 18,
+            size: 20,
           ),
           onPressed: () {
             if (widget.part.id > 0) {
@@ -285,7 +342,7 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
     );
   }
 
-  Widget _buildProgressIndicator(bool isSmallScreen) {
+  Widget _buildProgressIndicator() {
     return BlocBuilder<PartsBloc, PartsState>(
       buildWhen: (previous, current) {
         if (current is PartsLoaded) {
@@ -296,27 +353,16 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
       builder: (context, state) {
         final progress = widget.part.userProgress ?? 0;
         if (progress <= 0) {
-          return Container(
-            padding: EdgeInsets.symmetric(vertical: isSmallScreen ? 4 : 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.lock_open_rounded,
-                  color: Colors.white.withOpacity(0.7),
-                  size: isSmallScreen ? 14 : 16,
-                ),
-                SizedBox(width: isSmallScreen ? 4 : 8),
-                Text(
-                  'Başlamak için hazır',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.7),
-                    fontSize: isSmallScreen ? 10 : 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.lock_open_rounded, color: Colors.white.withOpacity(0.7), size: 16),
+              SizedBox(width: 8),
+              Text(
+                'Başlamak için hazır',
+                style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12, fontWeight: FontWeight.w500),
+              ),
+            ],
           );
         }
 
@@ -325,27 +371,19 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
           children: [
             Row(
               children: [
-                Icon(
-                  Icons.trending_up_rounded,
-                  color: Colors.white,
-                  size: isSmallScreen ? 14 : 16,
-                ),
-                SizedBox(width: isSmallScreen ? 4 : 8),
+                Icon(Icons.trending_up_rounded, color: Colors.white, size: 16),
+                SizedBox(width: 8),
                 Text(
                   'İlerleme: $progress%',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: isSmallScreen ? 10 : 12,
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
                 ),
               ],
             ),
-            const SizedBox(height: 4),
+            SizedBox(height: 4),
             LinearProgressIndicator(
               value: progress / 100,
               backgroundColor: Colors.white24,
-              valueColor: const AlwaysStoppedAnimation(Colors.white),
+              valueColor: AlwaysStoppedAnimation(Colors.white),
             ),
           ],
         );
@@ -355,13 +393,20 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
 
   String _getBodyPartName(int bodyPartId) {
     switch (bodyPartId) {
-      case 1: return 'Göğüs';
-      case 2: return 'Sırt';
-      case 3: return 'Bacak';
-      case 4: return 'Omuz';
-      case 5: return 'Kol';
-      case 6: return 'Karın';
-      default: return 'Bilinmeyen';
+      case 1:
+        return 'Göğüs';
+      case 2:
+        return 'Sırt';
+      case 3:
+        return 'Bacak';
+      case 4:
+        return 'Omuz';
+      case 5:
+        return 'Kol';
+      case 6:
+        return 'Karın';
+      default:
+        return 'Bilinmeyen';
     }
   }
 
