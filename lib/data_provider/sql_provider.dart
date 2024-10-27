@@ -24,47 +24,40 @@ class SQLProvider {
 
   Future<Database> initDatabase() async {
     String dbPath = join(await getDatabasesPath(), 'esek.db');
+    bool dbExists = await databaseExists(dbPath);
 
-    try {
-      // Her zaman assets'teki veritabanını kopyala
-      ByteData data = await rootBundle.load(join('database', 'esek.db'));
-      List<int> bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-      await File(dbPath).writeAsBytes(bytes, flush: true);
-      _logger.info("Veritabanı assets'ten kopyalandı.");
-    } catch (e) {
-      _logger.severe("Veritabanı kopyalama hatası", e);
-      throw Exception("Veritabanı kopyalanamadı: $e");
+    if (!dbExists) {
+      try {
+        ByteData data = await rootBundle.load(join('database', 'esek.db'));
+        List<int> bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+        await File(dbPath).writeAsBytes(bytes, flush: true);
+        _logger.info("Veritabanı assets'ten kopyalandı.");
+      } catch (e) {
+        _logger.severe("Veritabanı kopyalama hatası", e);
+        throw Exception("Veritabanı kopyalanamadı: $e");
+      }
+    } else {
+      _logger.info("Veritabanı zaten mevcut.");
     }
 
-    return await openDatabase(
-      dbPath,
-      version: 1,
-      onCreate: (db, version) async {
-        await _createTables(db);
-        _logger.info("Veritabanı oluşturuldu ve tablolar eklendi.");
-      },
-      onOpen: (db) async {
-        _logger.info("Veritabanı açıldı.");
-      },
-    );
+    return await openDatabase(dbPath, version:1, onCreate: (db, version) async {
+      await _createTables(db);
+      _logger.info("Veritabanı açıldı.");
+    });
   }
-
 
   Future<void> testDatabaseContent() async {
     try {
       final db = await database;
       final routines = await db.query('Routines');
       _logger.info("Routines tablosundaki kayıt sayısı: ${routines.length}");
-
-      final routineExercises = await db.query('RoutineExercises');
-      _logger.info("RoutineExercises tablosundaki kayıt sayısı: ${routineExercises.length}");
-
-      // Diğer tablolar için de benzer kontroller ekleyin
+      for (var routine in routines) {
+        _logger.fine(routine.toString());
+      }
     } catch (e) {
       _logger.severe("Veritabanı içerik testi hatası", e);
     }
   }
-
 
   Future<List<BodyParts>> getAllBodyParts() async {
     try {
@@ -737,10 +730,66 @@ class SQLProvider {
   }
 
 
+  Future<int?> getDifficultyForPart(int partId) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'Parts',
+      columns: ['difficulty'],
+      where: 'id = ?',
+      whereArgs: [partId],
+    );
+
+    if (maps.isNotEmpty) {
+      return maps.first['difficulty'] as int?;
+    }
+    return null;
+  }
+
+
+  Future<int?> getDifficultyForBodyPart(int bodyPartId) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'Parts',
+      columns: ['difficulty'],
+      where: 'bodyPartId = ?',
+      whereArgs: [bodyPartId],
+      limit: 1,
+    );
+
+    if (maps.isNotEmpty) {
+      return maps.first['difficulty'] as int?;
+    }
+    return null;
+  }
+
+
+  Future<List<Parts>> getPartsByDifficulty(int difficulty) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'Parts',
+      where: 'difficulty = ?',
+      whereArgs: [difficulty],
+    );
+
+    return List.generate(maps.length, (i) {
+      return Parts.fromMap(maps[i], []);  // exerciseIds'i boş liste olarak geçiyoruz
+    });
+  }
 
 
 
+  Future<List<Parts>> getPartsByBodyPartId(int bodyPartId) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'Parts',
+      where: 'bodyPartId = ?',
+      whereArgs: [bodyPartId],
+    );
 
+    return List.generate(maps.length, (i) {
+      return Parts.fromMap(maps[i], []);  // exerciseIds'i boş liste olarak geçiyoruz
+    });
+  }
 
 
 

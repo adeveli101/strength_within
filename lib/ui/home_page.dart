@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:workout/models/routines.dart';
-import 'package:workout/ui/list_pages/parts_page.dart';
 import 'package:workout/ui/part_ui/part_card.dart';
 import 'package:workout/ui/part_ui/part_detail.dart';
 import 'package:workout/ui/routine_ui/routine_card.dart';
@@ -10,6 +9,7 @@ import 'package:workout/ui/routine_ui/routine_detail.dart';
 import '../data_bloc_part/part_bloc.dart';
 import '../data_bloc_routine/routines_bloc.dart';
 import 'package:logging/logging.dart';
+import 'list_pages/parts_page.dart';
 
 class HomePage extends StatefulWidget {
   final String userId;
@@ -71,23 +71,27 @@ class _HomePageState extends State<HomePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Text(
-                    'Hoş Geldin!',
-                    style: TextStyle(
-                      fontSize: constraints.maxWidth > 600 ? 32 : 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blue[800],
-                    ),
-                  ),
-                ),
+                _buildWelcomeText(constraints),
                 _buildParts(constraints),
                 _buildRoutines(constraints),
               ],
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildWelcomeText(BoxConstraints constraints) {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Text(
+        'Hoş Geldin!',
+        style: TextStyle(
+          fontSize: constraints.maxWidth > 600 ? 32 : 28,
+          fontWeight: FontWeight.bold,
+          color: Colors.blue[800],
+        ),
       ),
     );
   }
@@ -104,7 +108,7 @@ class _HomePageState extends State<HomePage> {
       builder: (context, state) {
         if (state is PartsLoading) {
           return Center(
-            child: LoadingAnimationWidget.staggeredDotsWave(
+            child: LoadingAnimationWidget.threeArchedCircle(
               color: Colors.blue,
               size: 50,
             ),
@@ -132,6 +136,8 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildPartList(String title, List parts, BoxConstraints constraints, {bool showAllButton = false}) {
+    final isWideScreen = constraints.maxWidth > 600;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -142,13 +148,15 @@ class _HomePageState extends State<HomePage> {
             children: [
               Text(
                 title,
-                style: TextStyle(fontSize: constraints.maxWidth > 600 ? 24 : 20, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                    fontSize: isWideScreen ? 24 : 20,
+                    fontWeight: FontWeight.bold
+                ),
               ),
               if (showAllButton)
                 TextButton(
                   onPressed: () {
-                    // Navigate to parts_list_page
-                     Navigator.push(context, MaterialPageRoute(builder: (context) => PartsPage(userId: widget.userId,)));
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => PartsPage(userId: widget.userId)));
                   },
                   child: Text('Hepsini Gör'),
                 ),
@@ -156,15 +164,13 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         SizedBox(
-          height: constraints.maxWidth > 600 ? 280 : 230,
+          height: isWideScreen ? 280 : 230,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.symmetric(horizontal: 8.0),
             itemCount: parts.length,
             itemBuilder: (context, index) {
-              return SizedBox(
-                width: constraints.maxWidth > 600 ? 250 : 200,
-                child: _buildPartCard(parts[index]),
-              );
+              return _buildPartCard(parts[index],constraints);
             },
           ),
         ),
@@ -172,17 +178,31 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildPartCard(dynamic part) {
-    return Card(
-      margin: EdgeInsets.all(8),
-      child: PartCard(
-        key: ValueKey(part.id),
-        part: part,
-        userId: widget.userId,
-        onTap: () => _showPartDetailBottomSheet(part.id),
-      ),
+  Widget _buildPartCard(dynamic part, BoxConstraints constraints) {
+    return LayoutBuilder(
+      builder: (context, cardConstraints) {
+        final isWideScreen = constraints.maxWidth > 500;
+        final cardWidth = isWideScreen ? 200.0 : 240.0;
+        final cardHeight = isWideScreen ? 320.0 : 230.0;
+
+        return Container(
+          width: cardWidth,
+          height: cardHeight,
+          child: Card(
+            margin: EdgeInsets.all(4),
+            child: PartCard(
+              key: ValueKey(part.id),
+              part: part,
+              userId: widget.userId,
+              onTap: () => _showPartDetailBottomSheet(part.id),
+            ),
+          ),
+        );
+      },
     );
   }
+
+
 
   List _getRandomParts(List parts) {
     if (_randomParts.isEmpty) {

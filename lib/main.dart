@@ -1,10 +1,10 @@
 // ignore_for_file: deprecated_member_use
-
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get/get.dart';
+import 'package:responsive_framework/responsive_framework.dart';
 import 'package:workout/ui/home_page.dart';
 import 'package:workout/ui/for_you_page.dart';
 import 'package:workout/data_provider/firebase_provider.dart';
@@ -92,6 +92,15 @@ class App extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
+      builder: (context, child) => ResponsiveBreakpoints.builder(
+        child: child!,
+        breakpoints: [
+          const Breakpoint(start: 0, end: 450, name: MOBILE),
+          const Breakpoint(start: 451, end: 800, name: TABLET),
+          const Breakpoint(start: 801, end: 1920, name: DESKTOP),
+          const Breakpoint(start: 1921, end: double.infinity, name: '4K'),
+        ],
+      ),
       title: 'Fitness App',
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: Color(0xFF121212),
@@ -110,6 +119,7 @@ class App extends StatelessWidget {
     );
   }
 }
+
 
 class MainScreen extends StatefulWidget {
   final String userId;
@@ -155,12 +165,21 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       onWillPop: () async => true,
       child: Scaffold(
         appBar: AppBar(
-          title: Row(
-            mainAxisAlignment: MainAxisAlignment.start,
+          title: ResponsiveRowColumn(
+            rowMainAxisAlignment: MainAxisAlignment.start,
+            layout: ResponsiveBreakpoints.of(context).smallerThan(TABLET)
+                ? ResponsiveRowColumnType.COLUMN
+                : ResponsiveRowColumnType.ROW,
             children: [
-              Icon(Icons.sports_score_rounded, color: Colors.red),
-              SizedBox(width: 10),
-              Text('Workout App', style: TextStyle(color: Colors.red)),
+              ResponsiveRowColumnItem(
+                child: Icon(Icons.sports_score_rounded, color: Colors.red),
+              ),
+              ResponsiveRowColumnItem(
+                child: SizedBox(width: 10),
+              ),
+              ResponsiveRowColumnItem(
+                child: Text('Workout App', style: TextStyle(color: Colors.red)),
+              ),
             ],
           ),
           actions: [
@@ -190,29 +209,32 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             LibraryPage(),
           ],
         ),
-        bottomNavigationBar: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: (index) {
-            setState(() {
-              _currentIndex = index;
-            });
-            _refreshData();
-          },
-          items: [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home),
-              label: 'Ana Sayfa',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.recommend),
-              label: 'Senin İçin',
-            ),
-            BottomNavigationBarItem( // Kütüphane sekmesi
-              icon: Icon(Icons.library_books),
-              label: 'Kütüphane',
-            ),
-          ],
-          type: BottomNavigationBarType.fixed,
+        bottomNavigationBar: ResponsiveVisibility(
+          visible: true,
+          child: BottomNavigationBar(
+            currentIndex: _currentIndex,
+            onTap: (index) {
+              setState(() {
+                _currentIndex = index;
+              });
+              _refreshData();
+            },
+            items: [
+              BottomNavigationBarItem(
+                icon: Icon(Icons.home),
+                label: 'Ana Sayfa',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.recommend),
+                label: 'Senin İçin',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.library_books),
+                label: 'Kütüphane',
+              ),
+            ],
+            type: BottomNavigationBarType.fixed,
+          ),
         ),
       ),
     );
