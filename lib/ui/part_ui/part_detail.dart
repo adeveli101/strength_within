@@ -1,3 +1,6 @@
+// ignore_for_file: unused_element
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:workout/data_bloc_part/part_bloc.dart';
@@ -268,62 +271,17 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
                 ),
               ),
             ),
-            children: entry.value.asMap().entries.map((exercise) {
-              final exerciseData = Exercises.fromMap(exercise.value);
-              return Container(
-                margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF383838),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  leading: CircleAvatar(
-                    backgroundColor: Colors.white.withOpacity(0.1),
-                    child: Text(
-                      '${exercise.key + 1}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  title: Text(
-                    exerciseData.name,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  subtitle: Row(
-                    children: [
-                      _buildExerciseInfo(
-                        Icons.repeat,
-                        '${exerciseData.defaultSets} set',
-                      ),
-                      const SizedBox(width: 16),
-                      _buildExerciseInfo(
-                        Icons.fitness_center,
-                        '${exerciseData.defaultReps} tekrar',
-                      ),
-                      const SizedBox(width: 16),
-                      _buildExerciseInfo(
-                        Icons.monitor_weight_outlined,
-                        '${exerciseData.defaultWeight} kg',
-                      ),
-                    ],
-                  ),
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => ExerciseDetails(
-                        exerciseId: exerciseData.id,
-                      ),
-                    ),
-                  ),
+            children: entry.value.map((exerciseMap) {
+              final exerciseData = Exercises.fromMap(exerciseMap);
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: ExerciseCard(
+                  exercise: exerciseData,
+                  userId: widget.userId,
+                  onCompletionChanged: (isCompleted) {
+                    // Firebase'e kaydetme işlemi burada yapılabilir
+                    _updateExerciseCompletion(exerciseData.id, isCompleted);
+                  },
                 ),
               );
             }).toList(),
@@ -332,6 +290,19 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
       );
     }).toList();
   }
+
+  void _updateExerciseCompletion(int exerciseId, bool isCompleted) {
+    FirebaseFirestore.instance
+        .collection('exerciseProgress')
+        .doc('${widget.userId}_$exerciseId')
+        .set({
+      'userId': widget.userId,
+      'exerciseId': exerciseId,
+      'isCompleted': isCompleted,
+      'lastUpdated': FieldValue.serverTimestamp(),
+    });
+  }
+
   IconData _getBodyPartIcon(String bodyPartName) {
     switch (bodyPartName.toLowerCase()) {
       case 'göğüs':
@@ -414,7 +385,7 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
 
 
 
-  // ignore: unused_element
+
   Widget _buildExerciseListTile(Map<String, dynamic> exercise) {
     return ListTile(
       title: Text(exercise['name']),

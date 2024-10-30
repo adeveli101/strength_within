@@ -15,6 +15,8 @@ final _logger = Logger('SQLProvider');
 
 class SQLProvider {
   static Database? _database;
+  static const String DB_NAME = 'esek.db';
+  static const int DB_VERSION = 1; // Veritabanı versiyonunu takip etmek için
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -23,27 +25,38 @@ class SQLProvider {
   }
 
   Future<Database> initDatabase() async {
-    String dbPath = join(await getDatabasesPath(), 'esek.db');
-    bool dbExists = await databaseExists(dbPath);
+    String dbPath = join(await getDatabasesPath(), DB_NAME);
 
-    if (!dbExists) {
-      try {
-        ByteData data = await rootBundle.load(join('database', 'esek.db'));
-        List<int> bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-        await File(dbPath).writeAsBytes(bytes, flush: true);
-        _logger.info("Veritabanı assets'ten kopyalandı.");
-      } catch (e) {
-        _logger.severe("Veritabanı kopyalama hatası", e);
-        throw Exception("Veritabanı kopyalanamadı: $e");
+    // Her durumda veritabanını assets'ten kopyala
+    try {
+      // Eğer varolan bir veritabanı varsa, sil
+      if (await databaseExists(dbPath)) {
+        await deleteDatabase(dbPath);
+        _logger.info("Eski veritabanı silindi.");
       }
-    } else {
-      _logger.info("Veritabanı zaten mevcut.");
+
+      // Assets'ten yeni veritabanını kopyala
+      ByteData data = await rootBundle.load(join('database', DB_NAME));
+      List<int> bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+      await File(dbPath).writeAsBytes(bytes, flush: true);
+      _logger.info("Veritabanı assets'ten yeniden kopyalandı.");
+    } catch (e) {
+      _logger.severe("Veritabanı kopyalama hatası", e);
+      throw Exception("Veritabanı kopyalanamadı: $e");
     }
 
-    return await openDatabase(dbPath, version:1, onCreate: (db, version) async {
-      await _createTables(db);
-      _logger.info("Veritabanı açıldı.");
-    });
+    // Veritabanını aç
+    return await openDatabase(
+      dbPath,
+      version: DB_VERSION,
+      onCreate: (db, version) async {
+        await _createTables(db);
+        _logger.info("Veritabanı tabloları oluşturuldu.");
+      },
+      onOpen: (db) {
+        _logger.info("Veritabanı açıldı. Version: $DB_VERSION");
+      },
+    );
   }
 
   Future<void> testDatabaseContent() async {
@@ -51,13 +64,31 @@ class SQLProvider {
       final db = await database;
       final routines = await db.query('Routines');
       _logger.info("Routines tablosundaki kayıt sayısı: ${routines.length}");
-      for (var routine in routines) {
-        _logger.fine(routine.toString());
-      }
+
+      // Exercises tablosunu da kontrol et
+      final exercises = await db.query('Exercises');
+      _logger.info("Exercises tablosundaki kayıt sayısı: ${exercises.length}");
+
+      // Tablo yapısını kontrol et
+      final tableInfo = await db.rawQuery('PRAGMA table_info(Exercises)');
+      _logger.info("Exercises tablo yapısı: $tableInfo");
+
     } catch (e) {
       _logger.severe("Veritabanı içerik testi hatası", e);
     }
   }
+
+  // Veritabanını yeniden yükle
+  Future<void> reloadDatabase() async {
+    if (_database != null) {
+      await _database!.close();
+      _database = null;
+    }
+    await initDatabase();
+    _logger.info("Veritabanı yeniden yüklendi.");
+  }
+
+
 
   Future<List<BodyParts>> getAllBodyParts() async {
     try {
@@ -120,10 +151,36 @@ class SQLProvider {
     }
   }
 
+  Future<Exercises?> getExerciseById(int id) async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        'Exercises',
+        columns: ['Id', 'Name', 'Description', 'DefaultWeight', 'DefaultSets', 'DefaultReps', 'WorkoutTypeId', 'MainTargetedBodyPartId', 'GifUrl'],
+        where: 'Id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
+      if (maps.isNotEmpty) {
+        _logger.fine("Exercise data: ${maps.first}");
+        return Exercises.fromMap(maps.first);
+      } else {
+        _logger.warning('No exercise found for ID: $id');
+        return null;
+      }
+    } catch (e) {
+      _logger.severe('Error getting exercise by id', e);
+      return null;
+    }
+  }
+
   Future<List<Exercises>> getAllExercises() async {
     try {
       final db = await database;
-      final List<Map<String, dynamic>> maps = await db.query('Exercises');
+      final List<Map<String, dynamic>> maps = await db.query(
+        'Exercises',
+        columns: ['Id', 'Name', 'Description', 'DefaultWeight', 'DefaultSets', 'DefaultReps', 'WorkoutTypeId', 'MainTargetedBodyPartId', 'GifUrl'],
+      );
       _logger.fine("Exercises ham veri: $maps");
       return List.generate(maps.length, (i) => Exercises.fromMap(maps[i]));
     } catch (e) {
@@ -132,38 +189,25 @@ class SQLProvider {
     }
   }
 
-  Future<Exercises?> getExerciseById(int id) async {
-    try {
-      final db = await database;
-      final List<Map<String, dynamic>> maps = await db.query(
-        'Exercises',
-        where: 'Id = ?',
-        whereArgs: [id],
-        limit: 1,
-      );
-      if (maps.isNotEmpty) {
-        return Exercises.fromMap(maps.first);
-      } else {
-        _logger.warning('No exercise found for ID: $id');
-        return null;
-      }
-    } catch (e) {
-      _logger.severe('Error getting exercise by id', e);
-      return null; // Hata durumunda null döndür
-    }
-  }
+
   Future<List<Exercises>> getExercisesByIds(List<int> ids) async {
+    final db = await database;
     try {
-      final db = await database;
       final List<Map<String, dynamic>> maps = await db.query(
-        'Exercises',
-        where: 'id IN (${ids.join(",")})',
+        'exercises',
+        columns: ['id', 'name', 'description', 'defaultWeight', 'defaultSets', 'defaultReps', 'workoutTypeId', 'mainTargetedBodyPartId', 'gifUrl'], // Tüm gerekli alanları belirtin
+        where: 'id IN (${List.filled(ids.length, '?').join(',')})',
+        whereArgs: ids,
       );
-      return List.generate(maps.length, (i) => Exercises.fromMap(maps[i]));
+
+      return List.generate(maps.length, (i) {
+        return Exercises.fromMap(maps[i]);
+      });
     } catch (e) {
-      throw Exception("Egzersizler alınırken hata oluştu: $e");
+      throw Exception('ID\'lere göre egzersizler alınırken hata: $e');
     }
   }
+
 
 
   Future<List<Exercises>> getExercisesByWorkoutType(int workoutTypeId) async {
@@ -729,6 +773,32 @@ class SQLProvider {
 
   }
 
+  Future<void> updatePartExercisesOrder(int partId, List<PartExercise> newOrder) async {
+    final db = await database;
+    final batch = db.batch();
+
+    try {
+      // Önce mevcut sıralamayı temizle
+      await db.delete(
+        'PartExercises',
+        where: 'partId = ?',
+        whereArgs: [partId],
+      );
+
+      // Yeni sıralamayı ekle
+      for (var exercise in newOrder) {
+        batch.insert('PartExercises', {
+          'partId': partId,
+          'exerciseId': exercise.exerciseId,
+          'orderIndex': exercise.orderIndex,
+        });
+      }
+
+      await batch.commit();
+    } catch (e) {
+      throw Exception('Egzersiz sıralaması güncellenirken hata: $e');
+    }
+  }
 
   Future<int?> getDifficultyForPart(int partId) async {
     final db = await database;

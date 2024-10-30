@@ -574,6 +574,43 @@ class FirebaseProvider {
       throw e;
     }
   }
+  Future<void> toggleExerciseFavorite(String userId, String exerciseId, bool isFavorite) async {
+    try {
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('favoriteExercises')
+          .doc(exerciseId)
+          .set({
+        'isFavorite': isFavorite,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      throw Exception('Favori durumu güncellenirken hata: $e');
+    }
+  }
 
+  // Egzersiz tamamlanma durumunu güncelle
+  Future<void> updateExerciseCompletion(
+      String userId,
+      String exerciseId,
+      bool isCompleted,
+      DateTime completionDate,
+      ) async {
+    try {
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('exerciseProgress')
+          .doc(exerciseId)
+          .set({
+        'isCompleted': isCompleted,
+        'completionDate': completionDate.toIso8601String(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      throw Exception('Tamamlanma durumu güncellenirken hata: $e');
+    }
+  }
 // TODO: Implement methods for PartFocusRoutine if needed
 }

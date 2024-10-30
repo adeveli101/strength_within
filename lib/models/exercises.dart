@@ -8,6 +8,7 @@ class Exercises {
   final int workoutTypeId;
   final int mainTargetedBodyPartId;
   final String description;
+  final String? gifUrl;
 
   const Exercises({
     required this.id,
@@ -18,6 +19,7 @@ class Exercises {
     required this.workoutTypeId,
     required this.mainTargetedBodyPartId,
     required this.description,
+    this.gifUrl,
   });
 
   factory Exercises.fromMap(Map<String, dynamic> map) {
@@ -32,6 +34,7 @@ class Exercises {
       workoutTypeId: map['workoutTypeId'] as int? ?? 0,
       mainTargetedBodyPartId: map['mainTargetedBodyPartId'] as int? ?? 0,
       description: map['description'] as String? ?? '',
+      gifUrl: map['gifUrl'] as String?,
     );
   }
 
@@ -45,6 +48,7 @@ class Exercises {
       'WorkoutTypeId': workoutTypeId,
       'MainTargetedBodyPartId': mainTargetedBodyPartId,
       'description': description,
+      'gifUrl': gifUrl,
     };
   }
 

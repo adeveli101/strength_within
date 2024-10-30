@@ -11,6 +11,7 @@ import 'package:workout/data_provider/firebase_provider.dart';
 import 'package:workout/data_provider/sql_provider.dart';
 import 'package:workout/ui/library.dart';
 import 'package:workout/ui/setting_pages.dart';
+import 'ai_services/ai_bloc/ai_bloc.dart';
 import 'blocs/for_you_bloc.dart';
 import 'data_bloc_part/PartRepository.dart';
 import 'data_bloc_part/part_bloc.dart';
@@ -72,7 +73,11 @@ Future<void> main() async {
                 partRepository: partRepository,
                 routineRepository: routineRepository,
                 userId: userId,
+
               ),
+            ),
+            BlocProvider(
+              create: (context) => AIBloc(),
             ),
           ],
           child: App(userId: userId),
