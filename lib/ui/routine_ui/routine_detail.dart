@@ -316,7 +316,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
                           context,
                           MaterialPageRoute(
                             builder: (context) => ExerciseDetails(
-                              exerciseId: exercise.value['id'],
+                              exerciseId: exercise.value['id'], userId: widget.userId,
                             ),
                           ),
                         ),
@@ -580,7 +580,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
                     context,
                     MaterialPageRoute(
                       builder: (context) => ExerciseDetails(
-                        exerciseId: exercise['id'],
+                        exerciseId: exercise['id'], userId: widget.userId,
                       ),
                     ),
                   );
