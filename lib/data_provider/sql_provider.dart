@@ -593,7 +593,7 @@ class SQLProvider {
           whereArgs: [id],
         );
         final List<PartExercise> partExercises = partExerciseMaps.map((map) => PartExercise.fromMap(map)).toList();
-        return Parts.fromMap(partMaps.first, partExercises.cast<dynamic>());
+        return Parts.fromMap(partMaps.first, partExercises.cast<int>());
       }
       return null;
     } catch (e) {
@@ -612,7 +612,7 @@ class SQLProvider {
       );
       final List<Map<String, dynamic>> partExerciseMaps = await db.query('PartExercises');
       final List<PartExercise> partExercises = partExerciseMaps.map((map) => PartExercise.fromMap(map)).toList();
-      return partMaps.map((map) => Parts.fromMap(map, partExercises.cast<dynamic>())).toList();
+      return partMaps.map((map) => Parts.fromMap(map, partExercises.cast<int>())).toList();
     } catch (e) {
       print('Error getting parts by body part: $e');
       return [];
@@ -629,7 +629,7 @@ class SQLProvider {
       );
       final List<Map<String, dynamic>> partExerciseMaps = await db.query('PartExercises');
       final List<PartExercise> partExercises = partExerciseMaps.map((map) => PartExercise.fromMap(map)).toList();
-      return partMaps.map((map) => Parts.fromMap(map, partExercises.cast<dynamic>())).toList();
+      return partMaps.map((map) => Parts.fromMap(map, partExercises.cast<int>())).toList();
     } catch (e) {
       print('Error getting parts by set type: $e');
       return [];
@@ -646,7 +646,7 @@ class SQLProvider {
       );
       final List<Map<String, dynamic>> partExerciseMaps = await db.query('PartExercises');
       final List<PartExercise> partExercises = partExerciseMaps.map((map) => PartExercise.fromMap(map)).toList();
-      return partMaps.map((map) => Parts.fromMap(map, partExercises.cast<dynamic>())).toList();
+      return partMaps.map((map) => Parts.fromMap(map, partExercises.cast<int>())).toList();
     } catch (e) {
       print('Error searching parts by name: $e');
       return [];
@@ -662,7 +662,7 @@ class SQLProvider {
       );
       final List<Map<String, dynamic>> partExerciseMaps = await db.query('PartExercises');
       final List<PartExercise> partExercises = partExerciseMaps.map((map) => PartExercise.fromMap(map)).toList();
-      return partMaps.map((map) => Parts.fromMap(map, partExercises.cast<dynamic>())).toList();
+      return partMaps.map((map) => Parts.fromMap(map, partExercises.cast<int>())).toList();
     } catch (e) {
       print('Error getting parts sorted by name: $e');
       return [];

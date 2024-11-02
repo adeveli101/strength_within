@@ -17,11 +17,11 @@ class RoutineDetailBottomSheet extends StatefulWidget {
   final String userId;
 
   const RoutineDetailBottomSheet({
-    Key? key,
+    super.key,
     required this.routineId,
     required this.userId,
 
-  }) : super(key: key);
+  });
 
 
 
@@ -326,7 +326,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
                 ),
               ),
             );
-          }).toList(),
+          }),
           const SizedBox(height: 16),
         ],
       ),

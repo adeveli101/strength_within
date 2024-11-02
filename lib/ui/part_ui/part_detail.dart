@@ -17,10 +17,10 @@ class PartDetailBottomSheet extends StatefulWidget {
   final String userId;
 
   const PartDetailBottomSheet({
-    Key? key,
+    super.key,
     required this.partId,
     required this.userId
-  }) : super(key: key);
+  });
 
   @override
   _PartDetailBottomSheetState createState() => _PartDetailBottomSheetState();

@@ -20,7 +20,7 @@ final _logger = Logger('FirebaseProvider');
 class FirebaseProvider {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final SQLProvider sqlProvider;  // SQLProvider'ı constructor'da alacağız
+  final SQLProvider sqlProvider;  // SQLProvider'ı constructor'da alıyorum
 
   FirebaseProvider(this.sqlProvider);
 
@@ -108,7 +108,7 @@ class FirebaseProvider {
       _logger.info('Kullanıcı başarıyla güncellendi: $userId');
     } catch (e) {
       _logger.severe('Kullanıcı güncelleme hatası: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -159,7 +159,7 @@ class FirebaseProvider {
       _logger.info('Rutin başarıyla eklendi/güncellendi: ${routine.id}');
     } catch (e) {
       _logger.severe('Rutin ekleme/güncelleme hatası: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -174,7 +174,7 @@ class FirebaseProvider {
       _logger.info('Rutin başarıyla silindi: $routineId');
     } catch (e) {
       _logger.severe('Rutin silme hatası: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -189,7 +189,7 @@ class FirebaseProvider {
       _logger.info('Rutin favori durumu güncellendi: $isFavorite');
     } catch (e) {
       _logger.severe('Rutin favori durumu güncelleme hatası: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -247,7 +247,7 @@ class FirebaseProvider {
       _logger.info('Parça başarıyla eklendi/güncellendi: ${part.id}');
     } catch (e) {
       _logger.severe('Parça ekleme/güncelleme hatası: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -262,7 +262,22 @@ class FirebaseProvider {
       _logger.info('Parça başarıyla silindi: $partId');
     } catch (e) {
       _logger.severe('Parça silme hatası: $e');
-      throw e;
+      rethrow;
+    }
+  }
+
+  Future<bool> isPartFavorite(String userId, String partId) async {
+    try {
+      final docSnapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('userParts')
+          .doc(partId)
+          .get();
+      return docSnapshot.exists && docSnapshot.data()?['isFavorite'] == true;
+    } catch (e) {
+      _logger.severe('Parçanın favori durumunu kontrol etme hatası: $e');
+      return false;
     }
   }
 
@@ -274,17 +289,13 @@ class FirebaseProvider {
           .collection('parts')
           .doc(partId);
 
-      // Önce mevcut dökümanı kontrol edelim
       final docSnapshot = await docRef.get();
-
       if (docSnapshot.exists) {
-        // Sadece favori durumunu güncelle
         await docRef.update({
           'isFavorite': isFavorite,
           'lastUpdated': FieldValue.serverTimestamp(),
         });
       } else {
-        // Yeni döküman oluştur
         final part = await sqlProvider.getPartById(int.parse(partId));
         if (part != null) {
           await docRef.set({
@@ -297,12 +308,11 @@ class FirebaseProvider {
             'userProgress': 0,
             'lastUsedDate': null,
             'userRecommended': false,
-            'exerciseIds': part.exerciseIds,
+            'exerciseIds': part.exerciseIds.map((id) => id.toString()).toList(),
             'lastUpdated': FieldValue.serverTimestamp(),
           });
         }
       }
-
       debugPrint('Successfully updated favorite status for part: $partId');
     } catch (e) {
       debugPrint('Error toggling favorite: $e');
@@ -365,7 +375,7 @@ class FirebaseProvider {
       _logger.info('Rutin egzersizleri başarıyla senkronize edildi');
     } catch (e) {
       _logger.severe('Rutin egzersizleri senkronizasyon hatası', e);
-      throw e;
+      rethrow;
     }
   }
 
@@ -423,7 +433,7 @@ class FirebaseProvider {
       _logger.info('Rutin egzersizi başarıyla senkronize edildi: ${routineExercise.id}');
     } catch (e) {
       _logger.severe('Rutin egzersizi senkronizasyon hatası', e);
-      throw e;
+      rethrow;
     }
   }
 
@@ -455,20 +465,6 @@ class FirebaseProvider {
 
 
 
-  Future<bool> isPartFavorite(String userId, String partId) async {
-    try {
-      final docSnapshot = await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('userParts')
-          .doc(partId)
-          .get();
-      return docSnapshot.exists && docSnapshot.data()?['isFavorite'] == true;
-    } catch (e) {
-      _logger.severe('Parçanın favori durumunu kontrol etme hatası: $e');
-      return false;
-    }
-  }
 
   // RoutineHistory sınıfı için metodlar
   Future<List<RoutineHistory>> getUserRoutineHistory(String userId) async {
@@ -495,7 +491,7 @@ class FirebaseProvider {
       _logger.info('Rutin geçmişi başarıyla eklendi');
     } catch (e) {
       _logger.severe('Rutin geçmişi ekleme hatası: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -525,7 +521,7 @@ class FirebaseProvider {
       _logger.info('Haftalık rutin planı başarıyla eklendi/güncellendi: ${weekday.id}');
     } catch (e) {
       _logger.severe('Haftalık rutin planı ekleme/güncelleme hatası: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -540,7 +536,7 @@ class FirebaseProvider {
       _logger.info('Haftalık rutin planı başarıyla silindi: $weekdayId');
     } catch (e) {
       _logger.severe('Haftalık rutin planı silme hatası: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -556,7 +552,7 @@ class FirebaseProvider {
       _logger.info('Rutin ilerleme başarıyla güncellendi: $progress');
     } catch (e) {
       _logger.severe('Rutin ilerleme güncelleme hatası: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -571,7 +567,7 @@ class FirebaseProvider {
       _logger.info('Son kullanım tarihi başarıyla güncellendi');
     } catch (e) {
       _logger.severe('Son kullanım tarihi güncelleme hatası: $e');
-      throw e;
+      rethrow;
     }
   }
   Future<void> toggleExerciseFavorite(String userId, String exerciseId, bool isFavorite) async {
