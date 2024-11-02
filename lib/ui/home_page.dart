@@ -1,6 +1,10 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
+import 'package:weather_icons/weather_icons.dart';
 import 'package:workout/models/routines.dart';
 import 'package:workout/ui/part_ui/part_card.dart';
 import 'package:workout/ui/part_ui/part_detail.dart';
@@ -9,22 +13,29 @@ import 'package:workout/ui/routine_ui/routine_detail.dart';
 import '../data_bloc_part/part_bloc.dart';
 import '../data_bloc_routine/routines_bloc.dart';
 import 'package:logging/logging.dart';
+import '../z.app_theme/app_theme.dart';
+import '../z.app_theme/welcome_header.dart';
 import 'list_pages/parts_page.dart';
+import 'list_pages/routines_page.dart';
 
 class HomePage extends StatefulWidget {
   final String userId;
-  const HomePage({Key? key, required this.userId}) : super(key: key);
+  const HomePage({super.key, required this.userId});
 
   @override
   _HomePageState createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin {
   late RoutinesBloc _routinesBloc;
   late PartsBloc _partsBloc;
   final _logger = Logger('HomePage');
-  List _randomRoutines = [];
+  List<Routines> _randomRoutines = [];
   List _randomParts = [];
+
+  // AutomaticKeepAliveClientMixin için gerekli
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -55,25 +66,33 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // AutomaticKeepAliveClientMixin için gerekli
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Fitness Uygulaması'),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.refresh),
-            onPressed: _loadAllData,
-          ),
-        ],
-      ),
+      backgroundColor: AppTheme.darkBackground,
       body: LayoutBuilder(
         builder: (context, constraints) {
-          return SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildWelcomeText(constraints),
-                _buildParts(constraints),
-                _buildRoutines(constraints),
+          return RefreshIndicator(
+            color: AppTheme.primaryRed,
+            backgroundColor: AppTheme.darkBackground,
+            strokeWidth: 3,
+            onRefresh: () async {
+              HapticFeedback.mediumImpact();
+               _loadAllData();
+            },
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
+              slivers: [
+                SliverToBoxAdapter(
+                  child: WelcomeHeader(),
+                ),
+                SliverToBoxAdapter(
+                  child: _buildParts(constraints),
+                ),
+                SliverToBoxAdapter(
+                  child: _buildRoutines(constraints),
+                ),
               ],
             ),
           );
@@ -82,26 +101,18 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildWelcomeText(BoxConstraints constraints) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Text(
-        'Hoş Geldin!',
-        style: TextStyle(
-          fontSize: constraints.maxWidth > 600 ? 32 : 28,
-          fontWeight: FontWeight.bold,
-          color: Colors.blue[800],
-        ),
-      ),
-    );
-  }
+
 
   Widget _buildParts(BoxConstraints constraints) {
     return BlocConsumer<PartsBloc, PartsState>(
       listener: (context, state) {
         if (state is PartsError) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(state.message)),
+            SnackBar(
+              content: Text(state.message),
+              backgroundColor: AppTheme.primaryRed.withOpacity(0.8),
+              behavior: SnackBarBehavior.floating,
+            ),
           );
         }
       },
@@ -109,96 +120,135 @@ class _HomePageState extends State<HomePage> {
         if (state is PartsLoading) {
           return Center(
             child: LoadingAnimationWidget.threeArchedCircle(
-              color: Colors.blue,
+              color: AppTheme.primaryRed,
               size: 50,
             ),
           );
         }
-        if (state is PartsLoaded || state is PartExercisesLoaded) {
-          final parts = state is PartsLoaded
-              ? state.parts
-              : (state as PartExercisesLoaded).parts;
+
+        if (state is PartsLoaded) {
+          final parts = state.parts;
           final startedParts = parts.where((p) => p.lastUsedDate != null).toList()
-            ..sort((a, b) => (b.lastUsedDate ?? DateTime(0))
-                .compareTo(a.lastUsedDate ?? DateTime(0)));
-          return Column(
-            children: [
-              if (startedParts.isNotEmpty) ...[
-                _buildPartList('Devam Eden Antrenmanlar', startedParts, constraints),
+            ..sort((a, b) => (b.lastUsedDate ?? DateTime(0)).compareTo(a.lastUsedDate ?? DateTime(0)));
+
+          return AnimatedOpacity(
+            duration: AppTheme.quickAnimation,
+            opacity: 1.0,
+            child: Column(
+              children: [
+                if (startedParts.isNotEmpty) ...[
+                  _buildPartList('Devam Eden Antrenmanlar', startedParts, constraints),
+                  SizedBox(height: AppTheme.paddingMedium),
+                ],
+                _buildPartList('Keşfet', _getRandomParts(parts), constraints, showAllButton: true),
               ],
-              _buildPartList('Keşfet', _getRandomParts(parts), constraints, showAllButton: true),
-            ],
+            ),
           );
         }
-        return Center(child: Text('Veriler yüklenirken bir hata oluştu'));
+
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 48, color: AppTheme.primaryRed),
+              SizedBox(height: AppTheme.paddingSmall),
+              Text(
+                'Veriler yüklenirken bir hata oluştu',
+                style: AppTheme.bodyMedium.copyWith(color: Colors.white70),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        );
       },
     );
   }
 
-  Widget _buildPartList(String title, List parts, BoxConstraints constraints, {bool showAllButton = false}) {
-    final isWideScreen = constraints.maxWidth > 600;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                    fontSize: isWideScreen ? 24 : 20,
-                    fontWeight: FontWeight.bold
+  Widget _buildPartList(String title, List parts, BoxConstraints constraints, {bool showAllButton = false}) {
+    final isWideScreen = constraints.maxWidth > AppTheme.tabletBreakpoint;
+
+    return Container(
+      margin: EdgeInsets.symmetric(vertical: AppTheme.paddingSmall),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: AppTheme.paddingMedium,
+              vertical: AppTheme.paddingSmall,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  title,
+                  style: isWideScreen ? AppTheme.headingMedium : AppTheme.headingSmall,
                 ),
-              ),
-              if (showAllButton)
-                TextButton(
-                  onPressed: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => PartsPage(userId: widget.userId)));
-                  },
-                  child: Text('Hepsini Gör'),
-                ),
-            ],
+                if (showAllButton)
+                  TextButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => PartsPage(userId: widget.userId),
+                        ),
+                      );
+                    },
+                    icon: Text(
+                      'Hepsini Gör',
+                      style: AppTheme.bodyMedium.copyWith(
+                        color: AppTheme.primaryRed,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    label: Icon(
+                      Icons.arrow_forward_ios,
+                      size: 16,
+                      color: AppTheme.primaryRed,
+                    ),
+                  ),
+              ],
+            ),
           ),
-        ),
-        SizedBox(
-          height: isWideScreen ? 280 : 230,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: EdgeInsets.symmetric(horizontal: 8.0),
-            itemCount: parts.length,
-            itemBuilder: (context, index) {
-              return _buildPartCard(parts[index],constraints);
-            },
+          SizedBox(
+            height: isWideScreen ? 280 : 230,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              padding: EdgeInsets.symmetric(horizontal: AppTheme.paddingSmall),
+              itemCount: parts.length,
+              itemBuilder: (context, index) {
+                return _buildPartCard(parts[index], constraints);
+              },
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
   Widget _buildPartCard(dynamic part, BoxConstraints constraints) {
-    return LayoutBuilder(
-      builder: (context, cardConstraints) {
-        final isWideScreen = constraints.maxWidth > 500;
-        final cardWidth = isWideScreen ? 200.0 : 240.0;
-        final cardHeight = isWideScreen ? 320.0 : 230.0;
+    final isWideScreen = constraints.maxWidth > AppTheme.tabletBreakpoint;
+    final cardWidth = isWideScreen ? 200.0 : 240.0;
+    final cardHeight = isWideScreen ? 320.0 : 230.0;
 
-        return Container(
-          width: cardWidth,
-          height: cardHeight,
-          child: Card(
-            margin: EdgeInsets.all(4),
-            child: PartCard(
-              key: ValueKey(part.id),
-              part: part,
-              userId: widget.userId,
-              onTap: () => _showPartDetailBottomSheet(part.id),
-            ),
-          ),
-        );
-      },
+    return SizedBox(
+      width: cardWidth,
+      height: cardHeight,
+      child: Card(
+        margin: EdgeInsets.all(AppTheme.paddingSmall),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
+        ),
+        color: AppTheme.cardBackground,
+        child: PartCard(
+          key: ValueKey(part.id),
+          part: part,
+          userId: widget.userId,
+          onTap: () => _showPartDetailBottomSheet(part.id),
+        ),
+      ),
     );
   }
 
@@ -230,7 +280,11 @@ class _HomePageState extends State<HomePage> {
       listener: (context, state) {
         if (state is RoutinesError) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(state.message)),
+            SnackBar(
+              content: Text(state.message),
+              backgroundColor: AppTheme.primaryRed.withOpacity(0.8),
+              behavior: SnackBarBehavior.floating,
+            ),
           );
         }
       },
@@ -238,101 +292,165 @@ class _HomePageState extends State<HomePage> {
         if (state is RoutinesLoading) {
           return Center(
             child: LoadingAnimationWidget.staggeredDotsWave(
-              color: Colors.blue,
+              color: AppTheme.primaryRed,
               size: 50,
             ),
           );
         }
+
         if (state is RoutinesLoaded) {
-          final List<Routines> routines = state.routines;
+          final List routines = state.routines;
           if (routines.isEmpty) {
             return _buildEmptyRoutinesMessage(constraints);
           }
-          final List<Routines> startedRoutines = routines
+
+          final List startedRoutines = routines
               .where((r) => r.lastUsedDate != null)
               .toList()
             ..sort((a, b) => (b.lastUsedDate ?? DateTime(0))
                 .compareTo(a.lastUsedDate ?? DateTime(0)));
-          return Column(
-            children: [
-              if (startedRoutines.isNotEmpty) ...[
-                _buildRoutineList('Devam Eden Rutinler', startedRoutines, constraints),
+
+          return AnimatedOpacity(
+            duration: AppTheme.quickAnimation,
+            opacity: 1.0,
+            child: Column(
+              children: [
+                if (startedRoutines.isNotEmpty) ...[
+                  _buildRoutineList('Devam Eden Rutinler', startedRoutines, constraints),
+                  SizedBox(height: AppTheme.paddingMedium),
+                ],
+                _buildRoutineList(
+                  'Önerilen Rutinler',
+                  _getRandomRoutines(routines),
+                  constraints,
+                  showAllButton: true,
+                ),
               ],
-              _buildRoutineList('Önerilen Rutinler', _getRandomRoutines(routines), constraints, showAllButton: true),
-            ],
+            ),
           );
         }
-        return Center(child: Text('Rutinler yüklenirken bir hata oluştu'));
+
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 48, color: AppTheme.primaryRed),
+              SizedBox(height: AppTheme.paddingSmall),
+              Text(
+                'Rutinler yüklenirken bir hata oluştu',
+                style: AppTheme.bodyMedium.copyWith(color: Colors.white70),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        );
       },
     );
   }
 
-  Widget _buildEmptyRoutinesMessage(BoxConstraints constraints) {
-    return Center(
+  Widget _buildRoutineList(String title, List routines, BoxConstraints constraints, {bool showAllButton = false}) {
+    final isWideScreen = constraints.maxWidth > AppTheme.tabletBreakpoint;
+
+    return Container(
+      margin: EdgeInsets.symmetric(vertical: AppTheme.paddingSmall),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.fitness_center, size: constraints.maxWidth > 600 ? 100 : 80, color: Colors.grey),
-          SizedBox(height: 16),
-          Text(
-            'Henüz rutin bulunmamaktadır.',
-            style: TextStyle(fontSize: constraints.maxWidth > 600 ? 22 : 18, color: Colors.grey),
+          Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: AppTheme.paddingSmall,
+              vertical: AppTheme.paddingSmall,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  title,
+                  style: isWideScreen ? AppTheme.headingMedium : AppTheme.headingSmall,
+                ),
+                if (showAllButton)
+                  TextButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => RoutinesPage(userId: widget.userId),
+                        ),
+                      );
+                    },
+                    icon: Text(
+                      'Hepsini Gör',
+                      style: AppTheme.bodyMedium.copyWith(
+                        color: AppTheme.primaryRed,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    label: Icon(
+                      Icons.arrow_forward_ios,
+                      size: 16,
+                      color: AppTheme.primaryRed,
+                    ),
+                  ),
+              ],
+            ),
           ),
-          ElevatedButton(
-            child: Text('Rutin Ekle'),
-            onPressed: () {
-              // Rutin ekleme sayfasına yönlendir
-            },
+          SizedBox(
+            height: isWideScreen ? 320 : 270,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              padding: EdgeInsets.symmetric(horizontal: AppTheme.paddingSmall),
+              itemCount: routines.length,
+              itemBuilder: (context, index) {
+                return SizedBox(
+                  width: isWideScreen ? 300 : 250,
+                  child: _buildRoutineCard(routines[index]),
+                );
+              },
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildRoutineList(String title, List<Routines> routines, BoxConstraints constraints, {bool showAllButton = false}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                title,
-                style: TextStyle(fontSize: constraints.maxWidth > 600 ? 24 : 20, fontWeight: FontWeight.bold),
-              ),
-              if (showAllButton)
-                TextButton(
-                  onPressed: () {
-                    // Navigate to routines_list_page
-                    // Navigator.push(context, MaterialPageRoute(builder: (context) => RoutinesListPage()));
-                  },
-                  child: Text('Hepsini Gör'),
-                ),
-            ],
+  Widget _buildEmptyRoutinesMessage(BoxConstraints constraints) {
+    final isWideScreen = constraints.maxWidth > AppTheme.tabletBreakpoint;
+
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.fitness_center, size: isWideScreen ? 100 : 80, color: AppTheme.primaryRed),
+          SizedBox(height: AppTheme.paddingMedium),
+          Text(
+            'Henüz rutin bulunmamaktadır.',
+            style: isWideScreen ? AppTheme.headingMedium : AppTheme.headingSmall,
           ),
-        ),
-        SizedBox(
-          height: constraints.maxWidth > 600 ? 320 : 270,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: routines.length,
-            itemBuilder: (context, index) {
-              return SizedBox(
-                width: constraints.maxWidth > 600 ? 300 : 250,
-                child: _buildRoutineCard(routines[index]),
-              );
+          SizedBox(height: AppTheme.paddingMedium),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryRed,
+              padding: EdgeInsets.symmetric(horizontal: AppTheme.paddingMedium, vertical: AppTheme.paddingSmall),
+            ),
+            onPressed: () {
+              // Rutin ekleme sayfasına yönlendir
             },
+            child: Text('Rutin Ekle'),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
+
   Widget _buildRoutineCard(Routines routine) {
     return Card(
-      margin: EdgeInsets.all(8),
+      margin: EdgeInsets.all(AppTheme.paddingSmall),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
+      ),
+      color: AppTheme.cardBackground,
       child: RoutineCard(
         key: ValueKey(routine.id),
         routine: routine,
@@ -342,12 +460,14 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  List<Routines> _getRandomRoutines(List<Routines> routines) {
+  List<Routines> _getRandomRoutines(List<dynamic> routines) {
     if (_randomRoutines.isEmpty) {
       if (routines.isEmpty) return [];
+
       final randomRoutines = List<Routines>.from(routines);
       randomRoutines.shuffle();
-      _randomRoutines = randomRoutines.take(5).toList();
+      _randomRoutines = randomRoutines.take(6).toList();
+      return _randomRoutines.cast<Routines>();
     }
     return _randomRoutines.cast<Routines>();
   }

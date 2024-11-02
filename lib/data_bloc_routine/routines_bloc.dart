@@ -66,13 +66,11 @@ abstract class RoutinesState extends Equatable {
 }
 
 class RoutinesInitial extends RoutinesState {
-  const RoutinesInitial({required String userId, required RoutineRepository repository})
-      : super(userId: userId, repository: repository);
+  const RoutinesInitial({required super.userId, required super.repository});
 }
 
 class RoutinesLoading extends RoutinesState {
-  const RoutinesLoading({required String userId, required RoutineRepository repository})
-      : super(userId: userId, repository: repository);
+  const RoutinesLoading({required super.userId, required super.repository});
 }
 
 class RoutinesLoaded extends RoutinesState {
@@ -80,21 +78,28 @@ class RoutinesLoaded extends RoutinesState {
 
 
   const RoutinesLoaded({
-    required String userId,
-    required RoutineRepository repository,
+    required super.userId,
+    required super.repository,
     required this.routines,
 
-  }) : super(userId: userId, repository: repository);
+  });
 
   @override
-  List<Object> get props => [userId, repository, routines, ];
+  List<Object> get props => [userId, repository, routines];
+
+  RoutinesLoaded copyWith({List<Routines>? routines}) {
+    return RoutinesLoaded(
+      routines: routines ?? this.routines,
+      userId: userId,
+      repository: repository,
+    );
+  }
 }
 
 class RoutinesError extends RoutinesState {
   final String message;
 
-  const RoutinesError({required String userId, required RoutineRepository repository, required this.message})
-      : super(userId: userId, repository: repository);
+  const RoutinesError({required super.userId, required super.repository, required this.message});
 
   @override
   List<Object> get props => [userId, repository, message];
@@ -106,12 +111,12 @@ class RoutineExercisesLoaded extends RoutinesState {
   final List<Routines> routines; // Eklendi
 
   const RoutineExercisesLoaded({
-    required String userId,
-    required RoutineRepository repository,
+    required super.userId,
+    required super.repository,
     required this.routine,
     required this.exerciseListByBodyPart,
     this.routines = const [], // Varsayılan değer
-  }) : super(userId: userId, repository: repository);
+  });
 
   @override
   List<Object> get props => [userId, repository, routine, exerciseListByBodyPart, routines];

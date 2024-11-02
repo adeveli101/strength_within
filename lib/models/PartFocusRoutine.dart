@@ -15,7 +15,7 @@ class Parts {
   int? userProgress;
   DateTime? lastUsedDate;
   bool? userRecommended;
-  final List<dynamic> exerciseIds;
+  final List<int> exerciseIds;
 
   Parts({
     required this.id,
@@ -32,8 +32,9 @@ class Parts {
     required this.exerciseIds,
   });
   factory Parts.fromMap(Map<String, dynamic> map, List<dynamic> exerciseIds) {
-    print("Creating Parts object from map: $map"); // Hata ayıklama için eklendi
+    print("Creating Parts object from map: $map"); // Hata ayıklama için
     final id = map['id'] as int?;
+
     if (id == null) {
       throw ArgumentError('Invalid part id: null');
     }
@@ -50,7 +51,7 @@ class Parts {
       userProgress: map['userProgress'] as int?,
       lastUsedDate: map['lastUsedDate'] != null ? DateTime.parse(map['lastUsedDate'] as String) : null,
       userRecommended: (map['userRecommended'] as int?) == 1,
-      exerciseIds: exerciseIds,
+      exerciseIds: exerciseIds.map((e) => int.parse(e.toString())).toList(),
     );
   }
 
@@ -89,7 +90,7 @@ class Parts {
     int? userProgress,
     DateTime? lastUsedDate,
     bool? userRecommended,
-    List<dynamic>? exerciseIds,
+    List<int>? exerciseIds,
   }) {
     return Parts(
       id: id ?? this.id,
@@ -108,8 +109,10 @@ class Parts {
   }
 
   List<int> get safeExerciseIds {
-    return exerciseIds.whereType<int>().toList();
-  }
+    return exerciseIds.whereType<int>().toList();   }
+
+
+
   @override
   String toString() {
     return 'Part(id: $id, name: $name, bodyPartId: $bodyPartId,difficulty: $difficulty, setType: $setTypeString, isFavorite: $isFavorite, isCustom: $isCustom, userProgress: $userProgress, lastUsedDate: $lastUsedDate, userRecommended: $userRecommended, exerciseIds: $exerciseIds)';
