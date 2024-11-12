@@ -9,17 +9,20 @@ class PartCard extends StatefulWidget {
   final Parts part;
   final String userId;
   final VoidCallback? onTap;
+  final Function(bool)? onFavoriteChanged;
 
   const PartCard({
     super.key,
     required this.part,
     required this.userId,
     this.onTap,
+    this.onFavoriteChanged,
   });
 
   @override
   State<PartCard> createState() => _PartCardState();
 }
+
 
 class _PartCardState extends State<PartCard> {
 
@@ -95,7 +98,7 @@ class _PartCardState extends State<PartCard> {
         const SizedBox(height: 4),
         _buildInfoRow(
           Icons.repeat,
-          'Set Tipi: ${widget.part.setType}',
+          'Set Tipi: ${widget.part.setTypeString}',
         ),
         const SizedBox(height: 8),
         _buildDifficultyRow(),
@@ -202,6 +205,7 @@ class _PartCardState extends State<PartCard> {
               isFavorite: !part.isFavorite,
             ),
           );
+          widget.onFavoriteChanged?.call(!part.isFavorite);
           HapticFeedback.lightImpact();
         },
         customBorder: const CircleBorder(),
@@ -228,6 +232,7 @@ class _PartCardState extends State<PartCard> {
 
 
 
+  // ignore: unused_element
   Color _getProgressColor(int progress) {
     if (progress >= 80) return const Color(0xFF4CAF50);
     if (progress >= 60) return const Color(0xFF8BC34A);
