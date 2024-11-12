@@ -41,7 +41,7 @@ Future<void> main() async {
   await sqlProvider.initDatabase();
   final firebaseProvider = FirebaseProvider(sqlProvider);
 
-  // Repository'leri oluştur
+  // Repository'ler
   final routineRepository = RoutineRepository(sqlProvider, firebaseProvider);
   final partRepository = PartRepository(sqlProvider, firebaseProvider);
   final exerciseRepository = ExerciseRepository(sqlProvider: sqlProvider, firebaseProvider: firebaseProvider);
@@ -115,7 +115,7 @@ class App extends StatelessWidget {
         ],
       ),
       title: 'Fitness App',
-      theme: AppTheme.darkTheme, // Use the custom theme
+      theme: AppTheme.darkTheme, // custom theme
       home: MainScreen(userId: userId),
     );
   }
@@ -267,9 +267,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildBody() {
-    // SQLProvider ve FirebaseProvider örneklerini oluşturmanız gerekiyor
-    final sqlProvider = SQLProvider(); // Yerel veritabanı sağlayıcısı
-    final firebaseProvider = FirebaseProvider(sqlProvider); // Firebase sağlayıcısı
+    // SQLProvider ve FirebaseProvider örnekleri
+    final sqlProvider = SQLProvider(); // Yerel veritabanı
+    final firebaseProvider = FirebaseProvider(sqlProvider); // Firebase
 
     // RoutineRepository ve PartRepository örneklerini oluşturun
     final routineRepository = RoutineRepository(sqlProvider, firebaseProvider);
@@ -282,8 +282,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         ForYouPage(userId: widget.userId),
         LibraryPage(
           userId: widget.userId,
-          routineRepository: routineRepository, // Eksik parametre eklendi
-          partRepository: partRepository,       // Eksik parametre eklendi
+          routineRepository: routineRepository,
+          partRepository: partRepository,
         ),
       ],
     );

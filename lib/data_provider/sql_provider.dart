@@ -592,8 +592,8 @@ class SQLProvider {
           where: 'partId = ?',
           whereArgs: [id],
         );
-        final List<PartExercise> partExercises = partExerciseMaps.map((map) => PartExercise.fromMap(map)).toList();
-        return Parts.fromMap(partMaps.first, partExercises.cast<int>());
+        final List<int> exerciseIds = partExerciseMaps.map((map) => map['exerciseId'] as int).toList();
+        return Parts.fromMap(partMaps.first, exerciseIds);
       }
       return null;
     } catch (e) {
@@ -601,6 +601,7 @@ class SQLProvider {
       return null;
     }
   }
+
 
   Future<List<Parts>> getPartsByBodyPart(int bodyPartId) async {
     final db = await database;

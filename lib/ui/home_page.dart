@@ -13,6 +13,7 @@ import 'package:workout/ui/routine_ui/routine_detail.dart';
 import '../data_bloc_part/part_bloc.dart';
 import '../data_bloc_routine/routines_bloc.dart';
 import 'package:logging/logging.dart';
+import '../models/PartFocusRoutine.dart';
 import '../z.app_theme/app_theme.dart';
 import '../z.app_theme/welcome_header.dart';
 import 'list_pages/parts_page.dart';
@@ -31,20 +32,22 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
   late PartsBloc _partsBloc;
   final _logger = Logger('HomePage');
   List<Routines> _randomRoutines = [];
-  List _randomParts = [];
+  List<Parts> _randomParts = [];
 
   // AutomaticKeepAliveClientMixin için gerekli
   @override
   bool get wantKeepAlive => true;
 
   @override
+  @override
   void initState() {
     super.initState();
     _setupLogging();
     _routinesBloc = BlocProvider.of<RoutinesBloc>(context);
     _partsBloc = BlocProvider.of<PartsBloc>(context);
-    _loadAllData();
+    _loadAllData(resetRandomParts: true);
   }
+
 
   void _setupLogging() {
     hierarchicalLoggingEnabled = true;
@@ -54,15 +57,47 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
     });
   }
 
-  void _loadAllData() {
+  final List<int> _updatedPartIds = [];
+
+  void _loadAllData({bool resetRandomParts = false}) {
     _logger.info('Loading all data for user: ${widget.userId}');
     _partsBloc.add(FetchParts());
     _routinesBloc.add(FetchRoutines());
+
+    if (resetRandomParts) {
+      setState(() {
+        _randomParts = [];
+      });
+    } else if (_updatedPartIds.isNotEmpty) {
+      _reloadUpdatedParts();
+    }
+
     setState(() {
       _randomRoutines = [];
-      _randomParts = [];
     });
   }
+
+  void _reloadUpdatedParts() {
+    for (final partId in _updatedPartIds) {
+      _partsBloc.add(FetchSinglePart(partId: partId));
+    }
+    _updatedPartIds.clear();
+  }
+
+  // ignore: unused_element
+  void _updateRandomPartsFavoriteStatus(int partId, bool isFavorite) {
+    setState(() {
+      _randomParts = _randomParts.map((part) {
+        if (part.id == partId) {
+          return part.copyWith(isFavorite: isFavorite);
+        }
+        return part;
+      }).toList();
+    });
+  }
+
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -119,10 +154,7 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
       builder: (context, state) {
         if (state is PartsLoading) {
           return Center(
-            child: LoadingAnimationWidget.threeArchedCircle(
-              color: AppTheme.primaryRed,
-              size: 50,
-            ),
+
           );
         }
 
@@ -164,8 +196,7 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
     );
   }
 
-
-  Widget _buildPartList(String title, List parts, BoxConstraints constraints, {bool showAllButton = false}) {
+  Widget _buildPartList(String title, List<Parts> parts, BoxConstraints constraints, {bool showAllButton = false}) {
     final isWideScreen = constraints.maxWidth > AppTheme.tabletBreakpoint;
 
     return Container(
@@ -176,7 +207,7 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
           Padding(
             padding: EdgeInsets.symmetric(
               horizontal: AppTheme.paddingMedium,
-              vertical: AppTheme.paddingSmall,
+              vertical: AppTheme.paddingMedium,
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -228,16 +259,15 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
     );
   }
 
-  Widget _buildPartCard(dynamic part, BoxConstraints constraints) {
+  Widget _buildPartCard(Parts part, BoxConstraints constraints) {
     final isWideScreen = constraints.maxWidth > AppTheme.tabletBreakpoint;
     final cardWidth = isWideScreen ? 200.0 : 240.0;
     final cardHeight = isWideScreen ? 320.0 : 230.0;
-
     return SizedBox(
       width: cardWidth,
       height: cardHeight,
       child: Card(
-        margin: EdgeInsets.all(AppTheme.paddingSmall),
+        margin: EdgeInsets.all(AppTheme.borderRadiusMedium),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
         ),
@@ -247,23 +277,31 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
           part: part,
           userId: widget.userId,
           onTap: () => _showPartDetailBottomSheet(part.id),
+          onFavoriteChanged: (isFavorite) {
+            setState(() {
+              // Favori durumunu güncelle
+              final updatedPart = part.copyWith(isFavorite: isFavorite);
+              final index = _randomParts.indexWhere((p) => p.id == part.id);
+              if (index != -1) {
+                _randomParts[index] = updatedPart;
+              }
+            });
+          },
         ),
       ),
     );
   }
 
 
-
-  List _getRandomParts(List parts) {
-    if (_randomParts.isEmpty) {
-      final randomParts = List.from(parts);
-      randomParts.shuffle();
-      _randomParts = randomParts.take(5).toList();
+  List<Parts> _getRandomParts(List<Parts> parts) {
+    if (_randomParts.isEmpty && parts.isNotEmpty) {
+      final shuffledParts = List<Parts>.from(parts)..shuffle();
+      _randomParts = shuffledParts.take(5).toList();
     }
     return _randomParts;
   }
 
-  Future _showPartDetailBottomSheet(int partId) async {
+  Future<void> _showPartDetailBottomSheet(int partId) async {
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -273,7 +311,12 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
         userId: widget.userId,
       ),
     );
+    // Bottom sheet kapandıktan sonra verileri yeniden yükle
+    _loadAllData();
   }
+
+
+
 
   Widget _buildRoutines(BoxConstraints constraints) {
     return BlocConsumer<RoutinesBloc, RoutinesState>(
@@ -291,7 +334,7 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
       builder: (context, state) {
         if (state is RoutinesLoading) {
           return Center(
-            child: LoadingAnimationWidget.staggeredDotsWave(
+            child: LoadingAnimationWidget.newtonCradle(
               color: AppTheme.primaryRed,
               size: 50,
             ),

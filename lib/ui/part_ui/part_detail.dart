@@ -1,5 +1,6 @@
 // ignore_for_file: unused_element
 
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -9,6 +10,7 @@ import 'package:workout/ui/part_ui/part_card.dart';
 import 'package:logging/logging.dart';
 
 import '../../models/exercises.dart';
+import '../../z.app_theme/app_theme.dart';
 import '../exercises_ui/exercise_card.dart';
 import '../exercises_ui/exercise_details.dart';
 
@@ -35,6 +37,7 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
 
 
 
+  @override
   @override
   void initState() {
     super.initState();
@@ -69,12 +72,14 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
         }
         Navigator.of(context).pop();
       },
-
       child: BlocListener<PartsBloc, PartsState>(
         listener: (context, state) {
           if (state is PartsError) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.message)),
+              SnackBar(
+                content: Text(state.message),
+                backgroundColor: AppTheme.primaryRed,
+              ),
             );
           }
         },
@@ -85,29 +90,114 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
           builder: (_, controller) {
             return Container(
               decoration: BoxDecoration(
-                color: Theme.of(context).canvasColor,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                gradient: AppTheme.cardGradient,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(AppTheme.borderRadiusLarge),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.shadowColor,
+                    blurRadius: 15,
+                    offset: const Offset(0, -5),
+                  ),
+                ],
               ),
-              child: BlocBuilder<PartsBloc, PartsState>(
-                builder: (context, state) {
-                  _logger.info('PartDetailBottomSheet state: $state');
+              child: Stack(
+                children: [
+                  // Süsleme elementleri
+                  Positioned(
+                    top: -20,
+                    right: -20,
+                    child: Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        gradient: AppTheme.primaryGradient,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppTheme.primaryRed.withOpacity(0.2),
+                            blurRadius: 20,
+                            spreadRadius: -5,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Ana içerik
+                  BlocBuilder<PartsBloc, PartsState>(
+                    builder: (context, state) {
+                      _logger.info('PartDetailBottomSheet state: $state');
 
-                  if (state is PartsLoading) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
+                      if (state is PartsLoading) {
+                        return Center(
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              AppTheme.primaryRed,
+                            ),
+                          ),
+                        );
+                      }
 
-                  if (state is PartExercisesLoaded) {
-                    return _buildLoadedContent(state, controller);
-                  }
+                      if (state is PartExercisesLoaded) {
+                        return ClipRRect(
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(AppTheme.borderRadiusLarge),
+                          ),
+                          child: _buildLoadedContent(state, controller),
+                        );
+                      }
 
-                  if (state is PartsError) {
-                    return Center(child: Text('Hata: ${state.message}'));
-                  }
+                      if (state is PartsError) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.error_outline,
+                                color: AppTheme.primaryRed,
+                                size: 48,
+                              ),
+                              const SizedBox(height: AppTheme.paddingMedium),
+                              Text(
+                                'Hata: ${state.message}',
+                                style: AppTheme.bodyMedium.copyWith(
+                                  color: AppTheme.primaryRed,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        );
+                      }
 
-                  return Center(
-                    child: Text('Beklenmeyen durum: ${state.runtimeType}'),
-                  );
-                },
+                      return Center(
+                        child: Text(
+                          'Beklenmeyen durum: ${state.runtimeType}',
+                          style: AppTheme.bodyMedium,
+                        ),
+                      );
+                    },
+                  ),
+                  // Üst kısım çubuğu
+                  Positioned(
+                    top: AppTheme.paddingSmall,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.borderRadiusSmall,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             );
           },
@@ -115,6 +205,7 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
       ),
     );
   }
+
 
   Widget _buildLoadedContent(PartExercisesLoaded state, ScrollController controller) {
     return Container(
@@ -154,8 +245,8 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
                     ),
                     _buildStatItem(
                       Icons.category,
-                      'Bölge ID',
-                      state.part.id.toString(),
+                      '',
+                      state.part.name,
                     ),
                     _buildStatItem(
                       Icons.trending_up,
@@ -225,67 +316,224 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
     );
   }
 
+  String _getBodyPartName(int bodyPartId) {
+    switch (bodyPartId) {
+      case 1:
+        return 'Göğüs';
+      case 2:
+        return 'Sırt';
+      case 3:
+        return 'Bacak';
+      case 4:
+        return 'Omuz';
+      case 5:
+        return 'Kol';
+      case 6:
+        return 'Karın';
+      default:
+        return 'Bilinmeyen';
+    }
+  }
+
+
   List<Widget> _buildExerciseList(Map<String, List<Map<String, dynamic>>> exerciseListByBodyPart) {
     return exerciseListByBodyPart.entries.map((entry) {
-      return Card(
-        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        color: const Color(0xFF2C2C2C),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+      return Container(
+        margin: const EdgeInsets.symmetric(
+          horizontal: AppTheme.paddingMedium,
+          vertical: AppTheme.paddingSmall,
         ),
-        child: Theme(
-          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-          child: ExpansionTile(
-            backgroundColor: Colors.transparent,
-            collapsedBackgroundColor: Colors.transparent,
-            leading: Container(
-              padding: const EdgeInsets.all(8),
+        child: Stack(
+          children: [
+            // Ana Container
+            Container(
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                shape: BoxShape.circle,
+                gradient: AppTheme.cardGradient,
+                borderRadius: BorderRadius.circular(AppTheme.borderRadiusLarge),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.cardShadowColor,
+                    blurRadius: 15,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+                border: Border.all(
+                  color: AppTheme.primaryRed.withOpacity(0.1),
+                  width: 1,
+                ),
               ),
-              child: Icon(
-                _getBodyPartIcon(entry.key),
-                color: Colors.white,
-                size: 24,
-              ),
-            ),
-            title: Text(
-              entry.key,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            trailing: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '${entry.value.length}',
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontWeight: FontWeight.bold,
+              child: Theme(
+                data: ThemeData(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  backgroundColor: Colors.transparent,
+                  collapsedBackgroundColor: Colors.transparent,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppTheme.borderRadiusLarge),
+                  ),
+                  title: Row(
+                    children: [
+                      // İkon Container
+                      Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          gradient: AppTheme.primaryGradient,
+                          borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.primaryRed.withOpacity(0.3),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          _getBodyPartIcon(entry.key),
+                          color: Colors.white,
+                          size: 30,
+                        ),
+                      ),
+                      const SizedBox(width: AppTheme.paddingMedium),
+                      // Başlık ve Alt Başlık
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              entry.key,
+                              style: AppTheme.headingSmall,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${entry.value.length} egzersiz',
+                              style: AppTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Egzersiz Sayısı Badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppTheme.paddingSmall,
+                          vertical: AppTheme.paddingSmall / 2,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              AppTheme.primaryRed.withOpacity(0.2),
+                              AppTheme.secondaryRed.withOpacity(0.2),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
+                          border: Border.all(
+                            color: AppTheme.primaryRed.withOpacity(0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: Text(
+                          '${entry.value.length}',
+                          style: AppTheme.bodyMedium.copyWith(
+                            color: AppTheme.primaryRed,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        color: AppTheme.surfaceColor,
+                        borderRadius: const BorderRadius.only(
+                          bottomLeft: Radius.circular(AppTheme.borderRadiusLarge),
+                          bottomRight: Radius.circular(AppTheme.borderRadiusLarge),
+                        ),
+                      ),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        padding: const EdgeInsets.all(AppTheme.paddingMedium),
+                        itemCount: entry.value.length,
+                        itemBuilder: (context, index) {
+                          final exerciseMap = entry.value[index];
+                          final exerciseData = Exercises.fromMap(exerciseMap);
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: AppTheme.paddingSmall),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                gradient: AppTheme.cardGradient,
+                                borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
+                                border: Border.all(
+                                  color: AppTheme.primaryRed.withOpacity(0.1),
+                                  width: 1,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppTheme.shadowColor,
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: ExerciseCard(
+                                exercise: exerciseData,
+                                userId: widget.userId,
+                                onCompletionChanged: (isCompleted) {
+                                  _updateExerciseCompletion(
+                                    exerciseData.id,
+                                    isCompleted,
+                                  );
+                                },
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-            children: entry.value.map((exerciseMap) {
-              final exerciseData = Exercises.fromMap(exerciseMap);
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: ExerciseCard(
-                  exercise: exerciseData,
-                  userId: widget.userId,
-                  onCompletionChanged: (isCompleted) {
-                    // Firebase'e kaydetme işlemi burada yapılabilir
-                    _updateExerciseCompletion(exerciseData.id, isCompleted);
-                  },
+            // Süs Elementleri
+            Positioned(
+              top: 12,
+              right: 12,
+              child: Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryRed,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.primaryRed.withOpacity(0.5),
+                      blurRadius: 8,
+                      spreadRadius: 2,
+                    ),
+                  ],
                 ),
-              );
-            }).toList(),
-          ),
+              ),
+            ),
+            Positioned(
+              bottom: 12,
+              left: 12,
+              child: Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: AppTheme.secondaryRed,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.secondaryRed.withOpacity(0.5),
+                      blurRadius: 8,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       );
     }).toList();
@@ -302,6 +550,7 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
       'lastUpdated': FieldValue.serverTimestamp(),
     });
   }
+
 
   IconData _getBodyPartIcon(String bodyPartName) {
     switch (bodyPartName.toLowerCase()) {
@@ -321,26 +570,88 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
         return Icons.fitness_center;
     }
   }
+
   Widget _buildStatItem(IconData icon, String label, String value, {Color? color}) {
     return Expanded(
-      child: Column(
-        children: [
-          Icon(icon, color: color ?? Colors.white70, size: 24),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 12,
+      child: Container(
+        padding: const EdgeInsets.all(AppTheme.paddingMedium),
+        decoration: BoxDecoration(
+          gradient: AppTheme.cardGradient,
+          borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.cardShadowColor,
+              blurRadius: 8,
+              offset: const Offset(0, 4),
             ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(AppTheme.paddingSmall),
+              decoration: BoxDecoration(
+                gradient: AppTheme.primaryGradient,
+                borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
+              ),
+              child: Icon(
+                icon,
+                color: Colors.white,
+                size: 24,
+              ),
+            ),
+            const SizedBox(height: AppTheme.paddingSmall),
+            Text(
+              label,
+              style: AppTheme.bodySmall,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: AppTheme.headingSmall.copyWith(
+                color: color ?? Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExerciseInfo(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppTheme.paddingMedium,
+        vertical: AppTheme.paddingSmall,
+      ),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceColor,
+        borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
+        border: Border.all(
+          color: AppTheme.primaryRed.withOpacity(0.2),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.shadowColor,
+            blurRadius: 4,
+            spreadRadius: 0,
           ),
-          const SizedBox(height: 4),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 16,
+            color: AppTheme.primaryRed,
+          ),
+          const SizedBox(width: AppTheme.paddingSmall),
           Text(
-            value,
-            style: TextStyle(
-              color: color ?? Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
+            text,
+            style: AppTheme.bodySmall.copyWith(
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],
@@ -348,26 +659,6 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
     );
   }
 
-  Widget _buildExerciseInfo(IconData icon, String text) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          icon,
-          size: 14,
-          color: Colors.white70,
-        ),
-        const SizedBox(width: 4),
-        Text(
-          text,
-          style: const TextStyle(
-            fontSize: 12,
-            color: Colors.white70,
-          ),
-        ),
-      ],
-    );
-  }
 
   Color _getProgressColor(int progress) {
     if (progress >= 80) return Colors.green;
