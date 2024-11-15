@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../models/BodyPart.dart';
 import '../models/WorkoutType.dart';
-import '../models/PartFocusRoutine.dart';
+import '../models/Parts.dart';
 
 
 String mainTargetedBodyPartToStringConverter(MainTargetedBodyPart? mainTargetedBodyPart) {

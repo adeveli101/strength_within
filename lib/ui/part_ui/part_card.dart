@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../data_bloc_part/part_bloc.dart';
-import '../../models/PartFocusRoutine.dart';
+import '../../data_schedule_bloc/schedule_bloc.dart';
+import '../../models/Parts.dart';
 import '../../z.app_theme/app_theme.dart';
 
 class PartCard extends StatefulWidget {
@@ -50,20 +51,97 @@ class _PartCardState extends State<PartCard> {
             ),
           ],
         ),
-        child: Padding(
-          padding: EdgeInsets.all(AppTheme.paddingMedium),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(),
-              const Spacer(),
-              _buildInfo(),
-              _buildStartButton(),
-            ],
-          ),
+        child: Stack(
+          children: [
+            // Mevcut içerik
+            Padding(
+              padding: EdgeInsets.all(AppTheme.paddingMedium),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeader(),
+                  const Spacer(),
+                  _buildInfo(),
+                  _buildStartButton(),
+                ],
+              ),
+            ),
+
+            // Schedule göstergesi
+            Positioned(
+              top: AppTheme.paddingSmall,
+              right: AppTheme.paddingSmall,
+              child: _buildScheduleIndicator(
+                widget.userId,
+                widget.part.id.toString(),
+                'part',
+              ),
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  Widget _buildScheduleIndicator(String userId, String itemId, String type) {
+    return BlocBuilder<ScheduleBloc, ScheduleState>(
+      builder: (context, state) {
+        if (state is SchedulesLoaded) {
+          final schedules = state.schedules.where(
+                  (schedule) =>
+              schedule.itemId.toString() == itemId &&
+                  schedule.type == type
+          ).toList();
+
+          if (schedules.isEmpty) return const SizedBox.shrink();
+
+          return Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppTheme.paddingSmall,
+              vertical: 4,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.2),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.calendar_today,
+                  size: 14,
+                  color: Colors.white.withOpacity(0.9),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  _formatScheduleDays(schedules.first.selectedDays),
+                  style: AppTheme.bodySmall.copyWith(
+                    color: Colors.white.withOpacity(0.9),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+        return const SizedBox.shrink();
+      },
+    );
+  }
+
+  // Gün formatlaması için yardımcı metod
+  String _formatScheduleDays(List<int> days) {
+    if (days.isEmpty) return '';
+
+    final dayNames = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+    if (days.length > 2) {
+      return '${days.length} gün';
+    }
+    return days.map((day) => dayNames[day - 1]).join(', ');
   }
 
 
@@ -105,6 +183,7 @@ class _PartCardState extends State<PartCard> {
       ],
     );
   }
+
 
   Widget _buildInfoRow(IconData icon, String text) {
     return Row(
@@ -162,7 +241,7 @@ class _PartCardState extends State<PartCard> {
     return Container(
       width: double.infinity,
       margin: EdgeInsets.only(top: AppTheme.paddingSmall),
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 5),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.2),
         borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
@@ -175,7 +254,7 @@ class _PartCardState extends State<PartCard> {
             color: Colors.white,
             size: 20,
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
           Text(
             'Başlamak için hazır',
             style: AppTheme.bodySmall.copyWith(
@@ -261,6 +340,9 @@ class _PartCardState extends State<PartCard> {
         return 'Bilinmeyen';
     }
   }
+
+
+
 
 
 }

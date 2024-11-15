@@ -3,11 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/BodyPart.dart';
-import '../models/PartFocusRoutineExercises.dart';
+import '../models/PartExercises.dart';
 import '../models/RoutineExercises.dart';
 import '../models/WorkoutType.dart';
 import '../models/exercises.dart';
-import '../models/PartFocusRoutine.dart';
+import '../models/Parts.dart';
+import '../models/part_frequency.dart';
+import '../models/routine_frequency.dart';
 import '../models/routines.dart';
 import 'package:logging/logging.dart';
 
@@ -88,7 +90,33 @@ class SQLProvider {
     _logger.info("Veritabanı yeniden yüklendi.");
   }
 
+  Future<RoutineFrequency?> getRoutineFrequency(int routineId) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'RoutineFrequency',
+      where: 'routineId = ?',
+      whereArgs: [routineId],
+    );
 
+    if (maps.isNotEmpty) {
+      return RoutineFrequency.fromMap(maps.first);
+    }
+    return null;
+  }
+
+  Future<PartFrequency?> getPartFrequency(int partId) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'PartFrequency',
+      where: 'partId = ?',
+      whereArgs: [partId],
+    );
+
+    if (maps.isNotEmpty) {
+      return PartFrequency.fromMap(maps.first);
+    }
+    return null;
+  }
 
   Future<List<BodyParts>> getAllBodyParts() async {
     try {

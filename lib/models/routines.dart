@@ -102,11 +102,12 @@ class Routines {
       userProgress: userProgress ?? this.userProgress,
       lastUsedDate: lastUsedDate ?? this.lastUsedDate,
       userRecommended: userRecommended ?? this.userRecommended,
-      routineExercises: routineExercises ?? exerciseIds.map(
-              (id) => RoutineExercises(
-            id: 0,
+      routineExercises: routineExercises ?? exerciseIds.asMap().entries.map(
+              (entry) => RoutineExercises(
+            id: DateTime.now().millisecondsSinceEpoch + entry.key, // Geçici unique ID
             routineId: this.id,
-            exerciseId: id,
+            exerciseId: entry.value,
+            orderIndex: entry.key + 1,
           )
       ).toList(),
     );

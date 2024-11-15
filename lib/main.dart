@@ -3,8 +3,6 @@ import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
-
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -26,10 +24,17 @@ import 'data_bloc_part/part_bloc.dart';
 import 'data_bloc_routine/RoutineRepository.dart';
 import 'data_bloc_routine/routines_bloc.dart';
 import 'data_exercise_bloc/ExerciseRepository.dart';
+import 'data_schedule_bloc/schedule_bloc.dart';
+import 'data_schedule_bloc/schedule_repository.dart';
 import 'firebase_options.dart';
+import 'package:logging/logging.dart';
+
+final _logger = Logger('Main');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Firebase başlatma
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
@@ -37,15 +42,20 @@ Future<void> main() async {
     androidProvider: AndroidProvider.playIntegrity,
   );
 
+  // Providers
   final sqlProvider = SQLProvider();
   await sqlProvider.initDatabase();
-  final firebaseProvider = FirebaseProvider(sqlProvider);
+  final firebaseProvider = FirebaseProvider();
 
-  // Repository'ler
+  // Repositories
   final routineRepository = RoutineRepository(sqlProvider, firebaseProvider);
   final partRepository = PartRepository(sqlProvider, firebaseProvider);
-  final exerciseRepository = ExerciseRepository(sqlProvider: sqlProvider, firebaseProvider: firebaseProvider);
-
+  final exerciseRepository = ExerciseRepository(
+    sqlProvider: sqlProvider,
+    firebaseProvider: firebaseProvider,
+  );
+  final scheduleRepository = ScheduleRepository(firebaseProvider, sqlProvider);
+  // Anonim giriş
   String? userId = await firebaseProvider.signInAnonymously();
 
   if (userId != null) {
@@ -61,27 +71,46 @@ Future<void> main() async {
           RepositoryProvider<ExerciseRepository>(
             create: (context) => exerciseRepository,
           ),
+          RepositoryProvider<ScheduleRepository>(
+            create: (context) => scheduleRepository,
+          ),
+          RepositoryProvider<PartRepository>(
+            create: (context) => partRepository,
+          ),
+          RepositoryProvider<RoutineRepository>(
+            create: (context) => routineRepository,
+          ),
         ],
         child: MultiBlocProvider(
           providers: [
             BlocProvider(
               create: (context) => RoutinesBloc(
                 repository: routineRepository,
+                scheduleRepository: scheduleRepository,
                 userId: userId,
               ),
             ),
             BlocProvider(
               create: (context) => PartsBloc(
                 repository: partRepository,
+                scheduleRepository: scheduleRepository,
                 userId: userId,
               )..add(FetchParts()),
+            ),
+            // main.dart içinde
+
+            BlocProvider(
+              create: (context) => ScheduleBloc(
+                repository: scheduleRepository, // scheduleRepository yerine repository
+                userId: userId,
+              ),
             ),
             BlocProvider(
               create: (context) => ForYouBloc(
                 partRepository: partRepository,
                 routineRepository: routineRepository,
+                scheduleRepository: scheduleRepository,
                 userId: userId,
-
               ),
             ),
             BlocProvider(
@@ -93,7 +122,17 @@ Future<void> main() async {
       ),
     );
   } else {
-    print('Anonim giriş başarısız oldu.');
+    _logger.severe('Anonim giriş başarısız oldu.');
+    // Hata durumunda basit bir hata ekranı göster
+    runApp(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Text('Giriş yapılamadı. Lütfen tekrar deneyin.'),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -267,13 +306,14 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildBody() {
-    // SQLProvider ve FirebaseProvider örnekleri
-    final sqlProvider = SQLProvider(); // Yerel veritabanı
-    final firebaseProvider = FirebaseProvider(sqlProvider); // Firebase
+    // Providers
+    final sqlProvider = SQLProvider();
+    final firebaseProvider = FirebaseProvider();
 
-    // RoutineRepository ve PartRepository örneklerini oluşturun
+    // Repositories
     final routineRepository = RoutineRepository(sqlProvider, firebaseProvider);
     final partRepository = PartRepository(sqlProvider, firebaseProvider);
+    final scheduleRepository = ScheduleRepository(firebaseProvider, sqlProvider);
 
     return IndexedStack(
       index: _currentIndex,
@@ -284,11 +324,11 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           userId: widget.userId,
           routineRepository: routineRepository,
           partRepository: partRepository,
+          scheduleRepository: scheduleRepository, // Eklendi
         ),
       ],
     );
   }
-
 
   Widget _buildBottomNav() {
     return Container(
