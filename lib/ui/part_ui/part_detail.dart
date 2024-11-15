@@ -5,10 +5,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:workout/data_bloc_part/part_bloc.dart';
-import 'package:workout/models/PartFocusRoutine.dart';
+import 'package:workout/models/Parts.dart';
 import 'package:workout/ui/part_ui/part_card.dart';
 import 'package:logging/logging.dart';
 
+import '../../data_schedule_bloc/schedule_bloc.dart';
+import '../../firebase_class/user_schedule.dart';
 import '../../models/exercises.dart';
 import '../../z.app_theme/app_theme.dart';
 import '../exercises_ui/exercise_card.dart';
@@ -33,16 +35,27 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
 
   late PartsBloc _partsBloc;
   final _logger = Logger('PartDetailBottomSheet');
+  int _selectedDay = 1;
 
 
 
 
-  @override
   @override
   void initState() {
     super.initState();
     _partsBloc = context.read<PartsBloc>();
     _logger.info("PartDetailBottomSheet initialized with partId: ${widget.partId}");
+
+    // Schedule verilerini yükle
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        final scheduleBloc = context.read<ScheduleBloc>();
+        scheduleBloc.add(LoadUserSchedules(widget.userId)); // Event'i doğru şekilde gönder
+        _logger.info("Schedule verileri yükleniyor: ${widget.userId}");
+      } catch (e) {
+        _logger.severe("Schedule bloc erişim hatası", e);
+      }
+    });
 
     if (widget.partId > 0) {
       _partsBloc.add(FetchPartExercises(partId: widget.partId));
@@ -57,9 +70,9 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (bool didPop, dynamic result) async {
@@ -173,7 +186,7 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
 
                       return Center(
                         child: Text(
-                          'Beklenmeyen durum: ${state.runtimeType}',
+                          'Beklenmeyen durum: ${state.runtimeType }',
                           style: AppTheme.bodyMedium,
                         ),
                       );
@@ -209,7 +222,7 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
 
   Widget _buildLoadedContent(PartExercisesLoaded state, ScrollController controller) {
     return Container(
-      color: const Color(0xFF1E1E1E), // Koyu arka plan
+      color: const Color(0xFF1E1E1E),
       child: ListView(
         controller: controller,
         padding: EdgeInsets.zero,
@@ -217,9 +230,9 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
           // Üst Bilgi Bölümü
           Container(
             padding: const EdgeInsets.all(20.0),
-            decoration: BoxDecoration(
-              color: const Color(0xFF2C2C2C),
-              borderRadius: const BorderRadius.only(
+            decoration: const BoxDecoration(
+              color: Color(0xFF2C2C2C),
+              borderRadius: BorderRadius.only(
                 bottomLeft: Radius.circular(30),
                 bottomRight: Radius.circular(30),
               ),
@@ -227,13 +240,69 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  state.part.name,
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
+                // Başlık ve Schedule Butonu
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      state.part.name,
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    BlocBuilder<ScheduleBloc, ScheduleState>(
+                      builder: (context, scheduleState) {
+                        bool hasSchedule = false;
+                        if (scheduleState is SchedulesLoaded) {
+                          hasSchedule = scheduleState.schedules.any(
+                                  (schedule) =>
+                              schedule.itemId == state.part.id &&
+                                  schedule.type == 'part'
+                          );
+                        }
+                        return InkWell(
+                          onTap: () => _showScheduleModal(context, state.part,state.exerciseListByBodyPart,),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: hasSchedule
+                                  ? AppTheme.primaryRed
+                                  : Colors.white.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.calendar_today,
+                                  size: 16,
+                                  color: hasSchedule
+                                      ? Colors.white
+                                      : Colors.white70,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  hasSchedule ? 'Programı Düzenle' : 'Programa Ekle',
+                                  style: TextStyle(
+                                    color: hasSchedule
+                                        ? Colors.white
+                                        : Colors.white70,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 16),
                 Row(
@@ -315,7 +384,6 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
       ),
     );
   }
-
   String _getBodyPartName(int bodyPartId) {
     switch (bodyPartId) {
       case 1:
@@ -333,6 +401,189 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
       default:
         return 'Bilinmeyen';
     }
+  }
+
+  void _showScheduleModal(BuildContext context, Parts part, Map<String, List<Map<String, dynamic>>> exerciseListByBodyPart) {
+    try {
+      // Egzersizleri günlere böl
+      final dailyExercises = _groupExercisesByDay(exerciseListByBodyPart);
+
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.transparent,
+        isScrollControlled: true,
+        builder: (context) => StatefulBuilder(
+          builder: (context, setState) => Container(
+            height: MediaQuery.of(context).size.height * 0.8,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E1E1E),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(30),
+              ),
+            ),
+            child: Column(
+              children: [
+                // Modal başlığı
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Antrenman Programı',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.close, color: Colors.white),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(color: Colors.white24),
+
+                // Gün seçici
+                SizedBox(
+                  height: 50,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    itemCount: 3,
+                    itemBuilder: (context, index) {
+                      final day = index + 1;
+                      return Container(
+                        margin: const EdgeInsets.only(right: 12),
+                        child: ElevatedButton(
+                          onPressed: () => setState(() => _selectedDay = day),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _selectedDay == day
+                                ? AppTheme.primaryRed
+                                : Colors.white.withOpacity(0.1),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(25),
+                            ),
+                          ),
+                          child: Text('Day $day'),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Seçili günün egzersiz listesi
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(20),
+                    itemCount: dailyExercises[_selectedDay]?.length ?? 0,
+                    itemBuilder: (context, index) {
+                      final exercise = dailyExercises[_selectedDay]![index];
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryRed.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.fitness_center,
+                                color: AppTheme.primaryRed,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    exercise['name'],
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${exercise['defaultSets']} set × ${exercise['defaultReps']} tekrar',
+                                    style: TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryRed.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                '${exercise['defaultWeight']}kg',
+                                style: TextStyle(
+                                  color: AppTheme.primaryRed,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      _logger.severe('Modal açılırken hata oluştu', e);
+    }
+  }
+
+  // Egzersizleri günlere bölme yardımcı metodu
+  Map<int, List<Map<String, dynamic>>> _groupExercisesByDay(
+      Map<String, List<Map<String, dynamic>>> exerciseListByBodyPart
+      ) {
+    final allExercises = exerciseListByBodyPart.values
+        .expand((exercises) => exercises)
+        .toList();
+
+    final exercisesPerDay = (allExercises.length / 3).ceil();
+    Map<int, List<Map<String, dynamic>>> dailyExercises = {};
+
+    for (int day = 1; day <= 3; day++) {
+      final startIndex = (day - 1) * exercisesPerDay;
+      var endIndex = startIndex + exercisesPerDay;
+
+      if (endIndex > allExercises.length) {
+        endIndex = allExercises.length;
+      }
+
+      dailyExercises[day] = allExercises.sublist(startIndex, endIndex);
+    }
+
+    return dailyExercises;
   }
 
 

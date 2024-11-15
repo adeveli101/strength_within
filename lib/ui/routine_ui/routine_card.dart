@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../data_bloc_routine/routines_bloc.dart';
+import '../../data_schedule_bloc/schedule_bloc.dart';
 import '../../models/routines.dart';
 
 class RoutineCard extends StatefulWidget {
@@ -50,7 +51,7 @@ class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStat
         }
       },
       child: Card(
-        margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),
@@ -65,31 +66,102 @@ class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStat
             }
           },
           borderRadius: BorderRadius.circular(12),
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  _getRoutineColor(),
-                  _getRoutineColor().withOpacity(0.8),
-                ],
+          child: Stack(  // Column yerine Stack kullanıyoruz
+            children: [
+              // Ana içerik
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      _getRoutineColor(),
+                      _getRoutineColor().withOpacity(0.8),
+                    ],
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildHeader(),
+                    _buildBody(),
+                    _buildFooter(),
+                  ],
+                ),
               ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeader(),
-                _buildBody(),
-                _buildFooter(),
-              ],
-            ),
+
+              // Schedule göstergesi
+              Positioned(
+                top: 8,
+                right: 8,
+                child: BlocBuilder<ScheduleBloc, ScheduleState>(
+                  builder: (context, state) {
+                    if (state is SchedulesLoaded) {
+                      final schedules = state.schedules.where(
+                              (schedule) =>
+                          schedule.itemId == widget.routine.id &&
+                              schedule.type == 'routine'
+                      ).toList();
+
+                      if (schedules.isEmpty) return const SizedBox.shrink();
+
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.2),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.calendar_today,
+                              size: 14,
+                              color: Colors.white.withOpacity(0.9),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _formatScheduleDays(schedules.first.selectedDays),
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.9),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
+
+
+  String _formatScheduleDays(List<int> days) {
+    if (days.isEmpty) return '';
+
+    final dayNames = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+    if (days.length > 2) {
+      return '${days.length} gün';
+    }
+    return days.map((day) => dayNames[day - 1]).join(', ');
+  }
+
 
   Color _getRoutineColor() {
     // Egzersiz türüne göre renk belirleme

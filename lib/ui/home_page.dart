@@ -13,7 +13,7 @@ import 'package:workout/ui/routine_ui/routine_detail.dart';
 import '../data_bloc_part/part_bloc.dart';
 import '../data_bloc_routine/routines_bloc.dart';
 import 'package:logging/logging.dart';
-import '../models/PartFocusRoutine.dart';
+import '../models/Parts.dart';
 import '../z.app_theme/app_theme.dart';
 import '../z.app_theme/welcome_header.dart';
 import 'list_pages/parts_page.dart';

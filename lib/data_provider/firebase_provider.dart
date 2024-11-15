@@ -4,28 +4,19 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:workout/data_provider/sql_provider.dart';
-import 'dart:convert';
-import '../firebase_class/RoutineHistory.dart';
-import '../firebase_class/RoutineWeekday.dart';
-import '../firebase_class/firebase_parts.dart';
-import '../firebase_class/firebase_routines.dart';
-import '../firebase_class/users.dart';
 import 'package:logging/logging.dart';
-
-import '../models/RoutineExercises.dart';
-
-final _logger = Logger('FirebaseProvider');
+import 'dart:convert';
+import '../firebase_class/firebase_routines.dart';
+import '../firebase_class/firebase_parts.dart';
+import '../firebase_class/RoutineHistory.dart';
+import '../firebase_class/user_schedule.dart';
 
 class FirebaseProvider {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final SQLProvider sqlProvider;  // SQLProvider'ı constructor'da alıyorum
+  final Logger _logger = Logger('FirebaseProvider');
 
-  FirebaseProvider(this.sqlProvider);
-
-
-  // Anonim giriş ve cihaz ID oluşturma metodları
+  // MARK: - Auth Operations
   Future<String?> signInAnonymously() async {
     try {
       String deviceId = await _getDeviceId();
@@ -39,7 +30,6 @@ class FirebaseProvider {
 
       if (userQuery.docs.isNotEmpty) {
         String existingUserId = userQuery.docs.first.id;
-        _logger.info('Existing user found: $existingUserId');
         await _auth.signInAnonymously();
         await _firestore.collection('users').doc(existingUserId).update({
           'lastLoginAt': FieldValue.serverTimestamp(),
@@ -54,13 +44,12 @@ class FirebaseProvider {
             'createdAt': FieldValue.serverTimestamp(),
             'lastLoginAt': FieldValue.serverTimestamp(),
           });
-          _logger.info('New user created: ${user.uid}');
           return user.uid;
         }
       }
       return null;
     } catch (e) {
-      _logger.severe('Anonim giriş hatası: $e');
+      _logger.severe('Auth error', e);
       return null;
     }
   }
@@ -68,6 +57,7 @@ class FirebaseProvider {
   Future<String> _getDeviceId() async {
     final DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
     String deviceData = '';
+
     if (Platform.isAndroid) {
       final androidInfo = await deviceInfo.androidInfo;
       deviceData = '${androidInfo.model}-${androidInfo.id}';
@@ -75,518 +65,200 @@ class FirebaseProvider {
       final iosInfo = await deviceInfo.iosInfo;
       deviceData = '${iosInfo.model}-${iosInfo.identifierForVendor ?? ''}';
     }
+
     return sha256.convert(utf8.encode(deviceData)).toString();
   }
 
-  Future<String> getDeviceId() async {
-    return _getDeviceId();
-  }
-
-  // Users sınıfı için metodlar
-  Future<Users?> getUser(String userId) async {
+  // MARK: - Schedule Operations
+  Future<void> addUserSchedule(UserSchedule schedule) async {
     try {
-      final doc = await _firestore.collection('users').doc(userId).get();
-      if (doc.exists) {
-        final routines = await getUserRoutines(userId);
-        final routineHistory = await getUserRoutineHistory(userId);
-        final routineWeekdays = await getUserRoutineWeekdays(userId);
-        return Users.fromFirestore(doc,
-            routines: routines,
-            routineHistory: routineHistory,
-            routineWeekdays: routineWeekdays);
-      }
-      return null;
-    } catch (e) {
-      _logger.severe('Kullanıcı bilgilerini getirme hatası: $e');
-      return null;
-    }
-  }
+      await _firestore
+          .collection('users')
+          .doc(schedule.userId)
+          .collection('schedules')
+          .doc(schedule.id)
+          .set(schedule.toFirestore());
 
-  Future<void> updateUser(String userId, Map<String, dynamic> userData) async {
-    try {
-      await _firestore.collection('users').doc(userId).update(userData);
-      _logger.info('Kullanıcı başarıyla güncellendi: $userId');
+      _logger.info('Schedule added: ${schedule.id}');
     } catch (e) {
-      _logger.severe('Kullanıcı güncelleme hatası: $e');
+      _logger.severe('Error adding schedule', e);
       rethrow;
     }
   }
 
-  // FirebaseRoutines sınıfı için metodlar
-  Future<List<FirebaseRoutines>> getUserRoutines(String userId) async {
+  Future<void> updateUserSchedule(UserSchedule schedule) async {
+    try {
+      await _firestore
+          .collection('users')
+          .doc(schedule.userId)
+          .collection('schedules')
+          .doc(schedule.id)
+          .update(schedule.toFirestore());
+
+      _logger.info('Schedule updated: ${schedule.id}');
+    } catch (e) {
+      _logger.severe('Error updating schedule', e);
+      rethrow;
+    }
+  }
+
+  Future<void> deleteUserSchedule(String userId, String scheduleId) async {
+    try {
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('schedules')
+          .doc(scheduleId)
+          .delete();
+
+      _logger.info('Schedule deleted: $scheduleId');
+    } catch (e) {
+      _logger.severe('Error deleting schedule', e);
+      rethrow;
+    }
+  }
+  // MARK: - Schedule Operations
+  Future<List<UserSchedule>> getUserSchedules(String userId) async {
     try {
       final snapshot = await _firestore
           .collection('users')
           .doc(userId)
-          .collection('routines')
+          .collection('schedules')
+          .where('isActive', isEqualTo: true)
           .get();
-      List<FirebaseRoutines> routines =
-      snapshot.docs.map((doc) => FirebaseRoutines.fromFirestore(doc)).toList();
-      _logger.info('Kullanıcı rutinleri başarıyla getirildi. Toplam: ${routines.length}');
-      return routines;
+
+      return snapshot.docs
+          .map((doc) => UserSchedule.fromFirestore(doc))
+          .toList();
     } catch (e) {
-      _logger.severe('Kullanıcı rutinlerini getirme hatası: $e');
+      _logger.severe('Error getting user schedules', e);
       return [];
     }
   }
 
-  Future<FirebaseRoutines?> getUserRoutine(String userId, String routineId) async {
+  // MARK: - Progress Operations
+  Future<void> updateUserProgress(
+      String userId,
+      String itemId,
+      String type,
+      int progress,
+      ) async {
     try {
+      final collectionName = type == 'part' ? 'parts' : 'routines';
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection(collectionName)
+          .doc(itemId)
+          .update({
+        'userProgress': progress,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      });
+
+      _logger.info('Progress updated for $type: $itemId');
+    } catch (e) {
+      _logger.severe('Error updating progress', e);
+      rethrow;
+    }
+  }
+
+  Future<void> updateLastUsedDate(
+      String userId,
+      String itemId,
+      String type,
+      ) async {
+    try {
+      final collectionName = type == 'part' ? 'parts' : 'routines';
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection(collectionName)
+          .doc(itemId)
+          .update({
+        'lastUsedDate': FieldValue.serverTimestamp(),
+      });
+
+      _logger.info('Last used date updated for $type: $itemId');
+    } catch (e) {
+      _logger.severe('Error updating last used date', e);
+      rethrow;
+    }
+  }
+
+  // MARK: - Favorite Operations
+  Future<void> toggleFavorite(
+      String userId,
+      String itemId,
+      String type,
+      bool isFavorite,
+      ) async {
+    try {
+      final collectionName = type == 'part' ? 'parts' : 'routines';
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection(collectionName)
+          .doc(itemId)
+          .update({
+        'isFavorite': isFavorite,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      });
+
+      _logger.info('Favorite status updated for $type: $itemId');
+    } catch (e) {
+      _logger.severe('Error updating favorite status', e);
+      rethrow;
+    }
+  }
+
+  Future<bool> isFavorite(
+      String userId,
+      String itemId,
+      String type,
+      ) async {
+    try {
+      final collectionName = type == 'part' ? 'parts' : 'routines';
       final doc = await _firestore
           .collection('users')
           .doc(userId)
-          .collection('routines')
-          .doc(routineId)
-          .get();
-      if (doc.exists) {
-        return FirebaseRoutines.fromFirestore(doc);
-      }
-      return null;
-    } catch (e) {
-      _logger.severe('Rutin detaylarını getirme hatası: $e');
-      return null;
-    }
-  }
-
-  Future<void> addOrUpdateUserRoutine(String userId, FirebaseRoutines routine) async {
-    try {
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('routines')
-          .doc(routine.id)
-          .set(routine.toFirestore());
-      _logger.info('Rutin başarıyla eklendi/güncellendi: ${routine.id}');
-    } catch (e) {
-      _logger.severe('Rutin ekleme/güncelleme hatası: $e');
-      rethrow;
-    }
-  }
-
-  Future<void> deleteUserRoutine(String userId, String routineId) async {
-    try {
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('routines')
-          .doc(routineId)
-          .delete();
-      _logger.info('Rutin başarıyla silindi: $routineId');
-    } catch (e) {
-      _logger.severe('Rutin silme hatası: $e');
-      rethrow;
-    }
-  }
-
-  Future<void> toggleRoutineFavorite(String userId, String routineId, bool isFavorite) async {
-    try {
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('routines')
-          .doc(routineId)
-          .update({'isFavorite': isFavorite});
-      _logger.info('Rutin favori durumu güncellendi: $isFavorite');
-    } catch (e) {
-      _logger.severe('Rutin favori durumu güncelleme hatası: $e');
-      rethrow;
-    }
-  }
-
-  // FirebaseParts sınıfı için metodlar
-  Future<List<FirebaseParts>> getUserParts(String userId) async {
-    try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection('parts')
+          .collection(collectionName)
+          .doc(itemId)
           .get();
 
-      return snapshot.docs.map((doc) {
-        try {
-          return FirebaseParts.fromFirestore(doc);
-        } catch (e) {
-          debugPrint('Error parsing document ${doc.id}: $e');
-          // Hatalı dökümanı atlayıp devam et
-          return null;
-        }
-      }).whereType<FirebaseParts>().toList();
+      return doc.exists && doc.data()?['isFavorite'] == true;
     } catch (e) {
-      debugPrint('Error getting user parts: $e');
-      return [];
-    }
-  }
-
-
-
-
-
-  Future<FirebaseParts?> getUserPart(String userId, String partId) async {
-    try {
-      final doc = await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('parts')
-          .doc(partId)
-          .get();
-      return doc.exists ? FirebaseParts.fromFirestore(doc) : null;
-    } catch (e) {
-      _logger.severe('Kullanıcı parçasını getirme hatası: $e');
-      return null;
-    }
-  }
-
-  Future<void> addOrUpdateUserPart(String userId, FirebaseParts part) async {
-    try {
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('parts')
-          .doc(part.id)
-          .set(part.toFirestore());
-      _logger.info('Parça başarıyla eklendi/güncellendi: ${part.id}');
-    } catch (e) {
-      _logger.severe('Parça ekleme/güncelleme hatası: $e');
-      rethrow;
-    }
-  }
-
-  Future<void> deleteUserPart(String userId, String partId) async {
-    try {
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('parts')
-          .doc(partId)
-          .delete();
-      _logger.info('Parça başarıyla silindi: $partId');
-    } catch (e) {
-      _logger.severe('Parça silme hatası: $e');
-      rethrow;
-    }
-  }
-
-  Future<bool> isPartFavorite(String userId, String partId) async {
-    try {
-      final docSnapshot = await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('userParts')
-          .doc(partId)
-          .get();
-      return docSnapshot.exists && docSnapshot.data()?['isFavorite'] == true;
-    } catch (e) {
-      _logger.severe('Parçanın favori durumunu kontrol etme hatası: $e');
+      _logger.severe('Error checking favorite status', e);
       return false;
     }
   }
 
-  Future<void> togglePartFavorite(String userId, String partId, bool isFavorite) async {
-    try {
-      final docRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection('parts')
-          .doc(partId);
-
-      final docSnapshot = await docRef.get();
-      if (docSnapshot.exists) {
-        await docRef.update({
-          'isFavorite': isFavorite,
-          'lastUpdated': FieldValue.serverTimestamp(),
-        });
-      } else {
-        final part = await sqlProvider.getPartById(int.parse(partId));
-        if (part != null) {
-          await docRef.set({
-            'name': part.name,
-            'bodyPartId': part.bodyPartId,
-            'setType': part.setType.index,
-            'additionalNotes': part.additionalNotes,
-            'isFavorite': isFavorite,
-            'isCustom': false,
-            'userProgress': 0,
-            'lastUsedDate': null,
-            'userRecommended': false,
-            'exerciseIds': part.exerciseIds.map((id) => id.toString()).toList(),
-            'lastUpdated': FieldValue.serverTimestamp(),
-          });
-        }
-      }
-      debugPrint('Successfully updated favorite status for part: $partId');
-    } catch (e) {
-      debugPrint('Error toggling favorite: $e');
-      throw Exception('Favori durumu güncellenirken bir hata oluştu');
-    }
-  }
-
-
-  Future<void> syncRoutineExercises(String userId, int routineId, List<RoutineExercises> routineExercises) async {
-    try {
-      // Önce mevcut rutini al
-      final routineDoc = await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('routines')
-          .doc(routineId.toString())
-          .get();
-
-      if (!routineDoc.exists) {
-        // Eğer rutin yoksa, SQLProvider'dan bilgileri al
-        final routine = await sqlProvider.getRoutineById(routineId);
-        if (routine == null) {
-          throw Exception('Rutin bulunamadı: $routineId');
-        }
-
-        // Yeni FirebaseRoutines oluştur
-        final firebaseRoutine = FirebaseRoutines(
-          id: routineId.toString(),
-          name: routine.name,
-          description: routine.description,
-          mainTargetedBodyPartId: routine.mainTargetedBodyPartId,
-          workoutTypeId: routine.workoutTypeId,
-          exerciseIds: routineExercises.map((e) => e.exerciseId).toList(),
-        );
-
-        // Rutini Firebase'e kaydet
-        await _firestore
-            .collection('users')
-            .doc(userId)
-            .collection('routines')
-            .doc(routineId.toString())
-            .set(firebaseRoutine.toFirestore());
-
-        _logger.info('Yeni rutin Firebase\'e eklendi: $routineId');
-      } else {
-        // Mevcut rutinin exerciseIds listesini güncelle
-        await _firestore
-            .collection('users')
-            .doc(userId)
-            .collection('routines')
-            .doc(routineId.toString())
-            .update({
-          'exerciseIds': routineExercises.map((e) => e.exerciseId).toList(),
-          'lastUsedDate': Timestamp.now(),
-        });
-
-        _logger.info('Mevcut rutin güncellendi: $routineId');
-      }
-
-      _logger.info('Rutin egzersizleri başarıyla senkronize edildi');
-    } catch (e) {
-      _logger.severe('Rutin egzersizleri senkronizasyon hatası', e);
-      rethrow;
-    }
-  }
-
-  Future<void> syncRoutineExercise(String userId, RoutineExercises routineExercise) async {
-    try {
-      final routineDoc = await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('routines')
-          .doc(routineExercise.routineId.toString())
-          .get();
-
-      if (!routineDoc.exists) {
-        // Rutin yoksa oluştur
-        final routine = await sqlProvider.getRoutineById(routineExercise.routineId);
-        if (routine == null) {
-          throw Exception('Rutin bulunamadı: ${routineExercise.routineId}');
-        }
-
-        final firebaseRoutine = FirebaseRoutines(
-          id: routineExercise.routineId.toString(),
-          name: routine.name,
-          description: routine.description,
-          mainTargetedBodyPartId: routine.mainTargetedBodyPartId,
-          workoutTypeId: routine.workoutTypeId,
-          exerciseIds: [routineExercise.exerciseId],
-        );
-
-        await _firestore
-            .collection('users')
-            .doc(userId)
-            .collection('routines')
-            .doc(routineExercise.routineId.toString())
-            .set(firebaseRoutine.toFirestore());
-      } else {
-        // Mevcut rutinin exerciseIds listesini güncelle
-        FirebaseRoutines existingRoutine = FirebaseRoutines.fromFirestore(routineDoc);
-        List<dynamic> updatedExerciseIds = List.from(existingRoutine.exerciseIds);
-
-        if (!updatedExerciseIds.contains(routineExercise.exerciseId)) {
-          updatedExerciseIds.add(routineExercise.exerciseId);
-        }
-
-        await _firestore
-            .collection('users')
-            .doc(userId)
-            .collection('routines')
-            .doc(routineExercise.routineId.toString())
-            .update({
-          'exerciseIds': updatedExerciseIds,
-          'lastUsedDate': Timestamp.now(),
-        });
-      }
-
-      _logger.info('Rutin egzersizi başarıyla senkronize edildi: ${routineExercise.id}');
-    } catch (e) {
-      _logger.severe('Rutin egzersizi senkronizasyon hatası', e);
-      rethrow;
-    }
-  }
-
-
-
+  // MARK: - Challenge Operations
   Future<void> setWeeklyChallenge({
-  required String userId,
-  required int routineId,
-  required DateTime acceptedAt,
+    required String userId,
+    required int routineId,
+    required DateTime acceptedAt,
   }) async {
-  try {
-  await FirebaseFirestore.instance
-      .collection('users')
-      .doc(userId)
-      .collection('weeklyChallenge')
-      .doc(routineId.toString())
-      .set({
-  'routineId': routineId,
-  'acceptedAt': Timestamp.fromDate(acceptedAt),
-  'status': 'accepted',
-  });
-  } catch (e) {
-  debugPrint('Error setting weekly challenge: $e');
-  throw Exception('Haftalık meydan okuma kaydedilirken bir hata oluştu');
-  }
-  }
-
-
-
-
-
-
-  // RoutineHistory sınıfı için metodlar
-  Future<List<RoutineHistory>> getUserRoutineHistory(String userId) async {
-    try {
-      final snapshot = await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('routineHistory')
-          .get();
-      return snapshot.docs.map((doc) => RoutineHistory.fromFirestore(doc)).toList();
-    } catch (e) {
-      _logger.severe('Rutin geçmişini getirme hatası: $e');
-      return [];
-    }
-  }
-
-  Future<void> addRoutineHistoryEntry(String userId, RoutineHistory historyEntry) async {
     try {
       await _firestore
           .collection('users')
           .doc(userId)
-          .collection('routineHistory')
-          .add(historyEntry.toFirestore());
-      _logger.info('Rutin geçmişi başarıyla eklendi');
-    } catch (e) {
-      _logger.severe('Rutin geçmişi ekleme hatası: $e');
-      rethrow;
-    }
-  }
-
-  // RoutineWeekday sınıfı için metodlar
-  Future<List<RoutineWeekday>> getUserRoutineWeekdays(String userId) async {
-    try {
-      final snapshot = await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('routineWeekdays')
-          .get();
-      return snapshot.docs.map((doc) => RoutineWeekday.fromFirestore(doc)).toList();
-    } catch (e) {
-      _logger.severe('Haftalık rutin planını getirme hatası: $e');
-      return [];
-    }
-  }
-
-  Future<void> addOrUpdateRoutineWeekday(String userId, RoutineWeekday weekday) async {
-    try {
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('routineWeekdays')
-          .doc(weekday.id)
-          .set(weekday.toFirestore());
-      _logger.info('Haftalık rutin planı başarıyla eklendi/güncellendi: ${weekday.id}');
-    } catch (e) {
-      _logger.severe('Haftalık rutin planı ekleme/güncelleme hatası: $e');
-      rethrow;
-    }
-  }
-
-  Future<void> deleteRoutineWeekday(String userId, String weekdayId) async {
-    try {
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('routineWeekdays')
-          .doc(weekdayId)
-          .delete();
-      _logger.info('Haftalık rutin planı başarıyla silindi: $weekdayId');
-    } catch (e) {
-      _logger.severe('Haftalık rutin planı silme hatası: $e');
-      rethrow;
-    }
-  }
-
-  // Diğer yardımcı metodlar
-  Future<void> updateUserRoutineProgress(String userId, String routineId, int progress) async {
-    try {
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('routines')
-          .doc(routineId)
-          .update({'userProgress': progress});
-      _logger.info('Rutin ilerleme başarıyla güncellendi: $progress');
-    } catch (e) {
-      _logger.severe('Rutin ilerleme güncelleme hatası: $e');
-      rethrow;
-    }
-  }
-
-  Future<void> updateUserRoutineLastUsedDate(String userId, String routineId) async {
-    try {
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('routines')
-          .doc(routineId)
-          .update({'lastUsedDate': Timestamp.now()});
-      _logger.info('Son kullanım tarihi başarıyla güncellendi');
-    } catch (e) {
-      _logger.severe('Son kullanım tarihi güncelleme hatası: $e');
-      rethrow;
-    }
-  }
-  Future<void> toggleExerciseFavorite(String userId, String exerciseId, bool isFavorite) async {
-    try {
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('favoriteExercises')
-          .doc(exerciseId)
+          .collection('weeklyChallenge')
+          .doc(routineId.toString())
           .set({
-        'isFavorite': isFavorite,
-        'updatedAt': FieldValue.serverTimestamp(),
+        'routineId': routineId,
+        'acceptedAt': Timestamp.fromDate(acceptedAt),
+        'status': 'accepted',
+        'lastUpdated': FieldValue.serverTimestamp(),
       });
+
+      _logger.info('Weekly challenge set for routine: $routineId');
     } catch (e) {
-      throw Exception('Favori durumu güncellenirken hata: $e');
+      _logger.severe('Error setting weekly challenge', e);
+      rethrow;
     }
   }
 
-  // Egzersiz tamamlanma durumunu güncelle
+  // MARK: - Exercise Operations
   Future<void> updateExerciseCompletion(
       String userId,
       String exerciseId,
@@ -601,12 +273,458 @@ class FirebaseProvider {
           .doc(exerciseId)
           .set({
         'isCompleted': isCompleted,
-        'completionDate': completionDate.toIso8601String(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+        'completionDate': Timestamp.fromDate(completionDate),
+        'lastUpdated': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      _logger.info('Exercise completion updated: $exerciseId');
     } catch (e) {
-      throw Exception('Tamamlanma durumu güncellenirken hata: $e');
+      _logger.severe('Error updating exercise completion', e);
+      rethrow;
     }
   }
-// TODO: Implement methods for PartFocusRoutine if needed
+
+  // MARK: - History Operations
+  Future<void> addRoutineHistory(RoutineHistory history) async {
+    try {
+      await _firestore
+          .collection('users')
+          .doc(history.userId)
+          .collection('routineHistory')
+          .add(history.toFirestore());
+
+      _logger.info('Routine history added');
+    } catch (e) {
+      _logger.severe('Error adding routine history', e);
+      rethrow;
+    }
+  }
+
+  // MARK: - Parts Operations
+  Future<List<FirebaseParts>> getUserParts(String userId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('parts')
+          .get();
+
+      return snapshot.docs
+          .map((doc) => FirebaseParts.fromFirestore(doc))
+          .toList();
+    } catch (e) {
+      _logger.severe('Error getting user parts', e);
+      return [];
+    }
+  }
+
+  Future<void> addOrUpdateUserPart(String userId, FirebaseParts part) async {
+    try {
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('parts')
+          .doc(part.id)
+          .set(part.toFirestore());
+
+      _logger.info('Part added/updated successfully: ${part.id}');
+    } catch (e) {
+      _logger.severe('Error adding/updating part', e);
+      rethrow;
+    }
+  }
+
+  // MARK: - Favorite Operations
+  Future<bool> isPartFavorite(String userId, String partId) async {
+    try {
+      final doc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('parts')
+          .doc(partId)
+          .get();
+
+      return doc.exists && doc.data()?['isFavorite'] == true;
+    } catch (e) {
+      _logger.severe('Error checking part favorite status', e);
+      return false;
+    }
+  }
+
+  Future<void> togglePartFavorite(
+      String userId,
+      String partId,
+      bool isFavorite,
+      ) async {
+    try {
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('parts')
+          .doc(partId)
+          .update({
+        'isFavorite': isFavorite,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      });
+
+      _logger.info('Part favorite status updated: $partId');
+    } catch (e) {
+      _logger.severe('Error updating part favorite', e);
+      rethrow;
+    }
+  }
+
+  // MARK: - Progress Operations
+  Future<void> updatePartProgress(
+      String userId,
+      String partId,
+      int progress,
+      ) async {
+    try {
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('parts')
+          .doc(partId)
+          .update({
+        'userProgress': progress,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      });
+
+      _logger.info('Part progress updated: $partId');
+    } catch (e) {
+      _logger.severe('Error updating part progress', e);
+      rethrow;
+    }
+  }
+
+  // MARK: - Schedule Operations
+  Future<List<UserSchedule>> getSchedulesForDay(
+      String userId,
+      int weekday,
+      ) async {
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('schedules')
+          .where('selectedDays', arrayContains: weekday)
+          .where('isActive', isEqualTo: true)
+          .get();
+
+      return snapshot.docs
+          .map((doc) => UserSchedule.fromFirestore(doc))
+          .toList();
+    } catch (e) {
+      _logger.severe('Error getting schedules for day', e);
+      return [];
+    }
+  }
+
+  Future<void> updateScheduleStatus(
+      String userId,
+      String scheduleId,
+      bool isActive,
+      ) async {
+    try {
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('schedules')
+          .doc(scheduleId)
+          .update({
+        'isActive': isActive,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      });
+
+      _logger.info('Schedule status updated: $scheduleId');
+    } catch (e) {
+      _logger.severe('Error updating schedule status', e);
+      rethrow;
+    }
+  }
+
+// FirebaseProvider sınıfı içine eklenecek metodlar
+
+// MARK: - Routine Operations
+  Future<List<FirebaseRoutines>> getUserRoutines(String userId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('routines')
+          .get();
+
+      List<FirebaseRoutines> routines = snapshot.docs
+          .map((doc) => FirebaseRoutines.fromFirestore(doc))
+          .toList();
+
+      _logger.info('User routines fetched successfully. Total: ${routines.length}');
+      return routines;
+    } catch (e) {
+      _logger.severe('Error getting user routines', e);
+      return [];
+    }
+  }
+
+  Future<void> addOrUpdateUserRoutine(
+      String userId,
+      FirebaseRoutines routine,
+      ) async {
+    try {
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('routines')
+          .doc(routine.id)
+          .set(routine.toFirestore());
+
+      _logger.info('Routine added/updated successfully: ${routine.id}');
+    } catch (e) {
+      _logger.severe('Error adding/updating routine', e);
+      rethrow;
+    }
+  }
+
+  Future<FirebaseRoutines?> getUserRoutine(
+      String userId,
+      String routineId,
+      ) async {
+    try {
+      final doc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('routines')
+          .doc(routineId)
+          .get();
+
+      if (doc.exists) {
+        return FirebaseRoutines.fromFirestore(doc);
+      }
+      return null;
+    } catch (e) {
+      _logger.severe('Error getting user routine', e);
+      return null;
+    }
+  }
+
+  Future<void> deleteUserRoutine(String userId, String routineId) async {
+    try {
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('routines')
+          .doc(routineId)
+          .delete();
+
+      _logger.info('Routine deleted successfully: $routineId');
+    } catch (e) {
+      _logger.severe('Error deleting routine', e);
+      rethrow;
+    }
+  }
+
+  // Günlük egzersizlerle birlikte schedule oluşturma
+  Future<void> createScheduleWithExercises({
+    required String userId,
+    required UserSchedule schedule,
+    required Map<String, List<Map<String, dynamic>>> dailyExercises,
+  }) async {
+    try {
+      final scheduleData = schedule.copyWith(
+        dailyExercises: dailyExercises,
+      ).toFirestore();
+
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('schedules')
+          .doc(schedule.id)
+          .set(scheduleData);
+
+      _logger.info('Schedule created with exercises: ${schedule.id}');
+    } catch (e) {
+      _logger.severe('Error creating schedule with exercises', e);
+      rethrow;
+    }
+  }
+
+  // Schedule'ın günlük egzersizlerini güncelleme
+  Future<void> updateScheduleExercises({
+    required String userId,
+    required String scheduleId,
+    required Map<String, List<Map<String, dynamic>>> dailyExercises,
+  }) async {
+    try {
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('schedules')
+          .doc(scheduleId)
+          .update({
+        'dailyExercises': dailyExercises,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      });
+
+      _logger.info('Schedule exercises updated: $scheduleId');
+    } catch (e) {
+      _logger.severe('Error updating schedule exercises', e);
+      rethrow;
+    }
+  }
+
+  // Belirli bir günün egzersizlerini getirme
+  Future<List<Map<String, dynamic>>> getDayExercises({
+    required String userId,
+    required String scheduleId,
+    required String day,
+  }) async {
+    try {
+      final doc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('schedules')
+          .doc(scheduleId)
+          .get();
+
+      if (!doc.exists) {
+        _logger.warning('Schedule not found: $scheduleId');
+        return [];
+      }
+
+      final schedule = UserSchedule.fromFirestore(doc);
+      return schedule.dailyExercises?[day] ?? [];
+    } catch (e) {
+      _logger.severe('Error getting day exercises', e);
+      return [];
+    }
+  }
+
+  // Schedule'ın tüm egzersizlerini getirme
+  Future<Map<String, List<Map<String, dynamic>>>> getAllScheduleExercises({
+    required String userId,
+    required String scheduleId,
+  }) async {
+    try {
+      final doc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('schedules')
+          .doc(scheduleId)
+          .get();
+
+      if (!doc.exists) {
+        _logger.warning('Schedule not found: $scheduleId');
+        return {};
+      }
+
+      final schedule = UserSchedule.fromFirestore(doc);
+      return schedule.dailyExercises ?? {};
+    } catch (e) {
+      _logger.severe('Error getting all schedule exercises', e);
+      return {};
+    }
+  }
+
+  // Egzersiz detaylarını güncelleme (set, tekrar, ağırlık)
+  Future<void> updateExerciseDetails({
+    required String userId,
+    required String scheduleId,
+    required String day,
+    required int exerciseIndex,
+    required Map<String, dynamic> newDetails,
+  }) async {
+    try {
+      final doc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('schedules')
+          .doc(scheduleId)
+          .get();
+
+      if (!doc.exists) {
+        throw Exception('Schedule not found');
+      }
+
+      final schedule = UserSchedule.fromFirestore(doc);
+      final dailyExercises = schedule.dailyExercises ?? {};
+
+      if (!dailyExercises.containsKey(day)) {
+        throw Exception('Day not found in schedule');
+      }
+
+      final exercises = dailyExercises[day] ?? [];
+      if (exerciseIndex >= exercises.length) {
+        throw Exception('Exercise index out of range');
+      }
+
+      exercises[exerciseIndex] = {
+        ...exercises[exerciseIndex],
+        ...newDetails,
+      };
+
+      dailyExercises[day] = exercises;
+
+      await updateScheduleExercises(
+        userId: userId,
+        scheduleId: scheduleId,
+        dailyExercises: dailyExercises,
+      );
+
+      _logger.info('Exercise details updated: $scheduleId, day: $day, index: $exerciseIndex');
+    } catch (e) {
+      _logger.severe('Error updating exercise details', e);
+      rethrow;
+    }
+  }
+
+
+  Future<UserSchedule?> getUserScheduleById(String userId, String scheduleId) async {
+    try {
+      final doc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('schedules')
+          .doc(scheduleId)
+          .get();
+
+      if (!doc.exists) {
+        _logger.info('Schedule not found: $scheduleId');
+        return null;
+      }
+
+      final schedule = UserSchedule.fromFirestore(doc);
+      _logger.info('Schedule fetched successfully: $scheduleId');
+      return schedule;
+    } catch (e) {
+      _logger.severe('Error getting schedule by id', e);
+      rethrow;
+    }
+  }
+
+// Ayrıca bu metodları da ekleyelim (schedule işlemleri için)
+
+
+
+
+
+  Future<List<UserSchedule>> getAllUserSchedules(String userId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('schedules')
+          .orderBy('lastUpdated', descending: true)
+          .get();
+
+      return snapshot.docs
+          .map((doc) => UserSchedule.fromFirestore(doc))
+          .toList();
+    } catch (e) {
+      _logger.severe('Error getting all user schedules', e);
+      return [];
+    }
+  }
+
+
 }
