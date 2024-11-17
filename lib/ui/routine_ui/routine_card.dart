@@ -325,12 +325,10 @@ class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStat
       case 2:
         return 'Hypertrophy';
       case 3:
-        return 'Bacak';
+      return  'Endurance';
       case 4:
-      return 'Endurance';
-      case 5:
         return 'Power';
-      case 6:
+      case 5:
         return 'Flexibility';
       default:
         return 'Bilinmeyen';

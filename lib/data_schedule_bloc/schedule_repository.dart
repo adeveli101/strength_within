@@ -283,14 +283,27 @@ class ScheduleRepository {
     }
   }
 
-// Schedule oluştururken egzersizleri de ekle
   Future<void> createScheduleWithExercises(UserSchedule schedule) async {
     try {
+      // Frequency kontrolü
+      final isValid = await validateFrequencyRules(
+        schedule.userId,
+        schedule.itemId,
+        schedule.type,
+        schedule.selectedDays,
+      );
+
+      if (!isValid) {
+        throw ScheduleException('Seçilen günler antrenman sıklığı kurallarına uygun değil');
+      }
+
+      // Günlük egzersizleri oluştur
       final dailyExercises = await _buildDailyExercises(
         schedule.itemId,
         schedule.type,
       );
 
+      // Firebase'e kaydet
       await _firebaseProvider.createScheduleWithExercises(
         userId: schedule.userId,
         schedule: schedule,
@@ -304,6 +317,35 @@ class ScheduleRepository {
       throw ScheduleException('Program eklenirken hata oluştu: $e');
     }
   }
+
+
+  Future<void> updateExerciseProgress(
+      String userId,
+      String scheduleId,
+      String day,
+      int exerciseId,
+      Map<String, dynamic> progress,
+      ) async {
+    try {
+      await _firebaseProvider.updateExerciseDetails(
+        userId: userId,
+        scheduleId: scheduleId,
+        day: day,
+        exerciseIndex: exerciseId,
+        newDetails: {
+          ...progress,
+          'completedAt': DateTime.now().toIso8601String(),
+        },
+      );
+
+      _clearCache(userId);
+      _logger.info('Exercise progress updated: $exerciseId');
+    } catch (e) {
+      _logger.severe('Error updating exercise progress', e);
+      throw ScheduleException('Egzersiz ilerlemesi güncellenirken hata oluştu: $e');
+    }
+  }
+
 
 // Günlük egzersizleri getir
   Future<List<Map<String, dynamic>>> getDayExercises({
@@ -320,6 +362,174 @@ class ScheduleRepository {
     } catch (e) {
       _logger.severe('Error getting day exercises', e);
       throw ScheduleException('Gün egzersizleri yüklenirken hata: $e');
+    }
+  }
+
+
+  // schedule_repository.dart içine eklenecek metodlar
+
+// schedule_repository.dart içine eklenecek metodlar
+
+  Future<Map<String, dynamic>> getFrequencyInfo(int itemId, String type) async {
+    try {
+      if (type == 'part') {
+        final frequency = await _sqlProvider.getPartFrequency(itemId);
+        return {
+          'recommendedFrequency': frequency?.recommendedFrequency ?? 3,
+          'minRestDays': frequency?.minRestDays ?? 1
+        };
+      } else {
+        final frequency = await _sqlProvider.getRoutineFrequency(itemId);
+        return {
+          'recommendedFrequency': frequency?.recommendedFrequency ?? 3,
+          'minRestDays': frequency?.minRestDays ?? 1
+        };
+      }
+    } catch (e) {
+      _logger.severe('Error getting frequency info', e);
+      throw ScheduleException('Frequency bilgisi alınamadı: $e');
+    }
+  }
+
+  Future<bool> validateFrequencyRules(
+      String userId,
+      int itemId,
+      String type,
+      List<int> selectedDays,
+      ) async {
+    try {
+      final frequencyInfo = await getFrequencyInfo(itemId, type);
+      final int recommendedFrequency = frequencyInfo['recommendedFrequency'];
+      final int minRestDays = frequencyInfo['minRestDays'];
+
+      // Seçilen gün sayısı kontrolü
+      if (selectedDays.length > recommendedFrequency) {
+        _logger.warning('Selected days exceed recommended frequency');
+        return false;
+      }
+
+      // Minimum dinlenme günü kontrolü
+      selectedDays.sort();
+      for (int i = 0; i < selectedDays.length - 1; i++) {
+        int dayDiff = selectedDays[i + 1] - selectedDays[i];
+        if (dayDiff < minRestDays) {
+          _logger.warning('Minimum rest days rule violated');
+          return false;
+        }
+      }
+
+      return true;
+    } catch (e) {
+      _logger.severe('Error validating frequency rules', e);
+      throw ScheduleException('Frequency kuralları kontrol edilemedi: $e');
+    }
+  }
+  Future<bool> checkFrequencyRules(
+      String userId,
+      int itemId,
+      String type,
+      List<int> selectedDays
+      ) async {
+    try {
+      final frequencyInfo = await getFrequencyInfo(itemId, type);
+      final int recommendedFrequency = frequencyInfo['recommendedFrequency'];
+      final int minRestDays = frequencyInfo['minRestDays'];
+
+      // Seçilen gün sayısı kontrolü
+      if (selectedDays.length > recommendedFrequency) {
+        return false;
+      }
+
+      // Minimum dinlenme günü kontrolü
+      selectedDays.sort();
+      for (int i = 0; i < selectedDays.length - 1; i++) {
+        int dayDiff = selectedDays[i + 1] - selectedDays[i];
+        if (dayDiff < minRestDays) {
+          return false;
+        }
+      }
+
+      // Hafta sonu kontrolü (eğer gerekirse)
+      int weekendCount = selectedDays.where((day) => day > 5).length;
+      if (weekendCount > 1) {
+        return false;
+      }
+
+      return true;
+    } catch (e) {
+      _logger.severe('Error checking frequency rules', e);
+      throw ScheduleException('Frequency kuralları kontrol edilemedi: $e');
+    }
+  }
+
+  Future<Map<String, List<Map<String, dynamic>>>> groupExercisesByFrequency(
+      int itemId,
+      String type,
+      List<int> selectedDays,
+      ) async {
+    try {
+      // Egzersizleri al
+      final exerciseList = type == 'part'
+          ? await _sqlProvider.getPartExercisesByPartId(itemId)
+          : await _sqlProvider.getRoutineExercisesByRoutineId(itemId);
+
+      // Frequency bilgisini al
+      final frequency = type == 'part'
+          ? await _sqlProvider.getPartFrequency(itemId)
+          : await _sqlProvider.getRoutineFrequency(itemId);
+
+      // orderIndex'e göre sırala
+      if (type == 'part') {
+        (exerciseList as List<PartExercise>).sort((a, b) =>
+            a.orderIndex.compareTo(b.orderIndex));
+      } else {
+        (exerciseList as List<RoutineExercises>).sort((a, b) =>
+            a.orderIndex.compareTo(b.orderIndex));
+      }
+
+      // Seçilen gün sayısına göre egzersizleri böl
+      Map<String, List<Map<String, dynamic>>> dailyExercises = {};
+      int exercisesPerDay = (exerciseList.length / selectedDays.length).ceil();
+
+      for (int i = 0; i < selectedDays.length; i++) {
+        int startIndex = i * exercisesPerDay;
+        int endIndex = startIndex + exercisesPerDay;
+
+        if (endIndex > exerciseList.length) {
+          endIndex = exerciseList.length;
+        }
+
+        List<Map<String, dynamic>> dayExercises = [];
+        for (var exercise in exerciseList.sublist(startIndex, endIndex)) {
+          final exerciseDetails = await _sqlProvider.getExerciseById(
+              type == 'part'
+                  ? (exercise as PartExercise).exerciseId
+                  : (exercise as RoutineExercises).exerciseId);
+
+          if (exerciseDetails != null) {
+            dayExercises.add({
+              'exerciseId': exerciseDetails.id,
+              'name': exerciseDetails.name,
+              'sets': exerciseDetails.defaultSets,
+              'reps': exerciseDetails.defaultReps,
+              'weight': exerciseDetails.defaultWeight,
+              'orderIndex': type == 'part'
+                  ? (exercise as PartExercise).orderIndex
+                  : (exercise as RoutineExercises).orderIndex,
+              'type': type,
+              'isCompleted': false,
+              'completedAt': null
+            });
+          }
+        }
+
+        dailyExercises['day${selectedDays[i]}'] = dayExercises;
+      }
+
+      return dailyExercises;
+    } catch (e) {
+      _logger.severe('Error grouping exercises by frequency', e);
+      throw ScheduleException('Egzersizler günlere bölünürken hata oluştu: $e');
     }
   }
 

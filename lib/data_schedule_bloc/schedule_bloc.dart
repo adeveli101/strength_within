@@ -195,11 +195,25 @@ class ScheduleBloc extends Bloc<ScheduleEvent, ScheduleState> {
     }
   }
 
+
   Future<void> _onAddSchedule(
       AddSchedule event,
       Emitter<ScheduleState> emit,
       ) async {
     try {
+      // Frequency kurallarını kontrol et
+      final bool isValidFrequency = await repository.validateFrequencyRules(
+        event.schedule.userId,
+        event.schedule.itemId,
+        event.schedule.type,
+        event.schedule.selectedDays,
+      );
+
+      if (!isValidFrequency) {
+        emit(ScheduleError('Seçilen günler antrenman sıklığı kurallarına uygun değil'));
+        return;
+      }
+
       await repository.addSchedule(event.schedule);
       final schedules = await repository.getUserSchedules(event.schedule.userId);
       final statistics = await repository.getScheduleStatistics(event.schedule.userId);
