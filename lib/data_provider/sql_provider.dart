@@ -90,6 +90,9 @@ class SQLProvider {
     _logger.info("Veritabanı yeniden yüklendi.");
   }
 
+
+
+
   Future<RoutineFrequency?> getRoutineFrequency(int routineId) async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query(

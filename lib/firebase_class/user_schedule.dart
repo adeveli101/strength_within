@@ -13,7 +13,7 @@ class UserSchedule {
   final DateTime lastUpdated;
   final Map<String, dynamic>? performanceData;
   final bool isCustom;
-  final Map<String, List<Map<String, dynamic>>>? dailyExercises; // Yeni eklenen alan
+  final Map<String, List<Map<String, dynamic>>>? dailyExercises; // Yeni
 
   UserSchedule({
     required this.id,

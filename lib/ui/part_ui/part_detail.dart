@@ -10,11 +10,13 @@ import 'package:workout/ui/part_ui/part_card.dart';
 import 'package:logging/logging.dart';
 
 import '../../data_schedule_bloc/schedule_bloc.dart';
+import '../../data_schedule_bloc/schedule_repository.dart';
 import '../../firebase_class/user_schedule.dart';
 import '../../models/exercises.dart';
 import '../../z.app_theme/app_theme.dart';
 import '../exercises_ui/exercise_card.dart';
 import '../exercises_ui/exercise_details.dart';
+import '../list_pages/schedule_modal.dart';
 
 class PartDetailBottomSheet extends StatefulWidget {
   final int partId;
@@ -35,7 +37,6 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
 
   late PartsBloc _partsBloc;
   final _logger = Logger('PartDetailBottomSheet');
-  int _selectedDay = 1;
 
 
 
@@ -219,7 +220,6 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
     );
   }
 
-
   Widget _buildLoadedContent(PartExercisesLoaded state, ScrollController controller) {
     return Container(
       color: const Color(0xFF1E1E1E),
@@ -230,9 +230,9 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
           // Üst Bilgi Bölümü
           Container(
             padding: const EdgeInsets.all(20.0),
-            decoration: const BoxDecoration(
-              color: Color(0xFF2C2C2C),
-              borderRadius: BorderRadius.only(
+            decoration: BoxDecoration(
+              gradient: AppTheme.cardGradient,
+              borderRadius: const BorderRadius.only(
                 bottomLeft: Radius.circular(30),
                 bottomRight: Radius.circular(30),
               ),
@@ -257,23 +257,29 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
                         bool hasSchedule = false;
                         if (scheduleState is SchedulesLoaded) {
                           hasSchedule = scheduleState.schedules.any(
-                                  (schedule) =>
-                              schedule.itemId == state.part.id &&
-                                  schedule.type == 'part'
+                                (schedule) =>
+                            schedule.itemId == state.part.id &&
+                                schedule.type == 'part',
                           );
                         }
                         return InkWell(
-                          onTap: () => _showScheduleModal(context, state.part,state.exerciseListByBodyPart,),
+                          onTap: () => _showScheduleModal(
+                            context,
+                            state.part,
+                            state.exerciseListByBodyPart,
+                          ),
                           child: Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
+                              horizontal: 16,
+                              vertical: 8,
                             ),
                             decoration: BoxDecoration(
-                              color: hasSchedule
-                                  ? AppTheme.primaryRed
-                                  : Colors.white.withOpacity(0.1),
+                              gradient: hasSchedule ? AppTheme.primaryGradient : null,
+                              color: hasSchedule ? null : Colors.white.withOpacity(0.1),
                               borderRadius: BorderRadius.circular(20),
+                              border: hasSchedule
+                                  ? null
+                                  : Border.all(color: Colors.white.withOpacity(0.2)),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -281,17 +287,13 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
                                 Icon(
                                   Icons.calendar_today,
                                   size: 16,
-                                  color: hasSchedule
-                                      ? Colors.white
-                                      : Colors.white70,
+                                  color: hasSchedule ? Colors.white : Colors.white70,
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
                                   hasSchedule ? 'Programı Düzenle' : 'Programa Ekle',
                                   style: TextStyle(
-                                    color: hasSchedule
-                                        ? Colors.white
-                                        : Colors.white70,
+                                    color: hasSchedule ? Colors.white : Colors.white70,
                                     fontSize: 12,
                                     fontWeight: FontWeight.w500,
                                   ),
@@ -304,8 +306,43 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                Row(
+              ],
+            ),
+          ),
+
+          // Açılıp Kapanabilir Bölümler
+          // 2. İstatistikler
+          ExpansionTile(
+            initiallyExpanded: true,
+            title: Text(
+              'İstatistikler',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryRed.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.analytics_outlined,
+                color: AppTheme.primaryRed,
+                size: 20,
+              ),
+            ),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
                   children: [
                     _buildStatItem(
                       Icons.fitness_center,
@@ -314,7 +351,7 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
                     ),
                     _buildStatItem(
                       Icons.category,
-                      '',
+                      'Bölge',
                       state.part.name,
                     ),
                     _buildStatItem(
@@ -325,60 +362,99 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
                     ),
                   ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
 
-          // İlerleme Çubuğu
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            height: 4,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(2),
-              child: LinearProgressIndicator(
-                value: (state.part.userProgress ?? 0) / 100,
-                backgroundColor: Colors.grey[800],
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  _getProgressColor(state.part.userProgress ?? 0),
+          if (state.part.additionalNotes != null &&
+              state.part.additionalNotes.isNotEmpty)
+            ExpansionTile(
+              initiallyExpanded: true,
+              title: Text(
+                'Açıklama',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-            ),
-          ),
-
-          // Egzersiz Başlığı
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Egzersizler',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryRed.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
                 ),
+                child: Icon(
+                  Icons.info_outline,
+                  color: AppTheme.primaryRed,
+                  size: 20,
+                ),
+              ),
+              children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.all(16),
+                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
+                    color: Colors.white.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    '${_getTotalExerciseCount(state.exerciseListByBodyPart)} egzersiz',
-                    style: const TextStyle(
-                      color: Colors.white70,
+                    state.part.additionalNotes,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.8),
                       fontSize: 14,
                     ),
                   ),
                 ),
               ],
             ),
+
+          // 4. Egzersizler
+          ExpansionTile(
+            initiallyExpanded: true,
+            title: Text(
+              'Egzersizler',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryRed.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.fitness_center,
+                color: AppTheme.primaryRed,
+                size: 20,
+              ),
+            ),
+            trailing: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 6,
+              ),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryRed.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                '${_getTotalExerciseCount(state.exerciseListByBodyPart)} egzersiz',
+                style: TextStyle(
+                  color: AppTheme.primaryRed,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            children: [
+              ..._buildExerciseList(state.exerciseListByBodyPart),
+            ],
           ),
 
-          // Egzersiz Listesi
-          ..._buildExerciseList(state.exerciseListByBodyPart),
           const SizedBox(height: 16),
         ],
       ),
@@ -403,157 +479,25 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
     }
   }
 
-  void _showScheduleModal(BuildContext context, Parts part, Map<String, List<Map<String, dynamic>>> exerciseListByBodyPart) {
+  void _showScheduleModal(
+      BuildContext context,
+      Parts part,
+      Map<String, List<Map<String, dynamic>>> exerciseListByBodyPart,
+      ) async {
     try {
-      // Egzersizleri günlere böl
-      final dailyExercises = _groupExercisesByDay(exerciseListByBodyPart);
+      final scheduleBloc = context.read<ScheduleBloc>();
 
       showModalBottomSheet(
         context: context,
         backgroundColor: Colors.transparent,
         isScrollControlled: true,
-        builder: (context) => StatefulBuilder(
-          builder: (context, setState) => Container(
-            height: MediaQuery.of(context).size.height * 0.8,
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E1E1E),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(30),
-              ),
-            ),
-            child: Column(
-              children: [
-                // Modal başlığı
-                Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Antrenman Programı',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.close, color: Colors.white),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(color: Colors.white24),
-
-                // Gün seçici
-                SizedBox(
-                  height: 50,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    itemCount: 3,
-                    itemBuilder: (context, index) {
-                      final day = index + 1;
-                      return Container(
-                        margin: const EdgeInsets.only(right: 12),
-                        child: ElevatedButton(
-                          onPressed: () => setState(() => _selectedDay = day),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _selectedDay == day
-                                ? AppTheme.primaryRed
-                                : Colors.white.withOpacity(0.1),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(25),
-                            ),
-                          ),
-                          child: Text('Day $day'),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // Seçili günün egzersiz listesi
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(20),
-                    itemCount: dailyExercises[_selectedDay]?.length ?? 0,
-                    itemBuilder: (context, index) {
-                      final exercise = dailyExercises[_selectedDay]![index];
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.05),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primaryRed.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Icon(
-                                Icons.fitness_center,
-                                color: AppTheme.primaryRed,
-                                size: 20,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    exercise['name'],
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '${exercise['defaultSets']} set × ${exercise['defaultReps']} tekrar',
-                                    style: TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primaryRed.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                '${exercise['defaultWeight']}kg',
-                                style: TextStyle(
-                                  color: AppTheme.primaryRed,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
+        builder: (context) => ScheduleModal(
+          userId: 'currentUserId', // Kullanıcı ID'sini buradan geçirin
+          type: 'part',
+          itemId: part.id,
+          itemName: part.name,
+          description: part.additionalNotes,
+          exerciseListByBodyPart: exerciseListByBodyPart,
         ),
       );
     } catch (e) {
@@ -561,31 +505,55 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
     }
   }
 
-  // Egzersizleri günlere bölme yardımcı metodu
+
   Map<int, List<Map<String, dynamic>>> _groupExercisesByDay(
-      Map<String, List<Map<String, dynamic>>> exerciseListByBodyPart
+      Map<String, List<Map<String, dynamic>>> exerciseListByBodyPart,
+      int recommendedFrequency,
       ) {
-    final allExercises = exerciseListByBodyPart.values
-        .expand((exercises) => exercises)
-        .toList();
+    try {
+      // Tüm egzersizleri tek bir listede topla ve sırala
+      final allExercises = exerciseListByBodyPart.values
+          .expand((exercises) => exercises)
+          .toList()
+        ..sort((a, b) => (a['orderIndex'] as int).compareTo(b['orderIndex'] as int));
 
-    final exercisesPerDay = (allExercises.length / 3).ceil();
-    Map<int, List<Map<String, dynamic>>> dailyExercises = {};
+      Map<int, List<Map<String, dynamic>>> dailyExercises = {};
+      int exercisesPerDay = (allExercises.length / recommendedFrequency).ceil();
 
-    for (int day = 1; day <= 3; day++) {
-      final startIndex = (day - 1) * exercisesPerDay;
-      var endIndex = startIndex + exercisesPerDay;
+      for (int day = 1; day <= recommendedFrequency; day++) {
+        int startIndex = (day - 1) * exercisesPerDay;
+        int endIndex = startIndex + exercisesPerDay;
 
-      if (endIndex > allExercises.length) {
-        endIndex = allExercises.length;
+        if (endIndex > allExercises.length) {
+          endIndex = allExercises.length;
+        }
+
+        dailyExercises[day] = allExercises
+            .sublist(startIndex, endIndex)
+            .map((exercise) => {
+          'exerciseId': exercise['id'],
+          'name': exercise['name'],
+          'sets': exercise['defaultSets'],
+          'reps': exercise['defaultReps'],
+          'weight': exercise['defaultWeight'],
+          'orderIndex': exercise['orderIndex'],
+          'type': 'part',
+          'isCompleted': false,
+          'completedAt': null,
+          'mainTargetedBodyPartId': exercise['mainTargetedBodyPartId'],
+          'workoutTypeId': exercise['workoutTypeId'],
+          'description': exercise['description'],
+          'gifUrl': exercise['gifUrl'],
+        })
+            .toList();
       }
 
-      dailyExercises[day] = allExercises.sublist(startIndex, endIndex);
+      return dailyExercises;
+    } catch (e) {
+      _logger.severe('Egzersizler günlere bölünürken hata oluştu', e);
+      throw ScheduleException('Egzersizler günlere bölünürken hata oluştu: $e');
     }
-
-    return dailyExercises;
   }
-
 
   List<Widget> _buildExerciseList(Map<String, List<Map<String, dynamic>>> exerciseListByBodyPart) {
     return exerciseListByBodyPart.entries.map((entry) {
