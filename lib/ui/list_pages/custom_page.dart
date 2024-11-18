@@ -257,7 +257,7 @@ class _CustomProgramPageState extends State<CustomProgramPage> {
                           color: AppTheme.primaryRed,
                         ),
                         title: Text(
-                          exercise.exerciseId.toString() ?? 'Egzersiz',  // exerciseName kullan
+                          exercise.exerciseId.toString(),  // exerciseName kullan
                           style: AppTheme.bodySmall,
                         ),
                         trailing: Text(
