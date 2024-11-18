@@ -9,6 +9,10 @@ class AppTheme {
   static const Color darkBackground = Color(0xFF121212);
   static const Color cardBackground = Color(0xFF1E1E1E);
   static const Color surfaceColor = Color(0xFF2C2C2C);
+  static const Color warningColor = Color(0xFFEA0707);
+  static const Color textColorSecondary = Color(0xFF757575);
+  static const Color disabledColor = Color(0xFFBDBDBD);
+  static const Color primaryGreen = Color(0xFF4CAF50);
 
   // İkincil Renkler
   static const Color accentBlue = Color(0xFF2196F3);
