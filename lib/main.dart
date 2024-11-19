@@ -15,6 +15,7 @@ import 'package:workout/data_provider/firebase_provider.dart';
 import 'package:workout/data_provider/sql_provider.dart';
 import 'package:workout/ui/library.dart';
 import 'package:workout/ui/list_pages/custom_page.dart';
+import 'package:workout/ui/list_pages/program_merger_page.dart';
 import 'package:workout/ui/setting_pages.dart';
 import 'package:workout/z.app_theme/app_theme.dart';
 import 'package:workout/z.app_theme/circular_logo.dart';
@@ -246,7 +247,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                     userId: widget.userId,
                     scheduleRepository: context.read<ScheduleRepository>(),
                   ),
-                  child: CustomProgramPage(),
+                  child: ProgramMergerPage(userId: widget.userId,),
                 ),
               ),
             );
