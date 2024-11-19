@@ -4,7 +4,7 @@ class PartExercise {
   final dynamic exerciseId;
   final int orderIndex; //
 
-  PartExercise({
+  const PartExercise({
     required this.id,
     required this.partId,
     required this.exerciseId,
