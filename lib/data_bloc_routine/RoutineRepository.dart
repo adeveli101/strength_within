@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:logging/logging.dart';
 import '../data_provider/sql_provider.dart';
 import '../data_provider/firebase_provider.dart';
+import '../models/RoutinetargetedBodyParts.dart';
 import '../models/routines.dart';
 import '../models/exercises.dart';
 import '../models/BodyPart.dart';
@@ -18,7 +19,6 @@ class RoutineRepository {
 
   RoutineRepository(this._sqlProvider, this._firebaseProvider);
 
-  // MARK: - Temel Rutin İşlemleri
   Future<List<Routines>> getAllRoutines() async {
     try {
       List<Routines> routines = await _sqlProvider.getAllRoutines();
@@ -30,6 +30,8 @@ class RoutineRepository {
     }
   }
 
+
+
   Future<Routines?> getRoutineById(int id) async {
     try {
       return await _sqlProvider.getRoutineById(id);
@@ -39,7 +41,6 @@ class RoutineRepository {
     }
   }
 
-  // MARK: - Filtreleme İşlemleri
   Future<List<Routines>> getRoutinesByName(String name) async {
     try {
       return await _sqlProvider.getRoutinesByName(name);
@@ -60,9 +61,45 @@ class RoutineRepository {
 
   Future<List<Routines>> getRoutinesByMainTargetedBodyPart(int mainTargetedBodyPartId) async {
     try {
-      return await _sqlProvider.getRoutinesByMainTargetedBodyPart(mainTargetedBodyPartId);
+      return await _sqlProvider.getRoutinesByBodyPart(mainTargetedBodyPartId);
     } catch (e, stackTrace) {
       _logger.severe('Error in getRoutinesByMainTargetedBodyPart', e, stackTrace);
+      rethrow;
+    }
+  }
+
+  Future<List<RoutineExercises>> getOrderedExercisesForRoutine(int routineId) async {
+    try {
+      return await _sqlProvider.getRoutineExercisesByRoutineId(routineId);
+    } catch (e, stackTrace) {
+      _logger.severe('Error getting ordered exercises', e, stackTrace);
+      rethrow;
+    }
+  }
+
+  Future<List<RoutineTargetedBodyParts>> getRoutineTargets(int routineId) async {
+    try {
+      return await _sqlProvider.getRoutineTargetedBodyParts(routineId);
+    } catch (e, stackTrace) {
+      _logger.severe('Error getting routine targets', e, stackTrace);
+      rethrow;
+    }
+  }
+
+  Future<BodyParts?> getBodyPartById(int id) async {
+    try {
+      return await _sqlProvider.getBodyPartById(id);
+    } catch (e, stackTrace) {
+      _logger.severe('Error getting body part by id', e, stackTrace);
+      rethrow;
+    }
+  }
+
+  Future<Map<int, int>> getTargetPercentagesForRoutine(int routineId) async {
+    try {
+      return await _sqlProvider.getTargetPercentagesForRoutine(routineId);
+    } catch (e, stackTrace) {
+      _logger.severe('Error getting target percentages', e, stackTrace);
       rethrow;
     }
   }
@@ -109,7 +146,6 @@ class RoutineRepository {
     }
   }
 
-  // MARK: - WorkoutType İşlemleri
   Future<WorkoutTypes?> getWorkoutTypeById(int id) async {
     try {
       final workoutType = await _sqlProvider.getWorkoutTypeById(id);
@@ -139,7 +175,6 @@ class RoutineRepository {
     }
   }
 
-  // MARK: - Egzersiz İşlemleri
   Future<List<RoutineExercises>> getRoutineExercisesByRoutineId(int routineId) async {
     try {
       return await _sqlProvider.getRoutineExercisesByRoutineId(routineId);
@@ -160,7 +195,6 @@ class RoutineRepository {
     }
   }
 
-  // MARK: - Firebase İşlemleri
   Future<List<FirebaseRoutines>> getUserRoutines(String userId) async {
     try {
       return await _firebaseProvider.getUserRoutines(userId);
@@ -197,7 +231,6 @@ class RoutineRepository {
     }
   }
 
-  // MARK: - Rutin Geçmişi
   Future<void> addRoutineHistory(RoutineHistory history) async {
     try {
       await _firebaseProvider.addRoutineHistory(history);
@@ -207,7 +240,6 @@ class RoutineRepository {
     }
   }
 
-  // MARK: - Veri Birleştirme
   Future<List<Routines>> getRoutinesWithUserData(String userId) async {
     try {
       List<Routines> localRoutines = await getAllRoutines();
@@ -216,36 +248,38 @@ class RoutineRepository {
       List<FirebaseRoutines> userRoutines = await getUserRoutines(userId);
       _logger.info("Kullanıcı rutinleri yüklendi: ${userRoutines.length}");
 
-      List<Routines> combinedRoutines = localRoutines.map((localRoutine) {
-        try {
-          FirebaseRoutines? matchingUserRoutine = userRoutines.firstWhere(
-                (userRoutine) => userRoutine.id == localRoutine.id.toString(),
-            orElse: () => FirebaseRoutines(
-              id: localRoutine.id.toString(),
-              name: localRoutine.name,
-              description: localRoutine.description,
-              mainTargetedBodyPartId: localRoutine.mainTargetedBodyPartId,
-              workoutTypeId: localRoutine.workoutTypeId,
-              exerciseIds: [],
-            ),
-          );
+      List<Routines> combinedRoutines = await Future.wait(
+        localRoutines.map((localRoutine) async {
+          try {
+            // Hedef vücut bölümlerini al
+            final targetedBodyParts = await _sqlProvider.getRoutineTargetedBodyParts(localRoutine.id);
 
-          return localRoutine.copyWith(
-            isFavorite: matchingUserRoutine.isFavorite,
-            isCustom: matchingUserRoutine.isCustom,
-            userProgress: matchingUserRoutine.userProgress,
-            lastUsedDate: matchingUserRoutine.lastUsedDate,
-            userRecommended: matchingUserRoutine.userRecommended ?? false,
-          );
-        } catch (e, stackTrace) {
-          _logger.warning(
-            'Rutin birleştirme hatası: ${localRoutine.id}',
-            e,
-            stackTrace,
-          );
-          return localRoutine;
-        }
-      }).toList();
+            FirebaseRoutines? matchingUserRoutine = userRoutines.firstWhere(
+                  (userRoutine) => userRoutine.id == localRoutine.id.toString(),
+              orElse: () => FirebaseRoutines(
+                id: localRoutine.id.toString(),
+                name: localRoutine.name,
+                description: localRoutine.description,
+                targetedBodyPartIds: targetedBodyParts.map((t) => t.bodyPartId).toList(),
+                workoutTypeId: localRoutine.workoutTypeId,
+                exerciseIds: [],
+              ),
+            );
+
+            return localRoutine.copyWith(
+              isFavorite: matchingUserRoutine.isFavorite,
+              isCustom: matchingUserRoutine.isCustom,
+              userProgress: matchingUserRoutine.userProgress,
+              lastUsedDate: matchingUserRoutine.lastUsedDate,
+              userRecommended: matchingUserRoutine.userRecommended ?? false,
+              targetedBodyParts: targetedBodyParts,
+            );
+          } catch (e, stackTrace) {
+            _logger.warning('Rutin birleştirme hatası: ${localRoutine.id}', e, stackTrace);
+            return localRoutine;
+          }
+        }),
+      );
 
       _logger.info("Toplam birleştirilmiş rutin: ${combinedRoutines.length}");
       return combinedRoutines;
@@ -254,9 +288,6 @@ class RoutineRepository {
       rethrow;
     }
   }
-
-
-  // RoutineRepository sınıfı içine eklenecek metod
 
   Future<Routines?> getRoutineWithUserData(String userId, int routineId) async {
     try {
@@ -267,6 +298,9 @@ class RoutineRepository {
       // Rutin egzersizlerini al
       final routineExercises = await getRoutineExercisesByRoutineId(routineId);
 
+      // Hedef vücut bölümlerini al
+      final targetedBodyParts = await _sqlProvider.getRoutineTargetedBodyParts(routineId);
+
       // Firebase'den kullanıcı verilerini al
       final userRoutines = await getUserRoutines(userId);
       final userRoutine = userRoutines.firstWhere(
@@ -275,21 +309,22 @@ class RoutineRepository {
           id: routineId.toString(),
           name: localRoutine.name,
           description: localRoutine.description,
-          mainTargetedBodyPartId: localRoutine.mainTargetedBodyPartId,
+          targetedBodyPartIds: targetedBodyParts.map((t) => t.bodyPartId).toList(),
           workoutTypeId: localRoutine.workoutTypeId,
-          exerciseIds: routineExercises.map((re) => re.exerciseId.toString()).toList(),
+          exerciseIds: routineExercises.map((re) => re.exerciseId).toList(),
         ),
       );
 
       _logger.info('Routine with user data fetched: ${localRoutine.id}');
 
-      // Yerel ve kullanıcı verilerini birleştir
       return localRoutine.copyWith(
         isFavorite: userRoutine.isFavorite,
         isCustom: userRoutine.isCustom,
         userProgress: userRoutine.userProgress,
         lastUsedDate: userRoutine.lastUsedDate,
         userRecommended: userRoutine.userRecommended ?? false,
+        targetedBodyParts: targetedBodyParts,
+        routineExercises: routineExercises,
       );
     } catch (e, stackTrace) {
       _logger.severe('Error in getRoutineWithUserData', e, stackTrace);
@@ -297,42 +332,62 @@ class RoutineRepository {
     }
   }
 
-  // MARK: - Egzersiz Listesi Oluşturma
   Future<Map<String, List<Map<String, dynamic>>>> buildExerciseListForRoutine(
       Routines routine,
       ) async {
     try {
       Map<String, List<Map<String, dynamic>>> exerciseListByBodyPart = {};
+
+      // Rutin egzersizlerini sıralı şekilde al
       List<RoutineExercises> routineExercises =
       await getRoutineExercisesByRoutineId(routine.id);
+
+      // Hedef kas gruplarını ve yüzdelerini al
+      final targetedBodyParts = await _sqlProvider.getRoutineTargetedBodyParts(routine.id);
+      Map<int, int> targetPercentages = Map.fromEntries(
+          targetedBodyParts.map((t) => MapEntry(t.bodyPartId, t.targetPercentage))
+      );
 
       for (var routineExercise in routineExercises) {
         Exercises? exercise = await getExerciseById(routineExercise.exerciseId);
         if (exercise != null) {
-          BodyParts? bodyPart =
-          await _sqlProvider.getBodyPartById(exercise.mainTargetedBodyPartId);
-          WorkoutTypes? workoutType =
-          await _sqlProvider.getWorkoutTypeById(exercise.workoutTypeId);
+          // Egzersizin hedef kas gruplarını al
+          final exerciseTargets = await _sqlProvider.getExerciseTargetedBodyParts(exercise.id);
 
-          if (bodyPart != null) {
-            Map<String, dynamic> exerciseDetails = {
-              'id': exercise.id,
-              'name': exercise.name,
-              'description': exercise.description,
-              'defaultWeight': exercise.defaultWeight,
-              'defaultSets': exercise.defaultSets,
-              'defaultReps': exercise.defaultReps,
-              'workoutType': workoutType?.name ?? 'Unknown',
-              'bodyPartName': bodyPart.name,
-            };
+          for (var target in exerciseTargets) {
+            BodyParts? bodyPart = await _sqlProvider.getBodyPartById(target.bodyPartId);
+            WorkoutTypes? workoutType = await _sqlProvider.getWorkoutTypeById(exercise.workoutTypeId);
 
-            if (!exerciseListByBodyPart.containsKey(bodyPart.name)) {
-              exerciseListByBodyPart[bodyPart.name] = [];
+            if (bodyPart != null) {
+              Map<String, dynamic> exerciseDetails = {
+                'id': exercise.id,
+                'name': exercise.name,
+                'description': exercise.description,
+                'defaultWeight': exercise.defaultWeight,
+                'defaultSets': exercise.defaultSets,
+                'defaultReps': exercise.defaultReps,
+                'workoutType': workoutType?.name ?? 'Unknown',
+                'bodyPartName': bodyPart.name,
+                'orderIndex': routineExercise.orderIndex,
+                'targetPercentage': targetPercentages[bodyPart.id] ?? 0,
+                'isPrimaryTarget': target.isPrimary,
+                'exerciseTargetPercentage': target.targetPercentage
+              };
+
+              if (!exerciseListByBodyPart.containsKey(bodyPart.name)) {
+                exerciseListByBodyPart[bodyPart.name] = [];
+              }
+              exerciseListByBodyPart[bodyPart.name]!.add(exerciseDetails);
             }
-            exerciseListByBodyPart[bodyPart.name]!.add(exerciseDetails);
           }
         }
       }
+
+      // Her vücut bölümü için egzersizleri sırala
+      exerciseListByBodyPart.forEach((key, exercises) {
+        exercises.sort((a, b) => a['orderIndex'].compareTo(b['orderIndex']));
+      });
+
       return exerciseListByBodyPart;
     } catch (e, stackTrace) {
       _logger.severe('Error in buildExerciseListForRoutine', e, stackTrace);
@@ -340,7 +395,6 @@ class RoutineRepository {
     }
   }
 
-  // MARK: - Haftalık Challenge
   Future<void> acceptWeeklyChallenge(String userId, int routineId) async {
     try {
       await _firebaseProvider.setWeeklyChallenge(

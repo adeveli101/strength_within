@@ -1,6 +1,81 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-class UserSchedule {
+import '../models/BodyPart.dart';
+
+mixin UserScheduleValidation {
+  static const int MIN_SELECTED_DAYS = 1;
+  static const int MAX_SELECTED_DAYS = 7;
+  static const int MIN_FREQUENCY = 1;
+  static const int MAX_FREQUENCY = 7;
+  static const int MIN_REST_DAYS = 0;
+  static const int MAX_REST_DAYS = 6;
+
+  static ValidationResult validateUserSchedule({
+    required String userId,
+    required int itemId,
+    required String type,
+    required List<int> selectedDays,
+    required DateTime startDate,
+    int? recommendedFrequency,
+    int? minRestDays,
+  }) {
+    if (userId.isEmpty) {
+      return ValidationResult(
+        isValid: false,
+        message: 'Kullanıcı ID boş olamaz',
+      );
+    }
+
+    if (itemId <= 0) {
+      return ValidationResult(
+        isValid: false,
+        message: 'Geçersiz item ID',
+      );
+    }
+
+    if (type != 'part' && type != 'routine') {
+      return ValidationResult(
+        isValid: false,
+        message: "Tip 'part' veya 'routine' olmalıdır",
+      );
+    }
+
+    if (selectedDays.isEmpty || selectedDays.length > MAX_SELECTED_DAYS) {
+      return ValidationResult(
+        isValid: false,
+        message: 'Seçili gün sayısı $MIN_SELECTED_DAYS-$MAX_SELECTED_DAYS arasında olmalıdır',
+      );
+    }
+
+    if (startDate.isBefore(DateTime(2020))) {
+      return ValidationResult(
+        isValid: false,
+        message: 'Geçersiz başlangıç tarihi',
+      );
+    }
+
+    if (recommendedFrequency != null &&
+        (recommendedFrequency < MIN_FREQUENCY || recommendedFrequency > MAX_FREQUENCY)) {
+      return ValidationResult(
+        isValid: false,
+        message: 'Önerilen frekans $MIN_FREQUENCY-$MAX_FREQUENCY arasında olmalıdır',
+      );
+    }
+
+    if (minRestDays != null &&
+        (minRestDays < MIN_REST_DAYS || minRestDays > MAX_REST_DAYS)) {
+      return ValidationResult(
+        isValid: false,
+        message: 'Minimum dinlenme günü $MIN_REST_DAYS-$MAX_REST_DAYS arasında olmalıdır',
+      );
+    }
+
+    return ValidationResult(isValid: true);
+  }
+}
+
+
+class UserSchedule with UserScheduleValidation {
   final String id;
   final String userId;
   final int itemId;
@@ -15,21 +90,6 @@ class UserSchedule {
   final bool isCustom;
   final Map<String, List<Map<String, dynamic>>>? dailyExercises; // Yeni
 
-  UserSchedule({
-    required this.id,
-    required this.userId,
-    required this.itemId,
-    required this.type,
-    required this.selectedDays,
-    required this.startDate,
-    this.isActive = true,
-    this.recommendedFrequency,
-    this.minRestDays,
-    DateTime? lastUpdated,
-    this.performanceData,
-    this.isCustom = false,
-    this.dailyExercises, // Yeni eklenen
-  }) : lastUpdated = lastUpdated ?? DateTime.now();
 
   // Firebase'e veri gönderme
   Map<String, dynamic> toFirestore() {
@@ -193,4 +253,75 @@ class UserSchedule {
     }
     return true;
   }
+
+
+  UserSchedule._({
+    required this.id,
+    required this.userId,
+    required this.itemId,
+    required this.type,
+    required this.selectedDays,
+    required this.startDate,
+    required this.isActive,
+    this.recommendedFrequency,
+    this.minRestDays,
+    DateTime? lastUpdated,
+    this.performanceData,
+    required this.isCustom,
+    this.dailyExercises,
+  }) : lastUpdated = lastUpdated ?? DateTime.now();
+
+  factory UserSchedule({
+    required String id,
+    required String userId,
+    required int itemId,
+    required String type,
+    required List<int> selectedDays,
+    required DateTime startDate,
+    bool isActive = true,
+    int? recommendedFrequency,
+    int? minRestDays,
+    DateTime? lastUpdated,
+    Map<String, dynamic>? performanceData,
+    bool isCustom = false,
+    Map<String, List<Map<String, dynamic>>>? dailyExercises,
+  }) {
+    final validation = UserScheduleValidation.validateUserSchedule(
+      userId: userId,
+      itemId: itemId,
+      type: type,
+      selectedDays: selectedDays,
+      startDate: startDate,
+      recommendedFrequency: recommendedFrequency,
+      minRestDays: minRestDays,
+    );
+
+    if (!validation.isValid) {
+      throw UserScheduleException(validation.message);
+    }
+
+    return UserSchedule._(
+      id: id,
+      userId: userId,
+      itemId: itemId,
+      type: type,
+      selectedDays: selectedDays,
+      startDate: startDate,
+      isActive: isActive,
+      recommendedFrequency: recommendedFrequency,
+      minRestDays: minRestDays,
+      lastUpdated: lastUpdated,
+      performanceData: performanceData,
+      isCustom: isCustom,
+      dailyExercises: dailyExercises,
+    );
+  }
+}
+
+class UserScheduleException implements Exception {
+  final String message;
+  UserScheduleException(this.message);
+
+  @override
+  String toString() => message;
 }

@@ -10,6 +10,7 @@ import 'package:workout/models/routines.dart';
 import 'package:workout/ui/routine_ui/routine_card.dart';
 
 import '../../data_schedule_bloc/schedule_bloc.dart';
+import '../../models/RoutinetargetedBodyParts.dart';
 import '../../models/exercises.dart';
 import '../../z.app_theme/app_theme.dart';
 import '../exercises_ui/exercise_card.dart';
@@ -28,8 +29,6 @@ class RoutineDetailBottomSheet extends StatefulWidget {
 
   });
 
-
-
   @override
   _RoutineDetailBottomSheetState createState() => _RoutineDetailBottomSheetState();
 }
@@ -38,17 +37,38 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
   late RoutinesBloc _routinesBloc;
   final Logger _logger = Logger('RoutineDetailBottomSheet');
   Map<String, List<Map<String, dynamic>>> exerciseListByBodyPart = {};
+  Map<int, String> workoutTypeNames = {};
+  Map<int, String> bodyPartNames = {};
+
+  @override
+
 
   @override
   void initState() {
     super.initState();
     _routinesBloc = context.read<RoutinesBloc>();
-    _routinesBloc.add(FetchRoutineExercises(routineId: widget.routineId));
+    _loadInitialData();
+  }
+
+  void _loadInitialData() {
+    try {
+      // Rutin egzersizlerini yükle
+      _routinesBloc.add(FetchRoutineExercises(routineId: widget.routineId));
+    } catch (e) {
+      _logger.severe('Error loading initial data', e);
+    }
+  }
+
+  String getWorkoutTypeName(int workoutTypeId) {
+    return workoutTypeNames[workoutTypeId] ?? 'Yükleniyor...';
   }
 
 
+  String getBodyPartName(int bodyPartId) {
+    return bodyPartNames[bodyPartId] ?? 'Yükleniyor...';
+  }
 
-  @override
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -301,7 +321,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
       ),
     );
   }
-// Expandable Section Builder
+
   Widget _buildExpandableSection({
     required String title,
     required IconData icon,
@@ -557,6 +577,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
       }).toList(),
     );
   }
+
   Widget _buildExerciseGroup(List<Map<String, dynamic>> exercises) {
     return Container(
       padding: const EdgeInsets.all(AppTheme.paddingMedium),
@@ -651,7 +672,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
     );
   }
 
-// Header Section
+
   Widget _buildHeaderSection(Routines routine) {
     return Container(
       padding: const EdgeInsets.all(AppTheme.paddingMedium),
@@ -752,6 +773,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
       },
     );
   }
+
   Widget _buildExerciseCount(Map<String, List<Map<String, dynamic>>> exerciseListByBodyPart) {
     final count = exerciseListByBodyPart.values
         .fold(0, (sum, exercises) => sum + exercises.length);
@@ -772,7 +794,6 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
     );
   }
 
-  // Description Content
   Widget _buildDescriptionContent(Routines routine) {
     return Container(
       padding: const EdgeInsets.all(AppTheme.paddingMedium),
@@ -801,34 +822,6 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
     );
   }
 
-// Stats Content
-  Widget _buildStatsContent(Routines routine) {
-    return Container(
-      padding: const EdgeInsets.all(AppTheme.paddingMedium),
-      child: Row(
-        children: [
-          _buildStatItem(
-            Icons.fitness_center,
-            'Hedef',
-            _getBodyPartName(routine.mainTargetedBodyPartId),
-          ),
-          _buildStatItem(
-            Icons.category,
-            'Tip',
-            _getWorkoutTypeByName(routine.workoutTypeId),
-          ),
-          _buildStatItem(
-            Icons.trending_up,
-            'İlerleme',
-            '${routine.userProgress ?? 0}%',
-            color: _getProgressColor(routine.userProgress ?? 0),
-          ),
-        ],
-      ),
-    );
-  }
-
-// Progress Content
   Widget _buildProgressContent(Routines routine) {
     final progress = routine.userProgress ?? 0;
     return Container(
@@ -855,7 +848,6 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
     );
   }
 
-// Exercises Content
   Widget _buildExercisesContent(Map<String, List<Map<String, dynamic>>> exerciseListByBodyPart) {
     return Column(
       children: exerciseListByBodyPart.entries.map((entry) {
@@ -977,8 +969,6 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
     );
   }
 
-
-
   Widget _buildStatItem(IconData icon, String label, String value, {Color? color}) {
     return Expanded(
       child: LayoutBuilder(
@@ -1052,6 +1042,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
       ),
     );
   }
+
   Widget _buildExerciseInfo(IconData icon, String text) {
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -1087,6 +1078,34 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
             style: AppTheme.bodySmall.copyWith(
               fontWeight: FontWeight.w500,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatsContent(Routines routine) {
+    return Container(
+      padding: const EdgeInsets.all(AppTheme.paddingMedium),
+      child: Row(
+        children: [
+
+          FutureBuilder<String>(
+            future: _routinesBloc.repository.getWorkoutTypeById(routine.workoutTypeId)
+                .then((workoutType) => workoutType?.name ?? 'Bilinmeyen'),
+            builder: (context, snapshot) {
+              return _buildStatItem(
+                Icons.category,
+                'Tip',
+                snapshot.data ?? 'Yükleniyor...',
+              );
+            },
+          ),
+          _buildStatItem(
+            Icons.trending_up,
+            'İlerleme',
+            '${routine.userProgress ?? 0}%',
+            color: _getProgressColor(routine.userProgress ?? 0),
           ),
         ],
       ),
@@ -1140,11 +1159,113 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
             height: AppTheme.paddingSmall,
             color: AppTheme.primaryRed.withOpacity(0.2),
           ),
-          _buildExerciseInfo(Icons.track_changes, 'Hedef: ${routine.mainTargetedBodyPartId}'),
+          _buildTargetedBodyPartsList(routine.targetedBodyPartIds),
           const SizedBox(height: AppTheme.paddingSmall),
-          _buildExerciseInfo(Icons.category, 'Tip: ${routine.workoutTypeId}'),
+          _buildExerciseInfo(Icons.category, 'Tip: ${getWorkoutTypeName(routine.workoutTypeId)}'),
         ],
       ),
+    );
+  }
+
+  Widget _buildInfoSection(Routines routine) {
+    return Container(
+      margin: const EdgeInsets.symmetric(
+        horizontal: AppTheme.paddingMedium,
+        vertical: AppTheme.paddingSmall,
+      ),
+      decoration: BoxDecoration(
+        gradient: AppTheme.cardGradient,
+        borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.cardShadowColor,
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+        border: Border.all(
+          color: AppTheme.primaryRed.withOpacity(0.1),
+          width: 1,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppTheme.paddingSmall),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(AppTheme.paddingSmall),
+                  decoration: BoxDecoration(
+                    gradient: AppTheme.primaryGradient,
+                    borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
+                  ),
+                  child: const Icon(
+                    Icons.info_outline,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: AppTheme.paddingMedium),
+                Text(
+                  'Rutin Bilgileri',
+                  style: AppTheme.headingSmall,
+                ),
+              ],
+            ),
+            const SizedBox(height: AppTheme.paddingMedium),
+            _buildTargetedBodyPartsInfo(routine.targetedBodyPartIds),
+            _buildInfoRow(Icons.category, 'Antrenman Tipi', getWorkoutTypeName(routine.workoutTypeId)),
+            if (routine.lastUsedDate != null)
+              _buildInfoRow(
+                Icons.access_time,
+                'Son Kullanım',
+                routine.lastUsedDate!.toLocal().toString().split('.')[0],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+// Yardımcı metodlar
+  Widget _buildTargetedBodyPartsList(List<dynamic> targetedBodyPartIds) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: targetedBodyPartIds.map((bodyPartId) =>
+          _buildExerciseInfo(
+              Icons.track_changes,
+              getBodyPartName(bodyPartId)
+          )
+      ).toList(),
+    );
+  }
+
+  Future<String> _buildTargetedBodyPartsText(List<dynamic> bodyPartIds) async {
+    if (bodyPartIds.isEmpty) return 'Belirtilmemiş';
+
+    List<String> bodyPartNames = [];
+    for (var id in bodyPartIds) {
+      final bodyPart = await _routinesBloc.repository.getBodyPartById(id);
+      if (bodyPart != null) {
+        bodyPartNames.add(bodyPart.name);
+      }
+    }
+
+    return bodyPartNames.isEmpty ? 'Belirtilmemiş' : bodyPartNames.join(', ');
+  }
+  Widget _buildTargetedBodyPartsInfo(List<dynamic> targetedBodyPartIds) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: targetedBodyPartIds.map((bodyPartId) =>
+          _buildInfoRow(
+              Icons.fitness_center,
+              'Hedef Kas',
+              getBodyPartName(bodyPartId)
+          )
+      ).toList(),
     );
   }
 
@@ -1536,71 +1657,6 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
         .fold(0, (sum, exercises) => sum + exercises.length);
   }
 
-
-
-  Widget _buildInfoSection(Routines routine) {
-    return Container(
-      margin: const EdgeInsets.symmetric(
-        horizontal: AppTheme.paddingMedium,
-        vertical: AppTheme.paddingSmall,
-      ),
-      decoration: BoxDecoration(
-        gradient: AppTheme.cardGradient,
-        borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.cardShadowColor,
-            blurRadius: 15,
-            offset: const Offset(0, 8),
-          ),
-        ],
-        border: Border.all(
-          color: AppTheme.primaryRed.withOpacity(0.1),
-          width: 1,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppTheme.paddingSmall),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(AppTheme.paddingSmall),
-                  decoration: BoxDecoration(
-                    gradient: AppTheme.primaryGradient,
-                    borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
-                  ),
-                  child: const Icon(
-                    Icons.info_outline,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: AppTheme.paddingMedium),
-                Text(
-                  'Rutin Bilgileri',
-                  style: AppTheme.headingSmall,
-                ),
-              ],
-            ),
-            const SizedBox(height: AppTheme.paddingMedium),
-            _buildInfoRow(Icons.fitness_center, 'Hedef Bölge', routine.mainTargetedBodyPartId.toString()),
-            _buildInfoRow(Icons.category, 'Antrenman Tipi', routine.workoutTypeId.toString()),
-            if (routine.lastUsedDate != null)
-              _buildInfoRow(
-                Icons.access_time,
-                'Son Kullanım',
-                routine.lastUsedDate!.toLocal().toString().split('.')[0],
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildProgressSection(Routines routine) {
     final progress = routine.userProgress ?? 0;
     final color = _getProgressColor(progress);
@@ -1738,8 +1794,6 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
   }
 
 
-
-
   Color _getProgressColor(int progress) {
     if (progress >= 80) return Colors.green;
     if (progress >= 60) return Colors.lightGreen;
@@ -1748,41 +1802,5 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
     return Colors.white70.withRed(15);
   }
 
-  String _getWorkoutTypeByName(int workouttypeId) {
-    switch (workouttypeId) {
-      case 1:
-        return 'Strength';
-      case 2:
-        return 'Hypertrophy';
-      case 3:
-        return  'Endurance';
-      case 4:
-        return 'Power';
-      case 5:
-        return 'Flexibility';
-      default:
-        return 'Bilinmeyen';
-    }
-  }
 
-  String _getBodyPartName(int bodyPartId) {
-    switch (bodyPartId) {
-      case 1:
-        return 'Göğüs';
-      case 2:
-        return 'Sırt';
-      case 3:
-        return 'Bacak';
-      case 4:
-        return 'Omuz';
-      case 5:
-        return 'Kol';
-      case 6:
-        return 'Karın';
-      case 7:
-        return 'Full Body';
-      default:
-        return 'Bilinmeyen';
-    }
-  }
 }

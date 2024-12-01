@@ -231,7 +231,6 @@ class _ExerciseDetailsState extends State<ExerciseDetails> {
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
-            _buildDetailRow('Target Body Part', 'Part ${exercise.mainTargetedBodyPartId}'),
             _buildDetailRow('Default Sets', exercise.defaultSets.toString()),
             _buildDetailRow('Default Reps', exercise.defaultReps.toString()),
             _buildDetailRow('Default Weight', '${exercise.defaultWeight} kg'),

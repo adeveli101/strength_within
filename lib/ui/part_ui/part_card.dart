@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../data_bloc_part/part_bloc.dart';
 import '../../data_schedule_bloc/schedule_bloc.dart';
+import '../../models/PartTargetedBodyParts.dart';
 import '../../models/Parts.dart';
+import '../../utils/routine_helpers.dart';
 import '../../z.app_theme/app_theme.dart';
 
 class PartCard extends StatefulWidget {
@@ -169,22 +171,23 @@ class _PartCardState extends State<PartCard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildInfoRow(
-          Icons.fitness_center,
-          'Vücut Bölgesi: ${_getBodyPartName(widget.part.bodyPartId)}',
-        ),
-        const SizedBox(height: 4),
+        // Set Tipi bilgisi
         _buildInfoRow(
           Icons.repeat,
-          'Set Tipi: ${widget.part.setTypeString}',
+          'Set Tipi: ${setTypeToStringConverter(widget.part.setType)}',
         ),
         const SizedBox(height: 8),
+
+        // Zorluk seviyesi bilgisi
         _buildDifficultyRow(),
+
+        // Hedef kas gruplarını gösteren bilgi
+        _buildTargetedBodyPartsRow(widget.part.id)
       ],
     );
   }
 
-
+// Bilgi satırını oluşturan yardımcı metod
   Widget _buildInfoRow(IconData icon, String text) {
     return Row(
       children: [
@@ -207,6 +210,77 @@ class _PartCardState extends State<PartCard> {
       ],
     );
   }
+
+  Widget _buildTargetedBodyPartsRow(int partId) {
+    return FutureBuilder<List<PartTargetedBodyParts>>(
+      future: BlocProvider.of<PartsBloc>(context).repository.getPartTargetedBodyParts(partId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        } else if (snapshot.hasError) {
+          return Center(child: Text('Hata: ${snapshot.error}'));
+        } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(child: Text('Hedef kas grubu bulunamadı.'));
+        }
+
+        final targetedParts = snapshot.data!;
+
+        // firstWhere yerine try-catch ile güvenli kontrol
+        try {
+          final primaryTarget = targetedParts.firstWhere(
+                (target) => target.isPrimary == true,
+            orElse: () => targetedParts.first, // Eğer primary yoksa ilk elemanı al
+          );
+
+          return FutureBuilder<List<String>>(
+            future: _getBodyPartName([primaryTarget.bodyPartId]),
+            builder: (context, nameSnapshot) {
+              if (nameSnapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              } else if (nameSnapshot.hasError) {
+                return Center(child: Text('Hata: ${nameSnapshot.error}'));
+              } else if (!nameSnapshot.hasData || nameSnapshot.data!.isEmpty) {
+                return const Center(child: Text('Hedef kas ismi bulunamadı.'));
+              }
+
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                child: Row(
+                  children: [
+                    const Icon(Icons.man_rounded),
+                    const SizedBox(width: 8), // İkon ile metin arası boşluk
+                    Expanded(
+                      child: Text(
+                        '${nameSnapshot.data!.first} (${primaryTarget.targetPercentage}%)',
+                        style: const TextStyle(
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        } catch (e) {
+          return const Center(child: Text('Hedef kas grubu işlenirken hata oluştu.'));
+        }
+      },
+    );
+  }
+
+  Future<List<String>> _getBodyPartName(List<int> bodyPartIds) async {
+    // BLoC'dan repository'yi kullanarak body part isimlerini al
+    final bodyPartNames = await BlocProvider.of<PartsBloc>(context).repository.getBodyPartNamesByIds(bodyPartIds);
+    if (bodyPartNames.isEmpty) {
+      return List.filled(bodyPartIds.length, 'Bilinmiyor');
+    }
+
+    return bodyPartNames;
+  }
+
+
+
 
   Widget _buildDifficultyRow() {
     return Row(
@@ -319,29 +393,6 @@ class _PartCardState extends State<PartCard> {
     if (progress >= 20) return const Color(0xFFFF9800);
     return const Color(0xFFFF5722);
   }
-
-
-
-  String _getBodyPartName(int bodyPartId) {
-    switch (bodyPartId) {
-      case 1:
-        return 'Göğüs';
-      case 2:
-        return 'Sırt';
-      case 3:
-        return 'Bacak';
-      case 4:
-        return 'Omuz';
-      case 5:
-        return 'Kol';
-      case 6:
-        return 'Karın';
-      default:
-        return 'Bilinmeyen';
-    }
-  }
-
-
 
 
 

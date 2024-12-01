@@ -8,6 +8,8 @@ import '../models/Parts.dart';
 import '../models/routines.dart';
 import 'package:logging/logging.dart';
 
+import '../utils/routine_helpers.dart';
+
 // Events
 abstract class ForYouEvent extends Equatable {
   const ForYouEvent();
@@ -134,7 +136,6 @@ class ForYouBloc extends Bloc<ForYouEvent, ForYouState> {
           id: index + 1,
           name: 'Test Routine ${index + 1}',
           description: 'This is a test routine',
-          mainTargetedBodyPartId: (index % 3) + 1,
           workoutTypeId: (index % 2) + 1,
           difficulty: (index % 5) + 1,
           userProgress: (index * 20) % 100,
@@ -146,12 +147,12 @@ class ForYouBloc extends Bloc<ForYouEvent, ForYouState> {
         Parts(
           id: index + 1,
           name: 'Test Part ${index + 1}',
-          bodyPartId: (index % 3) + 1,
+
           setType: SetType.values[index % SetType.values.length],
           exerciseIds: [1, 2, 3],
           additionalNotes: 'Test notes',
           difficulty: (index % 5) + 1,
-          userProgress: (index * 20) % 100,
+          userProgress: (index * 20) % 100, targetedBodyPartIds: [],
         ));
   }
 

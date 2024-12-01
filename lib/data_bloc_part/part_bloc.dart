@@ -1,11 +1,14 @@
 // ignore_for_file: use_super_parameters
 
+import 'package:collection/collection.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:workout/data_schedule_bloc/schedule_repository.dart';
+import '../models/PartTargetedBodyParts.dart';
 import '../models/Parts.dart';
 import '../models/part_frequency.dart';
+import '../utils/routine_helpers.dart';
 import 'PartRepository.dart';
 import 'package:logging/logging.dart';
 
@@ -20,6 +23,80 @@ sealed class PartsEvent extends Equatable {
 }
 
 class FetchParts extends PartsEvent {}
+
+// Hedef kas grupları için eventler
+class UpdatePartTargets extends PartsEvent {
+  final int partId;
+  final List<Map<String, dynamic>> targetedBodyParts;
+
+  const UpdatePartTargets({
+    required this.partId,
+    required this.targetedBodyParts,
+  });
+
+  @override
+  List<Object> get props => [partId, targetedBodyParts];
+}
+
+class DeletePartTarget extends PartsEvent {
+  final int partId;
+  final int bodyPartId;
+
+  const DeletePartTarget({
+    required this.partId,
+    required this.bodyPartId,
+  });
+
+  @override
+  List<Object> get props => [partId, bodyPartId];
+}
+
+class FetchPartsWithTargetPercentage extends PartsEvent {
+  final int bodyPartId;
+  final int minPercentage;
+
+  const FetchPartsWithTargetPercentage({
+    required this.bodyPartId,
+    required this.minPercentage,
+  });
+
+  @override
+  List<Object> get props => [bodyPartId, minPercentage];
+}
+
+class FetchPartsGroupedByBodyPart extends PartsEvent {
+  const FetchPartsGroupedByBodyPart();
+
+  @override
+  List<Object> get props => [];
+}
+
+class FetchPartTargets extends PartsEvent {
+  final int partId;
+  const FetchPartTargets({required this.partId});
+  @override
+  List<Object> get props => [partId];
+}
+
+class FetchRelatedParts extends PartsEvent {
+  final int partId;
+  const FetchRelatedParts({required this.partId});
+  @override
+  List<Object> get props => [partId];
+}
+
+class FetchPartsWithMultipleTargets extends PartsEvent {}
+
+class FetchPartsWithExerciseCount extends PartsEvent {
+  final int minCount;
+  final int maxCount;
+  const FetchPartsWithExerciseCount({
+    required this.minCount,
+    required this.maxCount
+  });
+  @override
+  List<Object> get props => [minCount, maxCount];
+}
 
 class FetchPartExercises extends PartsEvent {
   final int partId;
@@ -127,6 +204,63 @@ class WeeklyScheduleLoading extends PartsState {
     required PartRepository repository,
   }) : super(userId: userId, repository: repository);
 }
+class PartTargetsUpdated extends PartsState {
+  final List<PartTargetedBodyParts> targets;
+
+  const PartTargetsUpdated({
+    required String userId,
+    required PartRepository repository,
+    required this.targets,
+  }) : super(userId: userId, repository: repository);
+
+  @override
+  List<Object> get props => [userId, repository, targets];
+}
+
+class PartsGroupedByBodyPart extends PartsState {
+  final Map<int, List<Parts>> groupedParts;
+
+  const PartsGroupedByBodyPart({
+    required String userId,
+    required PartRepository repository,
+    required this.groupedParts,
+  }) : super(userId: userId, repository: repository);
+
+  @override
+  List<Object> get props => [userId, repository, groupedParts];
+}
+
+class PartTargetDeleted extends PartsState {
+  final int partId;
+  final int bodyPartId;
+
+  const PartTargetDeleted({
+    required String userId,
+    required PartRepository repository,
+    required this.partId,
+    required this.bodyPartId,
+  }) : super(userId: userId, repository: repository);
+
+  @override
+  List<Object> get props => [userId, repository, partId, bodyPartId];
+}
+
+class PartsWithTargetPercentage extends PartsState {
+  final List<Parts> parts;
+  final int bodyPartId;
+  final int percentage;
+
+  const PartsWithTargetPercentage({
+    required String userId,
+    required PartRepository repository,
+    required this.parts,
+    required this.bodyPartId,
+    required this.percentage,
+  }) : super(userId: userId, repository: repository);
+
+  @override
+  List<Object> get props => [userId, repository, parts, bodyPartId, percentage];
+}
 
 class ScheduleUpdateSuccess extends PartsState {
   final String message;
@@ -152,6 +286,14 @@ class TogglePartFavorite extends PartsEvent {
   List<Object?> get props => [userId, partId, isFavorite];
 }
 
+
+/// States// States// States// States
+/// States// States// States// States
+/// States// States// States// States
+/// States// States// States// States
+/// States// States// States// States
+/// States// States// States// States
+
 // States
 sealed class PartsState extends Equatable {
   final String userId;
@@ -163,44 +305,85 @@ sealed class PartsState extends Equatable {
   });
 
   @override
-  List<Object?> get props => [userId, repository];
+  List<Object> get props => [userId, repository];
 }
 
-class ScheduleStatisticsLoaded extends PartsState {
-  final Map<String, int> statistics;
-  const ScheduleStatisticsLoaded({
+class PartsInitial extends PartsState {
+  const PartsInitial({
     required String userId,
     required PartRepository repository,
-    required this.statistics,
   }) : super(userId: userId, repository: repository);
-  @override
-  List<Object> get props => [userId, repository, statistics];
 }
 
-class ScheduleOperationSuccess extends PartsState {
-  final String message;
-  const ScheduleOperationSuccess({
+class PartsLoading extends PartsState {
+  const PartsLoading({
     required String userId,
     required PartRepository repository,
-    required this.message,
   }) : super(userId: userId, repository: repository);
-  @override
-  List<Object> get props => [userId, repository, message];
 }
 
+class PartsLoaded extends PartsState {
+  final List<Parts> parts;
 
-// States
-class WeeklyScheduleLoaded extends PartsState {
-  final Map<int, List<Parts>> schedule;
-
-  const WeeklyScheduleLoaded({
+  const PartsLoaded({
     required String userId,
     required PartRepository repository,
-    required this.schedule,
+    required this.parts,
   }) : super(userId: userId, repository: repository);
 
   @override
-  List<Object> get props => [userId, repository, schedule];
+  List<Object> get props => [userId, repository, parts];
+
+  PartsLoaded copyWith({List<Parts>? parts}) {
+    return PartsLoaded(
+      parts: parts ?? this.parts,
+      userId: userId,
+      repository: repository,
+    );
+  }
+}
+
+class PartExercisesLoaded extends PartsState {
+  final Parts part;
+  final List<Parts> parts;
+  final Map<String, List<Map<String, dynamic>>> exerciseListByBodyPart;
+
+  const PartExercisesLoaded({
+    required String userId,
+    required PartRepository repository,
+    required this.part,
+    required this.parts,
+    required this.exerciseListByBodyPart,
+  }) : super(userId: userId, repository: repository);
+
+  @override
+  List<Object> get props => [userId, repository, part, parts, exerciseListByBodyPart];
+}
+
+class PartTargetsLoaded extends PartsState {
+  final List<PartTargetedBodyParts> targets;
+
+  const PartTargetsLoaded({
+    required String userId,
+    required PartRepository repository,
+    required this.targets,
+  }) : super(userId: userId, repository: repository);
+
+  @override
+  List<Object> get props => [userId, repository, targets];
+}
+
+class RelatedPartsLoaded extends PartsState {
+  final List<Parts> relatedParts;
+
+  const RelatedPartsLoaded({
+    required String userId,
+    required PartRepository repository,
+    required this.relatedParts,
+  }) : super(userId: userId, repository: repository);
+
+  @override
+  List<Object> get props => [userId, repository, relatedParts];
 }
 
 class PartFrequencyLoaded extends PartsState {
@@ -216,61 +399,6 @@ class PartFrequencyLoaded extends PartsState {
   List<Object> get props => [userId, repository, frequency];
 }
 
-class PartsInitial extends PartsState {
-  const PartsInitial({
-    required String userId,
-    required PartRepository repository
-  }) : super(userId: userId, repository: repository);
-}
-
-class PartsLoading extends PartsState {
-  const PartsLoading({
-    required String userId,
-    required PartRepository repository
-  }) : super(userId: userId, repository: repository);
-}
-
-class PartsLoaded extends PartsState {
-  final List<Parts> parts;
-
-  const PartsLoaded({
-    required String userId,
-    required PartRepository repository,
-    required this.parts,
-  }) : super(userId: userId, repository: repository);
-
-  @override
-  List<Object?> get props => [userId, repository, parts];
-
-  PartsLoaded copyWith({List<Parts>? parts}) {
-    return PartsLoaded(
-      parts: parts ?? this.parts,
-      userId: userId,
-      repository: repository,
-    );
-  }
-
-
-}
-
-class PartExercisesLoaded extends PartsState {
-  final Parts part;
-  final List<Parts> parts; //
-  final Map<String, List<Map<String, dynamic>>> exerciseListByBodyPart;
-
-  const PartExercisesLoaded({
-    required String userId,
-    required PartRepository repository,
-    required this.part,
-    required this.parts, // Bunu ekledik
-    required this.exerciseListByBodyPart,
-  }) : super(userId: userId, repository: repository);
-
-  @override
-  List<Object?> get props => [userId, repository, part, parts, exerciseListByBodyPart];
-}
-
-
 class PartsError extends PartsState {
   final String message;
 
@@ -281,10 +409,14 @@ class PartsError extends PartsState {
   }) : super(userId: userId, repository: repository);
 
   @override
-  List<Object?> get props => [userId, repository, message];
+  List<Object> get props => [userId, repository, message];
 }
 
-// Bloc
+
+/// Bloc// Bloc// Bloc// Bloc/// Bloc// Bloc// Bloc// Bloc
+/// Bloc// Bloc// Bloc// Bloc/// Bloc// Bloc// Bloc// Bloc
+/// Bloc// Bloc// Bloc// Bloc/// Bloc// Bloc// Bloc// Bloc
+/// Bloc// Bloc// Bloc// Bloc/// Bloc// Bloc// Bloc// Bloc
 class PartsBloc extends Bloc<PartsEvent, PartsState> {
   final PartRepository repository;
   final String userId;
@@ -300,73 +432,324 @@ class PartsBloc extends Bloc<PartsEvent, PartsState> {
     on<FetchPartsByBodyPart>(_onFetchPartsByBodyPart);
     on<FetchPartsByWorkoutType>(_onFetchPartsByWorkoutType);
     on<FetchPartFrequency>(_onFetchPartFrequency);
-
+    on<FetchPartTargets>(_onFetchPartTargets);
+    on<FetchRelatedParts>(_onFetchRelatedParts);
+    on<FetchPartsWithMultipleTargets>(_onFetchPartsWithMultipleTargets);
+    on<FetchPartsWithExerciseCount>(_onFetchPartsWithExerciseCount);
+    on<UpdatePartTargets>(_onUpdatePartTargets);
+    on<DeletePartTarget>(_onDeletePartTarget);
+    on<FetchPartsWithTargetPercentage>(_onFetchPartsWithTargetPercentage);
+    on<FetchPartsGroupedByBodyPart>(_onFetchPartsGroupedByBodyPart);
   }
 
+  Future<void> _onUpdatePartTargets(
+      UpdatePartTargets event,
+      Emitter<PartsState> emit,
+      ) async {
+    emit(PartsLoading(userId: state.userId, repository: state.repository));
 
+    try {
+      await repository.updatePartTargets(
+        userId: state.userId,
+        partId: event.partId,
+        targetedBodyParts: event.targetedBodyParts,
+      );
 
+      final targets = await repository.getPartTargetedBodyParts(event.partId);
+      emit(PartTargetsUpdated(
+        userId: state.userId,
+        repository: state.repository,
+        targets: targets,
+      ));
 
+      _logger.info('Updated targets for part: ${event.partId}');
+    } catch (e) {
+      _logger.severe('Error updating part targets', e);
+      emit(PartsError(
+        userId: state.userId,
+        repository: state.repository,
+        message: 'Hedef güncellenirken hata oluştu: ${e.toString()}',
+      ));
+    }
+  }
 
+  Future<void> _onDeletePartTarget(
+      DeletePartTarget event,
+      Emitter<PartsState> emit,
+      ) async {
+    emit(PartsLoading(userId: state.userId, repository: state.repository));
 
+    try {
+      await repository.deletePartTarget(
+        userId: state.userId,
+        partId: event.partId,
+        bodyPartId: event.bodyPartId,
+      );
 
+      emit(PartTargetDeleted(
+        userId: state.userId,
+        repository: state.repository,
+        partId: event.partId,
+        bodyPartId: event.bodyPartId,
+      ));
 
+      _logger.info('Deleted target body part ID: ${event.bodyPartId} from part ID: ${event.partId}');
+    } catch (e) {
+      _logger.severe('Error deleting part target', e);
+      emit(PartsError(
+        userId: state.userId,
+        repository: state.repository,
+        message: 'Hedef silinirken hata oluştu: ${e.toString()}',
+      ));
+    }
+  }
 
+  Future<void> _onFetchPartsWithTargetPercentage(
+      FetchPartsWithTargetPercentage event,
+      Emitter<PartsState> emit,
+      ) async {
+    emit(PartsLoading(userId: state.userId, repository: state.repository));
 
+    try {
+      final parts = await repository.getPartsWithTargetPercentage(
+        event.bodyPartId,
+        event.minPercentage,
+      );
 
+      emit(PartsWithTargetPercentage(
+        userId: state.userId,
+        repository: state.repository,
+        parts: parts,
+        bodyPartId: event.bodyPartId,
+        percentage: event.minPercentage,
+      ));
+
+      _logger.info('Fetched ${parts.length} parts with target percentage >= ${event.minPercentage}% for body part ID: ${event.bodyPartId}');
+    } catch (e) {
+      _logger.severe('Error fetching parts with target percentage', e);
+      emit(PartsError(
+        userId: state.userId,
+        repository: state.repository,
+        message: 'Hedef yüzdesi ile parçalar alınırken hata oluştu: ${e.toString()}',
+      ));
+    }
+  }
+
+  Future<void> _onFetchPartsGroupedByBodyPart(
+      FetchPartsGroupedByBodyPart event,
+      Emitter<PartsState> emit,
+      ) async {
+    emit(PartsLoading(userId: state.userId, repository: state.repository));
+
+    try {
+      final groupedParts = await repository.getPartsGroupedByBodyPart();
+
+      emit(PartsGroupedByBodyPart(
+        userId: state.userId,
+        repository: state.repository,
+        groupedParts: groupedParts,
+      ));
+
+      _logger.info('Fetched parts grouped by body part successfully');
+    } catch (e) {
+      _logger.severe('Error fetching parts grouped by body part', e);
+      emit(PartsError(
+        userId: state.userId,
+        repository: state.repository,
+        message: 'Kas gruplarına göre parçalar alınırken hata oluştu: ${e.toString()}',
+      ));
+    }
+  }
+
+  Future<void> _onFetchPartTargets(
+      FetchPartTargets event,
+      Emitter<PartsState> emit,
+      ) async {
+    emit(PartsLoading(userId: state.userId, repository: state.repository));
+
+    try {
+      final targets = await repository.getPartTargetedBodyParts(event.partId);
+
+      if (targets.isNotEmpty) {
+        emit(PartTargetsLoaded(
+          userId: state.userId,
+          repository: state.repository,
+          targets: targets,
+        ));
+      } else {
+        emit(PartsError(
+          userId: state.userId,
+          repository: state.repository,
+          message: 'Parça hedefleri bulunamadı',
+        ));
+      }
+    } catch (e) {
+      emit(PartsError(
+        userId: state.userId,
+        repository: state.repository,
+        message: e.toString(),
+      ));
+    }
+  }
+
+  Future<void> _onFetchRelatedParts(
+      FetchRelatedParts event,
+      Emitter<PartsState> emit,
+      ) async {
+    emit(PartsLoading(userId: state.userId, repository: state.repository));
+
+    try {
+      final relatedParts = await repository.getRelatedParts(event.partId);
+
+      if (relatedParts.isNotEmpty) {
+        emit(RelatedPartsLoaded(
+          userId: state.userId,
+          repository: state.repository,
+          relatedParts: relatedParts,
+        ));
+      } else {
+        emit(PartsError(
+          userId: state.userId,
+          repository: state.repository,
+          message: 'İlişkili parçalar bulunamadı',
+        ));
+      }
+    } catch (e) {
+      emit(PartsError(
+        userId: state.userId,
+        repository: state.repository,
+        message: e.toString(),
+      ));
+    }
+  }
+
+  Future<void> _onFetchPartsWithMultipleTargets(
+      FetchPartsWithMultipleTargets event,
+      Emitter<PartsState> emit,
+      ) async {
+    emit(PartsLoading(userId: state.userId, repository: state.repository));
+
+    try {
+      final parts = await repository.getPartsWithMultipleTargets();
+
+      if (parts.isNotEmpty) {
+        emit(PartsLoaded(
+          userId: state.userId,
+          repository: state.repository,
+          parts: parts,
+        ));
+      } else {
+        emit(PartsError(
+          userId: state.userId,
+          repository: state.repository,
+          message: 'Çoklu hedeflere sahip parçalar bulunamadı',
+        ));
+      }
+    } catch (e) {
+      emit(PartsError(
+        userId: state.userId,
+        repository: state.repository,
+        message: e.toString(),
+      ));
+    }
+  }
+
+  Future<void> _onFetchPartsWithExerciseCount(
+      FetchPartsWithExerciseCount event,
+      Emitter<PartsState> emit,
+      ) async {
+    emit(PartsLoading(userId: state.userId, repository: state.repository));
+
+    try {
+      // Egzersiz sayısına göre parçaları al
+      final parts = await repository.getPartsWithExerciseCount(
+        event.minCount,
+        event.maxCount,
+      );
+
+      // Parçaların egzersiz bilgilerini zenginleştir
+      List<Parts> enrichedParts = [];
+      for (var part in parts) {
+        // Part'ın egzersizlerini al
+        final exercises = await repository.getPartExercisesByPartId(part.id);
+
+        // Part'ı zenginleştirilmiş bilgilerle güncelle
+        enrichedParts.add(part.copyWith(
+          exerciseIds: List<int>.from(exercises.map((e) => e.exerciseId)),
+        ));
+      }
+
+      emit(PartsLoaded(
+        userId: state.userId,
+        repository: state.repository,
+        parts: enrichedParts,
+      ));
+
+      _logger.info('Successfully fetched ${enrichedParts.length} parts with exercise count between ${event.minCount} and ${event.maxCount}');
+    } catch (e) {
+      _logger.severe('Error fetching parts with exercise count', e);
+      emit(PartsError(
+        userId: state.userId,
+        repository: state.repository,
+        message: 'Failed to fetch parts with exercise count: ${e.toString()}',
+      ));
+    }
+  }
 
   Future<void> _onFetchPartFrequency(
       FetchPartFrequency event,
       Emitter<PartsState> emit,
       ) async {
+    emit(PartsLoading(userId: state.userId, repository: state.repository));
+
     try {
+      // Parçanın sıklığını al
       final frequency = await repository.getPartFrequency(event.partId);
+
       if (frequency != null) {
         emit(PartFrequencyLoaded(
-          userId: userId,
-          repository: repository,
+          userId: state.userId,
+          repository: state.repository,
           frequency: frequency,
         ));
       } else {
         emit(PartsError(
-          userId: userId,
-          repository: repository,
-          message: 'Part frequency not found',
+          userId: state.userId,
+          repository: state.repository,
+          message: 'Parça sıklığı bulunamadı',
         ));
       }
     } catch (e) {
+      _logger.severe('Error fetching part frequency', e);
       emit(PartsError(
-        userId: userId,
-        repository: repository,
-        message: e.toString(),
+        userId: state.userId,
+        repository: state.repository,
+        message: 'Sıklık alınırken hata oluştu: ${e.toString()}',
       ));
     }
   }
 
   Future<void> _onFetchParts(
       FetchParts event,
-      Emitter<PartsState> emit
+      Emitter<PartsState> emit,
       ) async {
-    emit(PartsLoading(userId: userId, repository: repository));
-    try {
-      _logger.info('Fetching parts for user: $userId');
-      final parts = await repository.getPartsWithUserData(userId);
+    emit(PartsLoading(userId: state.userId, repository: state.repository));
 
-      if (parts.isEmpty) {
-        _logger.warning('No parts found for user: $userId');
-      } else {
-        _logger.info('Fetched ${parts.length} parts for user: $userId');
-      }
+    try {
+      final parts = await repository.getAllParts();
 
       emit(PartsLoaded(
-        userId: userId,
-        repository: repository,
+        userId: state.userId,
+        repository: state.repository,
         parts: parts,
       ));
-    } catch (e, stackTrace) {
-      _logger.severe('Error fetching parts for user: $userId', e, stackTrace);
+
+      _logger.info('Successfully fetched ${parts.length} parts');
+    } catch (e) {
+      _logger.severe('Error fetching parts', e);
       emit(PartsError(
-        userId: userId,
-        repository: repository,
+        userId: state.userId,
+        repository: state.repository,
         message: 'Failed to fetch parts: ${e.toString()}',
       ));
     }
@@ -380,21 +763,22 @@ class PartsBloc extends Bloc<PartsEvent, PartsState> {
     emit(PartsLoading(userId: state.userId, repository: state.repository));
 
     try {
-      final parts = await state.repository.getPartsByBodyPart(event.bodyPartId);
+      // Tek SQL sorgusu ile tüm verileri al
+      final groupedParts = await state.repository.getPartsGroupedByBodyPart();
 
-      emit(PartsLoaded(
+      emit(PartsGroupedByBodyPart(
         userId: state.userId,
         repository: state.repository,
-        parts: parts,
+        groupedParts: groupedParts,
       ));
 
-      _logger.info('Successfully fetched ${parts.length} parts for body part ${event.bodyPartId}');
+      _logger.info('Programlar başarıyla getirildi');
     } catch (e, stackTrace) {
-      _logger.severe('Error fetching parts by body part', e, stackTrace);
+      _logger.severe('Programlar getirilirken hata oluştu', e, stackTrace);
       emit(PartsError(
         userId: state.userId,
         repository: state.repository,
-        message: 'Failed to fetch parts: ${e.toString()}',
+        message: 'Programlar yüklenemedi: ${e.toString()}',
       ));
     }
   }
@@ -430,10 +814,11 @@ class PartsBloc extends Bloc<PartsEvent, PartsState> {
       Emitter<PartsState> emit
       ) async {
     emit(PartsLoading(userId: state.userId, repository: state.repository));
+
     try {
-      // Önce part'ı al
       final part = await repository.getPartById(event.partId);
       if (part == null) {
+        _logger.warning('Part not found with ID: ${event.partId}');
         emit(PartsError(
             userId: state.userId,
             repository: state.repository,
@@ -442,13 +827,17 @@ class PartsBloc extends Bloc<PartsEvent, PartsState> {
         return;
       }
 
-      // Egzersiz listesini oluştur
-      final exerciseListByBodyPart = await repository.buildExerciseListForPart(part);
+      // Paralel olarak verileri al
+      final results = await Future.wait([
+        repository.buildExerciseListForPart(part),
+        repository.getPartsWithUserData(state.userId)
+      ]);
 
-      // Tüm part'ları al
-      final allParts = await repository.getPartsWithUserData(state.userId);
+      final exerciseListByBodyPart = results[0] as Map<String, List<Map<String, dynamic>>>;
+      final allParts = results[1] as List<Parts>;
 
-      // State'i güncelle
+      _logger.info('Fetched exercises for part: ${part.name} with ${exerciseListByBodyPart.length} body parts');
+
       emit(PartExercisesLoaded(
         userId: state.userId,
         repository: state.repository,
@@ -456,7 +845,6 @@ class PartsBloc extends Bloc<PartsEvent, PartsState> {
         parts: allParts,
         exerciseListByBodyPart: exerciseListByBodyPart,
       ));
-
     } catch (e, stackTrace) {
       _logger.severe('Error in _onFetchPartExercises', e, stackTrace);
       emit(PartsError(
@@ -467,25 +855,29 @@ class PartsBloc extends Bloc<PartsEvent, PartsState> {
     }
   }
 
-
-
-
   void _onUpdatePart(UpdatePart event, Emitter<PartsState> emit) {
-    if (state is PartsLoaded) {
-      final currentState = state as PartsLoaded;
-      final updatedParts = currentState.parts.map((part) {
-        return part.id == event.updatedPart.id ? event.updatedPart : part;
-      }).toList();
-      emit(currentState.copyWith(parts: updatedParts));
+    try {
+      if (state is PartsLoaded) {
+        final currentState = state as PartsLoaded;
+        final updatedParts = List<Parts>.from(currentState.parts);
+        final partIndex = updatedParts.indexWhere((p) => p.id == event.updatedPart.id);
+
+        if (partIndex != -1) {
+          updatedParts[partIndex] = event.updatedPart;
+          _logger.info('Updated part: ${event.updatedPart.name}');
+          emit(currentState.copyWith(parts: updatedParts));
+        } else {
+          _logger.warning('Part not found for update: ${event.updatedPart.id}');
+        }
+      }
+    } catch (e, stackTrace) {
+      _logger.severe('Error in _onUpdatePart', e, stackTrace);
     }
   }
 
-  Future<void> _onTogglePartFavorite(
-      TogglePartFavorite event,
-      Emitter<PartsState> emit,
-      ) async {
+  Future<void> _onTogglePartFavorite(TogglePartFavorite event, Emitter<PartsState> emit) async {
     if (state is! PartsLoaded) {
-      _logger.warning('TogglePartFavorite called when state is not PartsLoaded');
+      _logger.warning('Invalid state for TogglePartFavorite');
       return;
     }
 
@@ -494,35 +886,28 @@ class PartsBloc extends Bloc<PartsEvent, PartsState> {
     final partIndex = updatedParts.indexWhere((p) => p.id.toString() == event.partId);
 
     if (partIndex == -1) {
-      _logger.warning('Part with id ${event.partId} not found');
+      _logger.warning('Part not found: ${event.partId}');
       return;
     }
 
     try {
-      // Favori durumunu güncelle
-      await repository.togglePartFavorite(
-          event.userId,
-          event.partId,
-          event.isFavorite
-      );
+      await repository.togglePartFavorite(event.userId, event.partId, event.isFavorite);
 
-      // Yerel state'i güncelle
       updatedParts[partIndex] = updatedParts[partIndex].copyWith(isFavorite: event.isFavorite);
 
-      // Yeni state'i emit et
       emit(PartsLoaded(
         userId: currentState.userId,
         repository: currentState.repository,
         parts: updatedParts,
       ));
 
-      _logger.info('Successfully updated favorite status for part: ${event.partId}');
-    } catch (e) {
-      _logger.severe('Error in _onTogglePartFavorite: $e');
+      _logger.info('Updated favorite status for part: ${event.partId}');
+    } catch (e, stackTrace) {
+      _logger.severe('Error in _onTogglePartFavorite', e, stackTrace);
       emit(PartsError(
         userId: currentState.userId,
         repository: currentState.repository,
-        message: 'Favori durumu güncellenirken bir hata oluştu: $e',
+        message: 'Favori durumu güncellenirken bir hata oluştu',
       ));
     }
   }

@@ -35,6 +35,7 @@ class _PartsPageState extends State<PartsPage> {
     _partsBloc = BlocProvider.of<PartsBloc>(context);
     _loadAllData();
     _loadFilterOptions();
+
   }
 
   void _setupLogging() {
@@ -52,6 +53,7 @@ class _PartsPageState extends State<PartsPage> {
       _selectedDifficulty = null;
     });
   }
+
 
   Future<void> _loadFilterOptions() async {
     List<Parts> allParts = await _partsBloc.repository.getAllParts();
@@ -100,43 +102,53 @@ class _PartsPageState extends State<PartsPage> {
 
   Widget _buildPartsContent(List<Parts> parts) {
     List<Parts> filteredParts = _filterParts(parts);
-    List<Map<String, dynamic>> bodyParts = _getBodyParts();
 
-    return Column(
-      children: [
-        _buildDifficultyFilter(),
-        Expanded(
-          child: Column(
-            children: [
-              Expanded(
-                child: PageView.builder(
-                  controller: _pageController,
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _partsBloc.repository.getAllBodyParts().then((bodyParts) =>
+          bodyParts.map((bp) => bp.toMap()).toList()),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(child: CircularProgressIndicator());
+        } else if (snapshot.hasError) {
+          return Center(child: Text('Hata oluştu: ${snapshot.error}', style: TextStyle(color: Colors.white)));
+        } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return Center(child: Text('Hiç body part bulunamadı.', style: TextStyle(color: Colors.white)));
+        }
 
-                  itemCount: bodyParts.length,
-                  onPageChanged: (index) {
-                    setState(() {
-                      _currentBodyPartIndex = index;
-                    });
-                  },
-                  itemBuilder: (context, index) {
-                    final bodyPart = bodyParts[index];
-                    return Column(
-                      children: [
-                        _buildBodyPartTabs(bodyParts),
+        List<Map<String, dynamic>> bodyParts = snapshot.data!;
 
-                        Expanded(
-                          child: _buildBodyPartSection(bodyPart['id'], bodyPart['name'], filteredParts),
-
+        return Column(
+          children: [
+            _buildDifficultyFilter(),
+            Expanded(
+              child: PageView.builder(
+                controller: _pageController,
+                itemCount: bodyParts.length,
+                onPageChanged: (index) {
+                  setState(() {
+                    _currentBodyPartIndex = index;
+                  });
+                },
+                itemBuilder: (context, index) {
+                  final bodyPart = bodyParts[index];
+                  return Column(
+                    children: [
+                      _buildBodyPartTabs(bodyParts),
+                      Expanded(
+                        child: _buildBodyPartSection(
+                          bodyPart['id'],
+                          bodyPart['name'],
+                          filteredParts,
                         ),
-                      ],
-                    );
-                  },
-                ),
+                      ),
+                    ],
+                  );
+                },
               ),
-            ],
-          ),
-        ),
-      ],
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -182,8 +194,6 @@ class _PartsPageState extends State<PartsPage> {
     );
   }
 
-
-
   Widget _buildDifficultyFilter() {
     // Difficulty'leri sırala
     List<Map<String, dynamic>> sortedDifficulties = List.from(difficultyFilterOptions)
@@ -221,10 +231,14 @@ class _PartsPageState extends State<PartsPage> {
     );
   }
 
-
   Widget _buildBodyPartSection(int bodyPartId, String bodyPartName, List<Parts> filteredParts) {
-    final bodyPartParts = filteredParts.where((part) => part.bodyPartId == bodyPartId).toList();
-    if (bodyPartParts.isEmpty) return Center(child: Text('Bu bölüm için parça bulunamadı.', style: TextStyle(color: Colors.white)));
+    // Belirtilen bodyPartId'ye göre parçaları filtrele
+    final bodyPartParts = filteredParts.where((part) => part.targetedBodyPartIds.contains(bodyPartId)).toList();
+
+    // Eğer filtrelenmiş parça yoksa kullanıcıya bilgi ver
+    if (bodyPartParts.isEmpty) {
+      return Center(child: Text('Bu bölüm için parça bulunamadı.', style: TextStyle(color: Colors.white)));
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -236,16 +250,15 @@ class _PartsPageState extends State<PartsPage> {
             children: [
               Row(
                 children: [
-
                   Text(
                     bodyPartName,
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
                   ),
-
                   IconButton(
                     icon: Icon(Icons.arrow_right_alt, color: Colors.white),
                     onPressed: () {
-                      int previousIndex = (_currentBodyPartIndex + 1 + _getBodyParts().length) % _getBodyParts().length;
+                      // _getBodyParts() metodunu tanımlayın veya mevcut bir metodu çağırın
+                      int previousIndex = (_currentBodyPartIndex + 1) % filteredParts.length;
                       _pageController.animateToPage(
                         previousIndex,
                         duration: Duration(milliseconds: 300),
@@ -253,7 +266,6 @@ class _PartsPageState extends State<PartsPage> {
                       );
                     },
                   ),
-
                 ],
               ),
               Row(
@@ -328,7 +340,6 @@ class _PartsPageState extends State<PartsPage> {
     );
   }
 
-
   Widget _buildCardView(List<Parts> parts) {
 
     return GridView.builder(
@@ -349,7 +360,6 @@ class _PartsPageState extends State<PartsPage> {
       },
     );
   }
-
   Widget _buildFilterChip({required Widget label, required bool selected, required Function(bool) onSelected}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4.0),
@@ -419,17 +429,6 @@ class _PartsPageState extends State<PartsPage> {
         ],
       ),
     );
-  }
-
-  List<Map<String, dynamic>> _getBodyParts() {
-    return [
-      {'id': 1, 'name': 'Göğüs'},
-      {'id': 2, 'name': 'Sırt'},
-      {'id': 3, 'name': 'Bacak'},
-      {'id': 4, 'name': 'Omuz'},
-      {'id': 5, 'name': 'Kol'},
-      {'id': 6, 'name': 'Karın'},
-    ];
   }
 
   Widget _buildPageIndicator(int pageCount) {

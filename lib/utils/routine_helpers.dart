@@ -3,10 +3,23 @@ import 'package:get/get.dart';
 import '../models/BodyPart.dart';
 import '../models/WorkoutType.dart';
 import '../models/Parts.dart';
+enum SetType {
+  regular,  // Normal set
+  drop,     // Drop set
+  superSet, // Super set
+  tri,      // Tri set
+  giant,    // Giant set
+  normal    // Normal set (legacy support)
+}
+// Kas grubu dönüştürücüler
+String bodyPartToStringConverter(BodyParts bodyPart) {
+  return bodyPart.name.capitalize!;
+}
 
-
-String mainTargetedBodyPartToStringConverter(MainTargetedBodyPart? mainTargetedBodyPart) {
-  return mainTargetedBodyPart!.name.capitalize!;
+String bodyPartIdToStringConverter(int bodyPartId,  bodyParts) {
+  // BodyPart ID'sine göre ismi döndür
+  final bodyPart = bodyParts.firstWhere((part) => part.id == bodyPartId, orElse: () => BodyParts(id: -1, name: 'Bilinmiyor'));
+  return bodyPart.name.capitalize!;
 }
 
 String workoutTypeToStringConverter(WorkoutTypes workoutType) {
@@ -15,6 +28,7 @@ String workoutTypeToStringConverter(WorkoutTypes workoutType) {
 
 
 
+// Set tipleri için dönüştürücüler
 Color setTypeToColorConverter(SetType setType) {
   switch (setType) {
     case SetType.regular:
@@ -29,6 +43,8 @@ Color setTypeToColorConverter(SetType setType) {
       return Colors.red;
     case SetType.normal:
       return Colors.orange;
+    default:
+      return Colors.transparent; // Varsayılan bir renk
   }
 }
 
@@ -46,6 +62,8 @@ String setTypeToStringConverter(SetType setType) {
       return 'Giant sets';
     case SetType.normal:
       return 'Normal';
+    default:
+      return 'Bilinmiyor'; // Varsayılan bir değer
   }
 }
 
@@ -61,42 +79,54 @@ int setTypeToExerciseCountConverter(SetType setType) {
       return 3;
     case SetType.giant:
       return 4;
+    default:
+      return 0; // Varsayılan bir değer
   }
 }
 
-Widget mainTargetedBodyPartToImageConverter(MainTargetedBodyPart mainTargetedBodyPart) {
+// Kas grubu ikon dönüştürücüsü
+Widget bodyPartToIconConverter(BodyParts bodyPart) {
   double scale = 30;
-  switch (mainTargetedBodyPart) {
-    case MainTargetedBodyPart.abs:
-      return Image.asset('assets/abs-96.png', scale: scale);
-    case MainTargetedBodyPart.arm:
-    case MainTargetedBodyPart.shoulder:
-      return Image.asset('assets/muscle-96.png', scale: scale);
-    case MainTargetedBodyPart.back:
-      return Image.asset('assets/back-96.png', scale: scale);
-    case MainTargetedBodyPart.chest:
-      return Image.asset('assets/chest-96.png', scale: scale);
-    case MainTargetedBodyPart.leg:
-      return Image.asset('assets/leg-96.png', scale: scale);
-    case MainTargetedBodyPart.core:
-      return Image.asset('assets/abs-96.png');
-  }
-}
 
-int getTimestampNow() {
-  return DateTime.now().millisecondsSinceEpoch;
-}
-
-class StringHelper {
-  static String weightToString(double? weight) {
-    if (weight == null) return '';
-    if (weight - weight.truncate() != 0) {
-      return weight.toStringAsFixed(1);
-    } else {
-      return weight.toStringAsFixed(0);
+  // Ana kas gruplarına göre ikon seçimi
+  if (bodyPart.parentBodyPartId == null) {
+    switch (bodyPart.id) {
+      case 1: // Göğüs
+        return Image.asset('assets/chest-96.png', scale: scale);
+      case 2: // Sırt
+        return Image.asset('assets/back-96.png', scale: scale);
+      case 3: // Bacak
+        return Image.asset('assets/leg-96.png', scale: scale);
+      case 4: // Omuz
+      case 5: // Kol
+        return Image.asset('assets/muscle-96.png', scale: scale);
+      case 6: // Karın
+        return Image.asset('assets/abs-96.png', scale: scale);
+      default:
+        return Image.asset('assets/muscle-96.png', scale: scale);
     }
+  } else {
+    // Alt kas grupları için parent'ın ikonunu kullan
+    return bodyPartToIconConverter(BodyParts(
+      id: bodyPart.parentBodyPartId!,
+      name: '',
+      parentBodyPartId: null,
+    ));
   }
 }
 
 
+  int getTimestampNow() {
+    return DateTime.now().millisecondsSinceEpoch;
+  }
 
+  class StringHelper {
+  static String weightToString(double? weight) {
+  if (weight == null) return '';
+  if (weight - weight.truncate() != 0) {
+  return weight.toStringAsFixed(1);
+  } else {
+  return weight.toStringAsFixed(0);
+  }
+  }
+  }
