@@ -1,41 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?><sqlb_project><db path="esek.db" readonly="0" foreign_keys="1" case_sensitive_like="0" temp_store="0" wal_autocheckpoint="1000" synchronous="2"/><attached/><window><main_tabs open="browser pragmas query structure" current="2"/></window><tab_structure><column_width id="0" width="300"/><column_width id="1" width="0"/><column_width id="2" width="100"/><column_width id="3" width="2717"/><column_width id="4" width="0"/><expanded_item id="0" parent="1"/><expanded_item id="1" parent="1"/><expanded_item id="2" parent="1"/><expanded_item id="3" parent="1"/></tab_structure><tab_browse><table title="RoutineExercises" custom_title="0" dock_id="1" table="4,16:mainRoutineExercises"/><dock_state state="000000ff00000000fd0000000100000002000003ee0000037efc0100000001fb000000160064006f0063006b00420072006f00770073006500310100000000000003ee0000011e00ffffff000003ee0000000000000004000000040000000800000008fc00000000"/><default_encoding codec=""/><browse_table_settings><table schema="main" name="BodyParts" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort><column index="0" mode="0"/></sort><column_widths><column index="1" value="35"/><column index="2" value="47"/><column index="3" value="140"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="Exercises" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort><column index="0" mode="0"/></sort><column_widths><column index="1" value="35"/><column index="2" value="247"/><column index="3" value="88"/><column index="4" value="73"/><column index="5" value="76"/><column index="6" value="97"/><column index="7" value="154"/><column index="8" value="300"/><column index="9" value="300"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="PartExercises" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort><column index="1" mode="0"/></sort><column_widths><column index="1" value="35"/><column index="2" value="46"/><column index="3" value="70"/><column index="4" value="72"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="PartFrequency" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort/><column_widths><column index="1" value="35"/><column index="2" value="46"/><column index="3" value="149"/><column index="4" value="83"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="Parts" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort/><column_widths><column index="1" value="35"/><column index="2" value="191"/><column index="3" value="74"/><column index="4" value="54"/><column index="5" value="300"/><column index="6" value="57"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="RoutineExercises" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort><column index="1" mode="0"/></sort><column_widths><column index="1" value="35"/><column index="2" value="63"/><column index="3" value="70"/><column index="4" value="72"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="Routines" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort><column index="3" mode="1"/></sort><column_widths><column index="1" value="35"/><column index="2" value="207"/><column index="3" value="300"/><column index="4" value="154"/><column index="5" value="97"/><column index="6" value="57"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="WorkoutTypes" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort/><column_widths><column index="1" value="35"/><column index="2" value="95"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table></browse_table_settings></tab_browse><tab_sql><sql name="SQL 1">-- Önce tekrar eden kayıtları kontrol edelim
-WITH DuplicateCheck AS (
-    SELECT partId, exerciseId, orderIndex,
-           ROW_NUMBER() OVER (
-               PARTITION BY partId, exerciseId 
-               ORDER BY orderIndex DESC
-           ) as rn
-    FROM PartExercises
-)
-SELECT * FROM DuplicateCheck 
-WHERE rn &gt; 1;
+<?xml version="1.0" encoding="UTF-8"?><sqlb_project><db path="esek.db" readonly="0" foreign_keys="1" case_sensitive_like="0" temp_store="2" wal_autocheckpoint="1000" synchronous="2"/><attached/><window><main_tabs open="browser pragmas query structure" current="0"/></window><tab_structure><column_width id="0" width="300"/><column_width id="1" width="0"/><column_width id="2" width="100"/><column_width id="3" width="2319"/><column_width id="4" width="0"/><expanded_item id="0" parent="1"/><expanded_item id="1" parent="1"/><expanded_item id="2" parent="1"/><expanded_item id="3" parent="1"/></tab_structure><tab_browse><table title="RoutineTargetedBodyParts" custom_title="0" dock_id="3" table="4,24:mainRoutineTargetedBodyParts"/><dock_state state="000000ff00000000fd0000000100000002000003ee0000037efc0100000002fc00000000000003ee0000000000fffffffa000000000100000002fb000000160064006f0063006b00420072006f00770073006500310000000000ffffffff0000000000000000fb000000160064006f0063006b00420072006f00770073006500320100000000ffffffff0000000000000000fb000000160064006f0063006b00420072006f00770073006500330100000000000003ee0000012f00ffffff000003ee0000000000000004000000040000000800000008fc00000000"/><default_encoding codec=""/><browse_table_settings><table schema="main" name="BodyParts" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort/><column_widths><column index="1" value="35"/><column index="2" value="119"/><column index="3" value="112"/><column index="4" value="77"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="RoutineTargetedBodyParts" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort/><column_widths><column index="1" value="35"/><column index="2" value="63"/><column index="3" value="74"/><column index="4" value="109"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table></browse_table_settings></tab_browse><tab_sql><sql name="SQL 1">-- Geçici tabloları RAM'de tut
+PRAGMA temp_store = MEMORY;
 
--- Tekrar eden kayıtları silelim
-DELETE FROM PartExercises
-WHERE rowid NOT IN (
-    SELECT MIN(rowid)
-    FROM PartExercises
-    GROUP BY partId, exerciseId
-);
-
--- OrderIndex'leri düzenleyelim
--- Geçici tablo oluştur
-CREATE TEMPORARY TABLE temp_part_exercises AS
-SELECT partId, exerciseId,
-    (ROW_NUMBER() OVER (
-        PARTITION BY partId 
-        ORDER BY orderIndex
-    ) * 10) as new_order
-FROM PartExercises;
-
--- Ana tabloyu güncelle
-UPDATE PartExercises
-SET orderIndex = (
-    SELECT new_order 
-    FROM temp_part_exercises 
-    WHERE temp_part_exercises.partId = PartExercises.partId 
-    AND temp_part_exercises.exerciseId = PartExercises.exerciseId
-);
-
--- Geçici tabloyu sil
-DROP TABLE temp_part_exercises;</sql><current_tab id="0"/></tab_sql></sqlb_project>
+-- İndeksleri optimize et
+ANALYZE;
+PRAGMA optimize;
+</sql><current_tab id="0"/></tab_sql></sqlb_project>

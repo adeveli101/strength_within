@@ -1,12 +1,56 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/cupertino.dart';
-import '../models/Parts.dart';
+
 import '../utils/routine_helpers.dart';
 
-class FirebaseParts {
+mixin FirebasePartsValidation {
+  static const int MIN_NAME_LENGTH = 2;
+  static const int MAX_NAME_LENGTH = 100;
+  static const int MAX_NOTE_LENGTH = 500;
+  static const int MAX_EXERCISES = 50;
+
+  static ValidationResult validateFirebaseParts({
+    required String name,
+    required List<int> targetedBodyPartIds,
+    required SetType setType,
+    required String additionalNotes,
+    required List<String> exerciseIds,
+  }) {
+    if (name.isEmpty || name.length < MIN_NAME_LENGTH || name.length > MAX_NAME_LENGTH) {
+      return ValidationResult(
+        isValid: false,
+        message: 'İsim $MIN_NAME_LENGTH-$MAX_NAME_LENGTH karakter arasında olmalıdır',
+      );
+    }
+
+    if (additionalNotes.length > MAX_NOTE_LENGTH) {
+      return ValidationResult(
+        isValid: false,
+        message: 'Notlar $MAX_NOTE_LENGTH karakterden uzun olamaz',
+      );
+    }
+
+    if (targetedBodyPartIds.isEmpty) {
+      return ValidationResult(
+        isValid: false,
+        message: 'En az bir hedef bölge seçilmelidir',
+      );
+    }
+
+    if (exerciseIds.isEmpty || exerciseIds.length > MAX_EXERCISES) {
+      return ValidationResult(
+        isValid: false,
+        message: 'Egzersiz sayısı 1-$MAX_EXERCISES arasında olmalıdır',
+      );
+    }
+
+    return ValidationResult(isValid: true);
+  }
+}
+
+class FirebaseParts with FirebasePartsValidation {
   final String id;
   final String name;
-  final int bodyPartId;
+  final List<int> targetedBodyPartIds;
   final SetType setType;
   final String additionalNotes;
   final bool isFavorite;
@@ -16,33 +60,67 @@ class FirebaseParts {
   final bool? userRecommended;
   final List<String> exerciseIds;
 
-  FirebaseParts({
+  FirebaseParts._({
     required this.id,
     required this.name,
-    required this.bodyPartId,
+    required this.targetedBodyPartIds,
     required this.setType,
-    this.additionalNotes = '',
-    this.isFavorite = false,
-    this.isCustom = false,
+    required this.additionalNotes,
+    required this.isFavorite,
+    required this.isCustom,
     this.userProgress,
     this.lastUsedDate,
     this.userRecommended,
     required this.exerciseIds,
   });
 
-  String get setTypeString => setTypeToStringConverter(setType);
-  Color get setTypeColor => setTypeToColorConverter(setType);
-  int get exerciseCount => setTypeToExerciseCountConverter(setType);
+  factory FirebaseParts({
+    required String id,
+    required String name,
+    required List<int> targetedBodyPartIds,
+    required SetType setType,
+    String additionalNotes = '',
+    bool isFavorite = false,
+    bool isCustom = false,
+    int? userProgress,
+    DateTime? lastUsedDate,
+    bool? userRecommended,
+    required List<String> exerciseIds,
+  }) {
+    final validation = FirebasePartsValidation.validateFirebaseParts(
+      name: name,
+      targetedBodyPartIds: targetedBodyPartIds,
+      setType: setType,
+      additionalNotes: additionalNotes,
+      exerciseIds: exerciseIds,
+    );
+
+    if (!validation.isValid) {
+      throw FirebasePartsException(validation.message);
+    }
+
+    return FirebaseParts._(
+      id: id,
+      name: name,
+      targetedBodyPartIds: targetedBodyPartIds,
+      setType: setType,
+      additionalNotes: additionalNotes,
+      isFavorite: isFavorite,
+      isCustom: isCustom,
+      userProgress: userProgress,
+      lastUsedDate: lastUsedDate,
+      userRecommended: userRecommended,
+      exerciseIds: exerciseIds,
+    );
+  }
 
   factory FirebaseParts.fromFirestore(DocumentSnapshot doc) {
     try {
       Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-
-      // Tüm alanlar için null kontrolü yapıyoruz ve varsayılan değerler atıyoruz
       return FirebaseParts(
         id: doc.id,
         name: data['name'] as String? ?? '',
-        bodyPartId: (data['bodyPartId'] as num?)?.toInt() ?? 0,
+        targetedBodyPartIds: List<int>.from(data['targetedBodyPartIds'] ?? []),
         setType: SetType.values[(data['setType'] as num?)?.toInt() ?? 0],
         additionalNotes: data['additionalNotes'] as String? ?? '',
         isFavorite: data['isFavorite'] as bool? ?? false,
@@ -54,89 +132,45 @@ class FirebaseParts {
         userRecommended: data['userRecommended'] as bool? ?? false,
         exerciseIds: List<String>.from(data['exerciseIds'] ?? []),
       );
-    } catch (e, stackTrace) {
-      debugPrint('Error parsing FirebaseParts from document ${doc.id}: $e\n$stackTrace');
-      // Hata durumunda varsayılan bir FirebaseParts objesi dönüyoruz
-      return FirebaseParts(
-        id: doc.id,
-        name: '',
-        bodyPartId: 0,
-        setType: SetType.values[0],
-        exerciseIds: [],
-      );
+    } catch (e) {
+      throw FirebasePartsException('Veri dönüştürme hatası: $e');
     }
   }
 
-
-
   Map<String, dynamic> toFirestore() {
-    return {
-      'name': name,
-      'bodyPartId': bodyPartId,
-      'setType': setType.index,
-      'additionalNotes': additionalNotes,
-      'isFavorite': isFavorite,
-      'isCustom': isCustom,
-      'userProgress': userProgress,
-      'lastUsedDate': lastUsedDate != null ? Timestamp.fromDate(lastUsedDate!) : null,
-      'userRecommended': userRecommended,
-      'exerciseIds': exerciseIds,
-    };
-  }
-
-  FirebaseParts copyWith({
-    String? id,
-    String? name,
-    int? bodyPartId,
-    SetType? setType,
-    String? additionalNotes,
-    bool? isFavorite,
-    bool? isCustom,
-    int? userProgress,
-    DateTime? lastUsedDate,
-    bool? userRecommended,
-    List<String>? exerciseIds,
-  }) {
-    return FirebaseParts(
-      id: id ?? this.id,
-      name: name ?? this.name,
-      bodyPartId: bodyPartId ?? this.bodyPartId,
-      setType: setType ?? this.setType,
-      additionalNotes: additionalNotes ?? this.additionalNotes,
-      isFavorite: isFavorite ?? this.isFavorite,
-      isCustom: isCustom ?? this.isCustom,
-      userProgress: userProgress ?? this.userProgress,
-      lastUsedDate: lastUsedDate ?? this.lastUsedDate,
-      userRecommended: userRecommended ?? this.userRecommended,
-      exerciseIds: exerciseIds ?? this.exerciseIds,
-    );
-  }
-
-  factory FirebaseParts.fromMap(Map<String, dynamic> map) {
-    return FirebaseParts(
-      id: map['id'] as String,
-      name: map['name'] as String,
-      bodyPartId: map['bodyPartId'] as int,
-      setType: SetType.values[map['setType'] as int],
-      additionalNotes: map['additionalNotes'] as String? ?? '',
-      isFavorite: map['isFavorite'] as bool? ?? false,
-      isCustom: map['isCustom'] as bool? ?? false,
-      userProgress: map['userProgress'] as int?,
-      lastUsedDate: map['lastUsedDate'] != null ? DateTime.parse(map['lastUsedDate'] as String) : null,
-      userRecommended: map['userRecommended'] as bool?,
-      exerciseIds: List<String>.from(map['exerciseIds'] ?? []),
-    );
-  }
+    try {
+      return {
+        'name': name,
+        'targetedBodyPartIds': targetedBodyPartIds,
+        'setType': setType.index,
+        'additionalNotes': additionalNotes,
+        'isFavorite': isFavorite,
+        'isCustom': isCustom,
+        'userProgress': userProgress,
+        'lastUsedDate': lastUsedDate != null ? Timestamp.fromDate(lastUsedDate!) : null,
+        'userRecommended': userRecommended,
+        'exerciseIds': exerciseIds,
+      };
+    } catch (e) {
+      throw FirebasePartsException('Veri kaydetme hatası: $e');
+    }
+  }}
 
 
-  List<int> get safeExerciseIds {
-    return exerciseIds.whereType<int>().toList();
-  }
-
-
+class FirebasePartsException implements Exception {
+  final String message;
+  FirebasePartsException(this.message);
 
   @override
-  String toString() {
-    return 'FirebasePart(id: $id, name: $name, bodyPartId: $bodyPartId, setType: $setTypeString, additionalNotes: $additionalNotes, isFavorite: $isFavorite, isCustom: $isCustom, userProgress: $userProgress, lastUsedDate: $lastUsedDate, userRecommended: $userRecommended, exerciseIds: $exerciseIds)';
-  }
+  String toString() => message;
+}
+
+class ValidationResult {
+  final bool isValid;
+  final String message;
+
+  ValidationResult({
+    required this.isValid,
+    this.message = '',
+  });
 }

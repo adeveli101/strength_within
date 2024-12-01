@@ -14,8 +14,7 @@ import 'package:workout/ui/for_you_page.dart';
 import 'package:workout/data_provider/firebase_provider.dart';
 import 'package:workout/data_provider/sql_provider.dart';
 import 'package:workout/ui/library.dart';
-import 'package:workout/ui/list_pages/custom_page.dart';
-import 'package:workout/ui/list_pages/program_merger_page.dart';
+import 'package:workout/ui/list_pages/program_merger/program_merger_page.dart';
 import 'package:workout/ui/setting_pages.dart';
 import 'package:workout/z.app_theme/app_theme.dart';
 import 'package:workout/z.app_theme/circular_logo.dart';
@@ -472,6 +471,18 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       ),
       label: label,
     );
+  }
+
+  IconData _getBodyPartIcon(int bodyPartId) {
+    switch (bodyPartId) {
+      case 1: return Icons.fitness_center; // Göğüs
+      case 2: return Icons.accessibility_new; // Sırt
+      case 3: return Icons.directions_walk; // Bacak
+      case 4: return Icons.sports_martial_arts; // Omuz
+      case 5: return Icons.sports_handball; // Kol
+      case 6: return Icons.circle; // Karın
+      default: return Icons.fitness_center;
+    }
   }
 
 }

@@ -1,10 +1,14 @@
 import 'dart:io';
 import 'package:flutter/services.dart';
-import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'package:sqflite/sqflite.dart';
+import '../data_provider_cache/app_cache.dart';
 import '../models/BodyPart.dart';
+import '../models/ExerciseTargetedBodyParts.dart';
 import '../models/PartExercises.dart';
+import '../models/PartTargetedBodyParts.dart';
 import '../models/RoutineExercises.dart';
+import '../models/RoutinetargetedBodyParts.dart';
 import '../models/WorkoutType.dart';
 import '../models/exercises.dart';
 import '../models/Parts.dart';
@@ -12,10 +16,22 @@ import '../models/part_frequency.dart';
 import '../models/routine_frequency.dart';
 import '../models/routines.dart';
 import 'package:logging/logging.dart';
+import '../utils/routine_helpers.dart';
+import 'dart:async';
+import 'database_helpers.dart';
+
+
 
 final _logger = Logger('SQLProvider');
 
 class SQLProvider {
+
+
+
+  static final SQLProvider _instance = SQLProvider._internal();
+  factory SQLProvider() => _instance;
+  SQLProvider._internal();
+
   static Database? _database;
   static const String DB_NAME = 'esek.db';
   static const int DB_VERSION = 1; // Veritabanı versiyonunu takip etmek için
@@ -28,37 +44,28 @@ class SQLProvider {
 
   Future<Database> initDatabase() async {
     String dbPath = join(await getDatabasesPath(), DB_NAME);
-
-    // Her durumda veritabanını assets'ten kopyala
     try {
-      // Eğer varolan bir veritabanı varsa, sil
       if (await databaseExists(dbPath)) {
         await deleteDatabase(dbPath);
         _logger.info("Eski veritabanı silindi.");
       }
-
-      // Assets'ten yeni veritabanını kopyala
       ByteData data = await rootBundle.load(join('database', DB_NAME));
       List<int> bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
       await File(dbPath).writeAsBytes(bytes, flush: true);
-      _logger.info("Veritabanı assets'ten yeniden kopyalandı.");
-    } catch (e) {
-      _logger.severe("Veritabanı kopyalama hatası", e);
-      throw Exception("Veritabanı kopyalanamadı: $e");
-    }
 
-    // Veritabanını aç
-    return await openDatabase(
-      dbPath,
-      version: DB_VERSION,
-      onCreate: (db, version) async {
-        await _createTables(db);
-        _logger.info("Veritabanı tabloları oluşturuldu.");
-      },
-      onOpen: (db) {
-        _logger.info("Veritabanı açıldı. Version: $DB_VERSION");
-      },
-    );
+      return await openDatabase(
+        dbPath,
+        version: DB_VERSION,
+        onCreate: (db, version) async {
+          await _createTables(db);
+          await _createIndexes(db); // Index oluşturma eklendi
+          _logger.info("Veritabanı tabloları ve indexler oluşturuldu.");
+        },
+      );
+    } catch (e) {
+      _logger.severe("Veritabanı başlatma hatası", e);
+      throw ("Veritabanı başlatılamadı", code: "DB_INIT_ERROR", details: e);
+    }
   }
 
   Future<void> testDatabaseContent() async {
@@ -90,94 +97,355 @@ class SQLProvider {
     _logger.info("Veritabanı yeniden yüklendi.");
   }
 
+  Future _createTables(Database db) async {
+    await db.execute('''
+    CREATE TABLE WorkoutTypes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL
+    )
+  ''');
 
+    await db.execute('''
+    CREATE TABLE BodyParts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      parentBodyPartId INTEGER REFERENCES BodyParts(id),
+      isCompound BOOLEAN DEFAULT FALSE
+    )
+  ''');
 
+    await db.execute('''
+    CREATE TABLE "Parts" (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      setType INTEGER NOT NULL,
+      additionalNotes TEXT,
+      difficulty INTEGER
+    )
+  ''');
 
-  Future<RoutineFrequency?> getRoutineFrequency(int routineId) async {
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'RoutineFrequency',
-      where: 'routineId = ?',
-      whereArgs: [routineId],
-    );
+    await db.execute('''
+    CREATE TABLE "Exercises" (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      defaultWeight REAL NOT NULL,
+      defaultSets INTEGER NOT NULL,
+      defaultReps INTEGER NOT NULL,
+      workoutTypeId INTEGER NOT NULL,
+      description TEXT,
+      gifUrl TEXT,
+      FOREIGN KEY(workoutTypeId) REFERENCES WorkoutTypes(id)
+    )
+  ''');
 
-    if (maps.isNotEmpty) {
-      return RoutineFrequency.fromMap(maps.first);
-    }
-    return null;
+    await db.execute('''
+    CREATE TABLE "Routines" (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      description TEXT,
+      workoutTypeId INTEGER,
+      difficulty INTEGER,
+      FOREIGN KEY(workoutTypeId) REFERENCES WorkoutTypes(id)
+    )
+  ''');
+
+    await db.execute('''
+    CREATE TABLE "ExerciseTargetedBodyParts" (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      exerciseId INTEGER NOT NULL,
+      bodyPartId INTEGER NOT NULL,
+      isPrimary BOOLEAN DEFAULT FALSE,
+      targetPercentage INTEGER NOT NULL DEFAULT 100,
+      FOREIGN KEY(exerciseId) REFERENCES Exercises(id),
+      FOREIGN KEY(bodyPartId) REFERENCES BodyParts(id),
+      CHECK (targetPercentage BETWEEN 0 AND 100)
+    )
+  ''');
+
+    await db.execute('''
+    CREATE TABLE "RoutineTargetedBodyParts" (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      routineId INTEGER NOT NULL,
+      bodyPartId INTEGER NOT NULL,
+      targetPercentage INTEGER NOT NULL DEFAULT 100,
+      FOREIGN KEY(routineId) REFERENCES Routines(id),
+      FOREIGN KEY(bodyPartId) REFERENCES BodyParts(id),
+      CHECK (targetPercentage BETWEEN 0 AND 100)
+    )
+  ''');
+
+    await db.execute('''
+    CREATE TABLE PartExercises (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      partId INTEGER NOT NULL,
+      exerciseId INTEGER NOT NULL,
+      orderIndex INTEGER,
+      FOREIGN KEY (partId) REFERENCES Parts(id),
+      FOREIGN KEY (exerciseId) REFERENCES Exercises(id)
+    )
+  ''');
+
+    await db.execute('''
+    CREATE TABLE RoutineExercises (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      routineId INTEGER NOT NULL,
+      exerciseId INTEGER NOT NULL,
+      orderIndex INTEGER,
+      FOREIGN KEY (routineId) REFERENCES Routines(id),
+      FOREIGN KEY (exerciseId) REFERENCES Exercises(id)
+    )
+  ''');
+
+    await db.execute('''
+    CREATE TABLE PartFrequency (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      partId INTEGER NOT NULL,
+      recommendedFrequency INTEGER NOT NULL,
+      minRestDays INTEGER NOT NULL,
+      FOREIGN KEY (partId) REFERENCES Parts(id)
+    )
+  ''');
+
+    await db.execute('''
+    CREATE TABLE RoutineFrequency (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      routineId INTEGER NOT NULL,
+      recommendedFrequency INTEGER NOT NULL,
+      minRestDays INTEGER NOT NULL,
+      FOREIGN KEY (routineId) REFERENCES Routines(id)
+    )
+  ''');
+
+    await db.execute('''
+    CREATE TABLE PartTargetedBodyParts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      partId INTEGER NOT NULL,
+      bodyPartId INTEGER NOT NULL,
+      isPrimary BOOLEAN DEFAULT FALSE,
+      targetPercentage INTEGER DEFAULT 100,
+      FOREIGN KEY(partId) REFERENCES Parts(id),
+      FOREIGN KEY(bodyPartId) REFERENCES BodyParts(id)
+    )
+  ''');
   }
 
-  Future<PartFrequency?> getPartFrequency(int partId) async {
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'PartFrequency',
-      where: 'partId = ?',
-      whereArgs: [partId],
-    );
+  Future _createIndexes(Database db) async {
+    // Primary Foreign Key Indexes
+    await db.execute('CREATE INDEX idx_exercises_workout ON Exercises(workoutTypeId)');
+    await db.execute('CREATE INDEX idx_routines_workout ON Routines(workoutTypeId)');
+    await db.execute('CREATE INDEX idx_bodyparts_parent ON BodyParts(parentBodyPartId)');
 
-    if (maps.isNotEmpty) {
-      return PartFrequency.fromMap(maps.first);
-    }
-    return null;
+    // Composite Indexes for Exercise Relations
+    await db.execute('CREATE INDEX idx_part_exercises_order ON PartExercises(partId, orderIndex)');
+    await db.execute('CREATE INDEX idx_routine_exercises_order ON RoutineExercises(routineId, orderIndex)');
+
+    // Frequency Table Indexes
+    await db.execute('CREATE INDEX idx_part_frequency ON PartFrequency(partId, recommendedFrequency)');
+    await db.execute('CREATE INDEX idx_routine_frequency ON RoutineFrequency(routineId, recommendedFrequency)');
+
+    // Targeted BodyParts Indexes
+    await db.execute('CREATE INDEX idx_part_targeted ON PartTargetedBodyParts(partId, isPrimary, targetPercentage)');
+    await db.execute('CREATE INDEX idx_exercise_targeted ON ExerciseTargetedBodyParts(exerciseId, isPrimary, targetPercentage)');
+    await db.execute('CREATE INDEX idx_routine_targeted ON RoutineTargetedBodyParts(routineId, targetPercentage)');
+
+    // Search Optimization Indexes
+    await db.execute('CREATE INDEX idx_parts_search ON Parts(name COLLATE NOCASE, setType, difficulty)');
+    await db.execute('CREATE INDEX idx_exercises_search ON Exercises(name COLLATE NOCASE, workoutTypeId)');
+    await db.execute('CREATE INDEX idx_routines_search ON Routines(name COLLATE NOCASE, workoutTypeId, difficulty)');
+    await db.execute('CREATE INDEX idx_bodyparts_search ON BodyParts(name COLLATE NOCASE, isCompound)');
   }
+
+
+
+  ///cache ///cache ///cache ///cache ///cache ///cache
+  ///cache ///cache ///cache ///cache ///cache ///cache
+  final AppCache _cache = AppCache();
+
+  static const String ROUTINES_CACHE_KEY = 'all_routines';
+  static const String EXERCISES_CACHE_KEY = 'all_exercises';
+  static const String BODYPARTS_CACHE_KEY = 'all_bodyparts';
+  static const String WORKOUTTYPE_CACHE_KEY = 'workout_types';
+  static const String PARTS_CACHE_KEY = 'all_parts';
+
+
+  Future<List<T>> getCachedData<T>(String key, Future<List<T>> Function() dbQuery) async {
+    // Önce cache'den kontrol et
+    final cachedData = _cache.get<List<T>>(key);
+    if (cachedData != null) {
+      return cachedData;
+    }
+
+    // Cache'de yoksa DB'den al ve cache'e kaydet
+    final data = await dbQuery();
+    _cache.set(key, data);
+    return data;
+  }
+
+
+  //büyük sorgular için cache
+
+  Future<List<Exercises>> getAllExercises() async {
+    // Cache kontrolü
+    final cachedExercises = _cache.get<List<Exercises>>(EXERCISES_CACHE_KEY);
+    if (cachedExercises != null) {
+      return cachedExercises;
+    }
+
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query('Exercises');
+      final exercises = List.generate(maps.length, (i) => Exercises.fromMap(maps[i]));
+
+      // Sonuçları cache'e kaydet
+      _cache.set(EXERCISES_CACHE_KEY, exercises);
+      return exercises;
+    } catch (e) {
+      _logger.severe('Error getting all exercises', e);
+      return [];
+    }
+  }
+
 
   Future<List<BodyParts>> getAllBodyParts() async {
+    final cachedBodyParts = _cache.get<List<BodyParts>>(BODYPARTS_CACHE_KEY);
+    if (cachedBodyParts != null) {
+      return cachedBodyParts;
+    }
+
     try {
       final db = await database;
       final List<Map<String, dynamic>> maps = await db.query('BodyParts');
-      _logger.fine("BodyParts ham veri: $maps");
-      return List.generate(maps.length, (i) => BodyParts.fromMap(maps[i]));
+      final bodyParts = List.generate(maps.length, (i) => BodyParts.fromMap(maps[i]));
+
+      _cache.set(BODYPARTS_CACHE_KEY, bodyParts);
+      return bodyParts;
     } catch (e) {
       _logger.severe('Error getting all body parts', e);
       return [];
     }
   }
 
-  Future<BodyParts?> getBodyPartById(int id) async {
+
+
+  Future<List<Parts>> getAllParts() async {
+    final cachedParts = _cache.get<List<Parts>>(PARTS_CACHE_KEY);
+    if (cachedParts != null) {
+      return cachedParts;
+    }
+
     try {
       final db = await database;
-      final List<Map<String, dynamic>> maps = await db.query(
-        'BodyParts',
-        where: 'Id = ?',
-        whereArgs: [id],
-        limit: 1,
-      );
-      if (maps.isNotEmpty) {
-        return BodyParts.fromMap(maps.first);
-      }
-      return null;
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT p.*,
+          GROUP_CONCAT(DISTINCT pe.exerciseId) as exerciseIds,
+          GROUP_CONCAT(DISTINCT ptb.bodyPartId || '|' || 
+            ptb.isPrimary || '|' || ptb.targetPercentage) as targetedBodyParts
+        FROM Parts p
+        LEFT JOIN PartExercises pe ON p.id = pe.partId
+        LEFT JOIN PartTargetedBodyParts ptb ON p.id = ptb.partId
+        GROUP BY p.id
+      ''');
+
+        return _generatePartsFromMaps(maps);
+      });
     } catch (e) {
-      _logger.severe('Error getting body part by id', e);
-      return null;
+      _logger.severe('Error getting all parts', e);
+      throw Exception('Parts alınırken hata oluştu: $e');
     }
   }
 
-  Future<List<BodyParts>> getBodyPartsByMainTargeted(MainTargetedBodyPart mainTargeted) async {
+
+  Future<List<Routines>> getAllRoutines() async {
+    // Önce cache'i kontrol et
+    final cachedRoutines = _cache.get<List<Routines>>(ROUTINES_CACHE_KEY);
+    if (cachedRoutines != null) {
+      return cachedRoutines;
+    }
+
     try {
       final db = await database;
-      final List<Map<String, dynamic>> maps = await db.query(
-        'BodyParts',
-        where: 'MainTargetedBodyPart = ?',
-        whereArgs: [mainTargeted.index],
-      );
-      return List.generate(maps.length, (i) => BodyParts.fromMap(maps[i]));
-    } catch (e) {
-      _logger.severe('Error getting body parts by main targeted', e);
-      return [];
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT r.*, 
+          GROUP_CONCAT(re.exerciseId) as exerciseIds,
+          GROUP_CONCAT(rtb.bodyPartId || ':' || rtb.targetPercentage) as targetedBodyParts
+        FROM Routines r
+        LEFT JOIN RoutineExercises re ON r.id = re.routineId
+        LEFT JOIN RoutineTargetedBodyParts rtb ON r.id = rtb.routineId
+        GROUP BY r.id
+        ORDER BY r.id
+      ''');
+
+        final routines = await Future.wait(maps.map((map) async {
+          final targetedBodyParts = await txn.query(
+              'RoutineTargetedBodyParts',
+              where: 'routineId = ?',
+              whereArgs: [map['id']]
+          );
+
+          return Routines.fromMap({
+            ...map,
+            'routineExercises': map['exerciseIds']?.split(',')
+                .map((e) => {'exerciseId': int.parse(e)}).toList() ?? [],
+            'targetedBodyParts': targetedBodyParts
+          });
+        }));
+
+        // Sonuçları cache'e kaydet
+        _cache.set(ROUTINES_CACHE_KEY, routines);
+        return routines;
+
+      });
+    } catch (e, stackTrace) {
+      _logger.severe('Error getting all routines', e, stackTrace);
+      rethrow;
     }
   }
 
-  Future<List<BodyParts>> searchBodyPartsByName(String name) async {
+
+
+// Cache'i temizleme metodları
+  void invalidatePartssCache() {
+    _cache.invalidatePattern('^parts_.*');
+  }
+
+  void invalidateRoutinesCache() {
+    _cache.invalidatePattern('^routines_.*');
+  }
+
+  void invalidateExercisesCache() {
+    _cache.invalidatePattern('^exercises_.*');
+  }
+
+  void clearAllCache() {
+    _cache.clear();
+  }
+
+
+
+
+  ///exercises
+
+
+  Future<List<ExerciseTargetedBodyParts>> getExerciseTargetedBodyParts(int exerciseId) async {
     try {
       final db = await database;
-      final List<Map<String, dynamic>> maps = await db.query(
-        'BodyParts',
-        where: 'Name LIKE ?',
-        whereArgs: ['%$name%'],
-      );
-      return List.generate(maps.length, (i) => BodyParts.fromMap(maps[i]));
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT etb.*, b.name as bodyPartName
+        FROM ExerciseTargetedBodyParts etb
+        LEFT JOIN BodyParts b ON etb.bodyPartId = b.id
+        WHERE etb.exerciseId = ?
+        ORDER BY etb.targetPercentage DESC
+      ''', [exerciseId]);
+
+        return List.generate(maps.length, (i) =>
+            ExerciseTargetedBodyParts.fromMap(maps[i])
+        );
+      });
     } catch (e) {
-      _logger.severe('Error searching body parts by name', e);
+      _logger.severe('Error getting exercise targeted body parts', e);
       return [];
     }
   }
@@ -187,8 +455,8 @@ class SQLProvider {
       final db = await database;
       final List<Map<String, dynamic>> maps = await db.query(
         'Exercises',
-        columns: ['Id', 'Name', 'Description', 'DefaultWeight', 'DefaultSets', 'DefaultReps', 'WorkoutTypeId', 'MainTargetedBodyPartId', 'GifUrl'],
-        where: 'Id = ?',
+        columns: ['id', 'name', 'description', 'defaultWeight', 'defaultSets', 'defaultReps', 'workoutTypeId', 'gifUrl'],
+        where: 'id = ?',
         whereArgs: [id],
         limit: 1,
       );
@@ -204,22 +472,6 @@ class SQLProvider {
       return null;
     }
   }
-
-  Future<List<Exercises>> getAllExercises() async {
-    try {
-      final db = await database;
-      final List<Map<String, dynamic>> maps = await db.query(
-        'Exercises',
-        columns: ['Id', 'Name', 'Description', 'DefaultWeight', 'DefaultSets', 'DefaultReps', 'WorkoutTypeId', 'MainTargetedBodyPartId', 'GifUrl'],
-      );
-      _logger.fine("Exercises ham veri: $maps");
-      return List.generate(maps.length, (i) => Exercises.fromMap(maps[i]));
-    } catch (e) {
-      _logger.severe('Error getting all exercises', e);
-      return [];
-    }
-  }
-
 
   Future<List<Exercises>> getExercisesByIds(List<int> ids) async {
     final db = await database;
@@ -240,7 +492,6 @@ class SQLProvider {
   }
 
 
-
   Future<List<Exercises>> getExercisesByWorkoutType(int workoutTypeId) async {
     try {
       final db = await database;
@@ -252,21 +503,6 @@ class SQLProvider {
       return List.generate(maps.length, (i) => Exercises.fromMap(maps[i]));
     } catch (e) {
       _logger.severe('Error getting exercises by workout type', e);
-      return [];
-    }
-  }
-
-  Future<List<Exercises>> getExercisesByMainTargetedBodyPart(int mainTargetedBodyPartId) async {
-    try {
-      final db = await database;
-      final List<Map<String, dynamic>> maps = await db.query(
-        'Exercises',
-        where: 'MainTargetedBodyPartId = ?',
-        whereArgs: [mainTargetedBodyPartId],
-      );
-      return List.generate(maps.length, (i) => Exercises.fromMap(maps[i]));
-    } catch (e) {
-      _logger.severe('Error getting exercises by main targeted body part', e);
       return [];
     }
   }
@@ -301,17 +537,419 @@ class SQLProvider {
     }
   }
 
-  Future<List<RoutineExercises>> getRoutineExercisesByRoutineId(int routineId) async {
+  Future<Map<int, double>> getTargetPercentagesForExercise(int exerciseId) async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        'ExerciseTargetedBodyParts',
+        where: 'exerciseId = ?',
+        whereArgs: [exerciseId],
+      );
+      return Map.fromEntries(
+          maps.map((m) => MapEntry(m['bodyPartId'] as int, m['targetPercentage'] as double))
+      );
+    } catch (e) {
+      _logger.severe('Error getting target percentages for exercise', e);
+      return {};
+    }
+  }
+
+  Future<List<Exercises>> getExercisesByBodyPart(int bodyPartId, {bool isPrimary = true}) async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT DISTINCT e.* FROM Exercises e
+      INNER JOIN ExerciseTargetedBodyParts etb ON e.id = etb.exerciseId
+      WHERE etb.bodyPartId = ? AND etb.isPrimary = ?
+    ''', [bodyPartId, isPrimary ? 1 : 0]);
+      return List.generate(maps.length, (i) => Exercises.fromMap(maps[i]));
+    } catch (e) {
+      _logger.severe('Error getting exercises by body part', e);
+      return [];
+    }
+  }
+
+  Future<List<ExerciseTargetedBodyParts>> getPrimaryTargetedBodyParts(int exerciseId) async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        'ExerciseTargetedBodyParts',
+        where: 'exerciseId = ? AND isPrimary = 1',
+        whereArgs: [exerciseId],
+      );
+      return List.generate(maps.length, (i) => ExerciseTargetedBodyParts.fromMap(maps[i]));
+    } catch (e) {
+      _logger.severe('Error getting primary targeted body parts', e);
+      return [];
+    }
+  }
+
+  Future<List<ExerciseTargetedBodyParts>> getSecondaryTargetedBodyParts(int exerciseId) async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        'ExerciseTargetedBodyParts',
+        where: 'exerciseId = ? AND isPrimary = 0',
+        whereArgs: [exerciseId],
+      );
+      return List.generate(maps.length, (i) => ExerciseTargetedBodyParts.fromMap(maps[i]));
+    } catch (e) {
+      _logger.severe('Error getting secondary targeted body parts', e);
+      return [];
+    }
+  }
+
+
+
+  ///bodyparts///  ///bodyparts///  ///bodyparts///
+  ///bodyparts///  ///bodyparts///  ///bodyparts///
+
+  Future<String> getBodyPartName(int bodyPartId) async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        'BodyParts',
+        where: 'id = ?',
+        whereArgs: [bodyPartId],
+      );
+
+      if (maps.isNotEmpty) {
+        return maps.first['name'] as String;
+      }
+      return 'Bilinmiyor';
+    } catch (e) {
+      _logger.severe('Error getting body part name', e);
+      return 'Bilinmiyor';
+    }
+  }
+
+  Future<List<BodyParts>> getPrimaryTargetedBodyPartsForExercise(int exerciseId) async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT b.* FROM BodyParts b
+      INNER JOIN ExerciseTargetedBodyParts etb ON b.id = etb.bodyPartId
+      WHERE etb.exerciseId = ? AND etb.isPrimary = 1
+    ''', [exerciseId]);
+      return List.generate(maps.length, (i) => BodyParts.fromMap(maps[i]));
+    } catch (e) {
+      _logger.severe('Error getting primary targeted body parts for exercise', e);
+      return [];
+    }
+  }
+
+  Future<List<String>> getBodyPartNamesByIds(List<int> bodyPartIds) async {
+    try {
+      if (bodyPartIds.isEmpty) return [];
+
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT id, name 
+      FROM BodyParts 
+      WHERE id IN (${bodyPartIds.join(',')})
+      ORDER BY CASE 
+        WHEN parentBodyPartId IS NULL THEN 0 
+        ELSE 1 
+      END, id
+    ''');
+
+      _logger.info('Body part names fetched for IDs: ${bodyPartIds.length} items');
+
+      if (maps.isEmpty) {
+        _logger.warning('No body parts found for IDs: $bodyPartIds');
+        return List.filled(bodyPartIds.length, 'Bilinmiyor');
+      }
+
+      // ID'lere göre sıralı liste oluştur
+      final nameMap = {for (var map in maps) map['id'] as int: map['name'] as String};
+      return bodyPartIds.map((id) => nameMap[id] ?? 'Bilinmiyor').toList();
+
+    } catch (e) {
+      _logger.severe('Error getting body part names by IDs', e);
+      return List.filled(bodyPartIds.length, 'Bilinmiyor');
+    }
+  }
+
+  Future<List<BodyParts>> getMainBodyParts() async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        'BodyParts',
+        where: 'parentBodyPartId IS NULL',
+      );
+      return List.generate(maps.length, (i) => BodyParts.fromMap(maps[i]));
+    } catch (e) {
+      _logger.severe('Error getting main body parts', e);
+      return [];
+    }
+  }
+
+  Future<BodyParts?> getBodyPartById(int id) async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        'BodyParts',
+        where: 'Id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
+      if (maps.isNotEmpty) {
+        return BodyParts.fromMap(maps.first);
+      }
+      return null;
+    } catch (e) {
+      _logger.severe('Error getting body part by id', e);
+      return null;
+    }
+  }
+
+  Future<List<BodyParts>> getBodyPartsByParentId(int? parentId) async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        'BodyParts',
+        where: parentId == null ? 'parentBodyPartId IS NULL' : 'parentBodyPartId = ?',
+        whereArgs: parentId == null ? [] : [parentId],
+      );
+      return List.generate(maps.length, (i) => BodyParts.fromMap(maps[i]));
+    } catch (e) {
+      _logger.severe('Error getting body parts by parent id', e);
+      return [];
+    }
+  }
+
+  Future<List<BodyParts>> searchBodyPartsByName(String name) async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        'BodyParts',
+        where: 'Name LIKE ?',
+        whereArgs: ['%$name%'],
+      );
+      return List.generate(maps.length, (i) => BodyParts.fromMap(maps[i]));
+    } catch (e) {
+      _logger.severe('Error searching body parts by name', e);
+      return [];
+    }
+  }
+
+  Future<List<BodyParts>> getSecondaryTargetedBodyPartsForExercise(int exerciseId) async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT b.* FROM BodyParts b
+      INNER JOIN ExerciseTargetedBodyParts etb ON b.id = etb.bodyPartId
+      WHERE etb.exerciseId = ? AND etb.isPrimary = 0
+    ''', [exerciseId]);
+      return List.generate(maps.length, (i) => BodyParts.fromMap(maps[i]));
+    } catch (e) {
+      _logger.severe('Error getting secondary targeted body parts for exercise', e);
+      return [];
+    }
+  }
+
+  Future<List<BodyParts>> getCompoundBodyParts() async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        'BodyParts',
+        where: 'isCompound = 1',
+      );
+      return List.generate(maps.length, (i) => BodyParts.fromMap(maps[i]));
+    } catch (e) {
+      _logger.severe('Error getting compound body parts', e);
+      return [];
+    }
+  }
+
+  Future<List<BodyParts>> getTargetedBodyPartsWithPercentage(int routineId) async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT b.*, rtb.targetPercentage 
+      FROM BodyParts b
+      INNER JOIN RoutineTargetedBodyParts rtb ON b.id = rtb.bodyPartId
+      WHERE rtb.routineId = ?
+      ORDER BY rtb.targetPercentage DESC
+    ''', [routineId]);
+      return List.generate(maps.length, (i) => BodyParts.fromMap(maps[i]));
+    } catch (e) {
+      _logger.severe('Error getting targeted body parts with percentage', e);
+      return [];
+    }
+  }
+
+  Future<List<BodyParts>> getRelatedBodyParts(int bodyPartId) async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT DISTINCT b.* 
+      FROM BodyParts b
+      LEFT JOIN PartTargetedBodyParts ptb ON b.id = ptb.bodyPartId
+      WHERE b.parentBodyPartId = (
+        SELECT parentBodyPartId FROM BodyParts WHERE id = ?
+      )
+      OR b.id IN (
+        SELECT bodyPartId FROM PartTargetedBodyParts 
+        WHERE partId IN (
+          SELECT partId FROM PartTargetedBodyParts WHERE bodyPartId = ?
+        )
+      )
+    ''', [bodyPartId, bodyPartId]);
+      return List.generate(maps.length, (i) => BodyParts.fromMap(maps[i]));
+    } catch (e) {
+      _logger.severe('Error getting related body parts', e);
+      return [];
+    }
+  }
+
+  Future<List<BodyParts>> getCompoundExercises() async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        'BodyParts',
+        where: 'isCompound = 1',
+      );
+      return List.generate(maps.length, (i) => BodyParts.fromMap(maps[i]));
+    } catch (e) {
+      _logger.severe('Error getting compound exercises', e);
+      return [];
+    }
+  }
+
+
+
+
+
+
+
+  ///routines ///routines ///routines ///routines
+  ///routines ///routines ///routines ///routines
+
+
+  Future<List<BodyParts>> getTargetedBodyPartsForRoutine(int routineId) async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT b.*, rtb.targetPercentage 
+      FROM BodyParts b
+      INNER JOIN RoutineTargetedBodyParts rtb ON b.id = rtb.bodyPartId
+      WHERE rtb.routineId = ?
+    ''', [routineId]);
+      return List.generate(maps.length, (i) => BodyParts.fromMap(maps[i]));
+    } catch (e) {
+      _logger.severe('Error getting targeted body parts for routine', e);
+      return [];
+    }
+  }
+
+  Future<List<Routines>> getRoutinesByBodyPartAndWorkoutType(
+      int bodyPartId,
+      int workoutTypeId,
+      ) async {
+    try {
+      final db = await database;
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT DISTINCT r.*, 
+          rtb.targetPercentage,
+          GROUP_CONCAT(re.exerciseId) as exerciseIds
+        FROM Routines r
+        INNER JOIN RoutineTargetedBodyParts rtb ON r.id = rtb.routineId
+        LEFT JOIN RoutineExercises re ON r.id = re.routineId
+        WHERE rtb.bodyPartId = ? 
+        AND r.workoutTypeId = ?
+        AND rtb.targetPercentage >= 50
+        GROUP BY r.id
+        ORDER BY rtb.targetPercentage DESC, r.difficulty ASC
+      ''', [bodyPartId, workoutTypeId]);
+
+        return Future.wait(maps.map((map) async {
+          final targetedBodyParts = await txn.query(
+              'RoutineTargetedBodyParts',
+              where: 'routineId = ?',
+              whereArgs: [map['id']]
+          );
+
+          return Routines.fromMap({
+            ...map,
+            'routineExercises': map['exerciseIds']?.split(',')
+                .map((e) => {'exerciseId': int.parse(e)}).toList() ?? [],
+            'targetedBodyParts': targetedBodyParts
+          });
+        }));
+      });
+    } catch (e, stackTrace) {
+      _logger.severe('Error in getRoutinesByBodyPartAndWorkoutType', e, stackTrace);
+      rethrow;
+    }
+  }
+
+  Future<List<Routines>> getRoutinesByMainTargetedBodyPart(int bodyPartId) async {
+    try {
+      final db = await database;
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT DISTINCT r.*, 
+          rtb.targetPercentage,
+          GROUP_CONCAT(re.exerciseId) as exerciseIds
+        FROM Routines r
+        INNER JOIN RoutineTargetedBodyParts rtb ON r.id = rtb.routineId
+        LEFT JOIN RoutineExercises re ON r.id = re.routineId
+        WHERE rtb.bodyPartId = ? 
+        AND rtb.isPrimary = 1
+        GROUP BY r.id
+        ORDER BY rtb.targetPercentage DESC
+      ''', [bodyPartId]);
+
+        return Future.wait(maps.map((map) async {
+          final targetedBodyParts = await txn.query(
+              'RoutineTargetedBodyParts',
+              where: 'routineId = ?',
+              whereArgs: [map['id']]
+          );
+
+          return Routines.fromMap({
+            ...map,
+            'routineExercises': map['exerciseIds']?.split(',')
+                .map((e) => {'exerciseId': int.parse(e)}).toList() ?? [],
+            'targetedBodyParts': targetedBodyParts
+          });
+        }));
+      });
+    } catch (e, stackTrace) {
+      _logger.severe('Error in getRoutinesByMainTargetedBodyPart', e, stackTrace);
+      rethrow;
+    }
+  }
+
+  Future<RoutineFrequency?> getRoutineFrequency(int routineId) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'RoutineFrequency',
+      where: 'routineId = ?',
+      whereArgs: [routineId],
+    );
+
+    if (maps.isNotEmpty) {
+      return RoutineFrequency.fromMap(maps.first);
+    }
+    return null;
+  }
+
+  Future<List<int>> getExerciseIdsForRoutine(int routineId) async {
     try {
       final db = await database;
       final List<Map<String, dynamic>> maps = await db.query(
         'RoutineExercises',
+        columns: ['exerciseId'],
         where: 'routineId = ?',
         whereArgs: [routineId],
+        orderBy: 'orderIndex ASC', // Egzersizleri sıralı getirmek için eklendi
       );
-      return List.generate(maps.length, (i) => RoutineExercises.fromMap(maps[i]));
+      return List.generate(maps.length, (i) => maps[i]['exerciseId'] as int);
     } catch (e) {
-      _logger.severe('Error getting routine exercises by routine id', e);
+      _logger.severe('Error getting exercise ids for routine', e);
       return [];
     }
   }
@@ -341,6 +979,7 @@ class SQLProvider {
         'RoutineExercises',
         where: 'exerciseId = ?',
         whereArgs: [exerciseId],
+        orderBy: 'orderIndex ASC', // Sıralama eklendi
       );
       return List.generate(maps.length, (i) => RoutineExercises.fromMap(maps[i]));
     } catch (e) {
@@ -349,49 +988,50 @@ class SQLProvider {
     }
   }
 
-  Future<List<int>> getExerciseIdsForRoutine(int routineId) async {
+  Future<List<RoutineExercises>> getRoutineExercisesByRoutineId(int routineId) async {
     try {
       final db = await database;
       final List<Map<String, dynamic>> maps = await db.query(
         'RoutineExercises',
-        columns: ['exerciseId'],
         where: 'routineId = ?',
         whereArgs: [routineId],
       );
-      return List.generate(maps.length, (i) => maps[i]['exerciseId'] as int);
+      return List.generate(maps.length, (i) => RoutineExercises.fromMap(maps[i]));
     } catch (e) {
-      _logger.severe('Error getting exercise ids for routine', e);
+      _logger.severe('Error getting routine exercises by routine id', e);
       return [];
     }
   }
 
-  Future<List<Routines>> getAllRoutines() async {
+  Future<List<RoutineTargetedBodyParts>> getRoutineTargetedBodyParts(int routineId) async {
     try {
       final db = await database;
-      final List<Map<String, dynamic>> maps = await db.query('Routines');
-      _logger.fine("Routines ham veri: $maps");
+      final List<Map<String, dynamic>> maps = await db.query(
+        'RoutineTargetedBodyParts',
+        where: 'routineId = ?',
+        whereArgs: [routineId],
+        orderBy: 'targetPercentage DESC', // Hedef yüzdesine göre sıralama eklendi
+      );
+      return List.generate(maps.length, (i) => RoutineTargetedBodyParts.fromMap(maps[i]));
+    } catch (e) {
+      _logger.severe('Error getting routine targeted body parts', e);
+      return [];
+    }
+  }
 
-      List<Routines> routines = [];
-      for (var map in maps) {
-        try {
-          // RoutineExercises olmadan önce rutin oluştur
-          routines.add(Routines.fromMap(map));
-          _logger.info("Rutin başarıyla oluşturuldu: ${map['id']}");
-        } catch (e, stackTrace) {
-          _logger.warning(
-              'Rutin işlenirken hata: ${map['id']}, Hata: $e',
-              e,
-              stackTrace
-          );
-          continue;
-        }
-      }
-
-      _logger.info("${routines.length} rutin başarıyla yüklendi");
-      return routines;
-    } catch (e, stackTrace) {
-      _logger.severe('Error getting all routines', e, stackTrace);
-      rethrow; // Hatayı yukarı fırlat
+  Future<List<RoutineTargetedBodyParts>> getRoutinesForBodyPart(int bodyPartId) async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        'RoutineTargetedBodyParts',
+        where: 'bodyPartId = ?',
+        whereArgs: [bodyPartId],
+        orderBy: 'targetPercentage DESC', // Hedef yüzdesine göre sıralama eklendi
+      );
+      return List.generate(maps.length, (i) => RoutineTargetedBodyParts.fromMap(maps[i]));
+    } catch (e) {
+      _logger.severe('Error getting routines for body part', e);
+      return [];
     }
   }
 
@@ -399,37 +1039,67 @@ class SQLProvider {
   Future<Routines?> getRoutineById(int id) async {
     try {
       final db = await database;
-      final List<Map<String, dynamic>> maps = await db.query(
-        'Routines',
-        where: 'Id = ?',
-        whereArgs: [id],
-        limit: 1,
-      );
-      if (maps.isNotEmpty) {
-        List<RoutineExercises> routineExercises = await getRoutineExercisesByRoutineId(id);
-        return Routines.fromMap({...maps.first, 'routineExercises': routineExercises});
-      }
-      return null;
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT r.*, GROUP_CONCAT(re.exerciseId) as exerciseIds
+        FROM Routines r
+        LEFT JOIN RoutineExercises re ON r.id = re.routineId
+        WHERE r.id = ?
+        GROUP BY r.id
+      ''', [id]);
+
+        if (maps.isEmpty) return null;
+
+        final targetedBodyParts = await txn.query(
+            'RoutineTargetedBodyParts',
+            where: 'routineId = ?',
+            whereArgs: [id]
+        );
+
+        return Routines.fromMap({
+          ...maps.first,
+          'routineExercises': maps.first['exerciseIds']?.split(',')
+              .map((e) => {'exerciseId': int.parse(e)}).toList() ?? [],
+          'targetedBodyParts': targetedBodyParts
+        });
+      });
     } catch (e) {
       _logger.severe('Error getting routine by id', e);
       return null;
     }
   }
 
+
+
+
   Future<List<Routines>> getRoutinesByName(String name) async {
     try {
       final db = await database;
-      final List<Map<String, dynamic>> maps = await db.query(
-        'Routines',
-        where: 'Name = ?',
-        whereArgs: [name],
-      );
-      List<Routines> routines = [];
-      for (var map in maps) {
-        List<RoutineExercises> routineExercises = await getRoutineExercisesByRoutineId(map['Id']);
-        routines.add(Routines.fromMap({...map, 'routineExercises': routineExercises}));
-      }
-      return routines;
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT r.*, 
+          GROUP_CONCAT(re.exerciseId) as exerciseIds
+        FROM Routines r
+        LEFT JOIN RoutineExercises re ON r.id = re.routineId
+        WHERE r.name = ?
+        GROUP BY r.id
+      ''', [name]);
+
+        return Future.wait(maps.map((map) async {
+          final targetedBodyParts = await txn.query(
+              'RoutineTargetedBodyParts',
+              where: 'routineId = ?',
+              whereArgs: [map['id']]
+          );
+
+          return Routines.fromMap({
+            ...map,
+            'routineExercises': map['exerciseIds']?.split(',')
+                .map((e) => {'exerciseId': int.parse(e)}).toList() ?? [],
+            'targetedBodyParts': targetedBodyParts
+          });
+        }));
+      });
     } catch (e) {
       _logger.severe('Error getting routines by name', e);
       return [];
@@ -456,197 +1126,630 @@ class SQLProvider {
     }
   }
 
-  Future<List<Routines>> getRoutinesByMainTargetedBodyPart(int mainTargetedBodyPartId) async {
+  Future<List<Routines>> getRoutinesByBodyPart(int bodyPartId) async {
     try {
       final db = await database;
-      final List<Map<String, dynamic>> maps = await db.query(
-        'Routines',
-        where: 'MainTargetedBodyPartId = ?',
-        whereArgs: [mainTargetedBodyPartId],
-      );
-      List<Routines> routines = [];
-      for (var map in maps) {
-        List<RoutineExercises> routineExercises = await getRoutineExercisesByRoutineId(map['Id']);
-        routines.add(Routines.fromMap({...map, 'routineExercises': routineExercises}));
-      }
-      return routines;
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT DISTINCT r.*, rtb.targetPercentage,
+        GROUP_CONCAT(re.exerciseId) as exerciseIds
+        FROM Routines r
+        INNER JOIN RoutineTargetedBodyParts rtb ON r.id = rtb.routineId
+        LEFT JOIN RoutineExercises re ON r.id = re.routineId
+        WHERE rtb.bodyPartId = ?
+        GROUP BY r.id
+        ORDER BY rtb.targetPercentage DESC
+      ''', [bodyPartId]);
+
+        return Future.wait(maps.map((map) async {
+          final targetedBodyParts = await txn.query(
+              'RoutineTargetedBodyParts',
+              where: 'routineId = ?',
+              whereArgs: [map['id']]
+          );
+
+          return Routines.fromMap({
+            ...map,
+            'routineExercises': map['exerciseIds']?.split(',').map((e) => {'exerciseId': int.parse(e)}).toList() ?? [],
+            'targetedBodyParts': targetedBodyParts
+          });
+        }));
+      });
     } catch (e) {
-      _logger.severe('Error getting routines by main targeted body part', e);
+      _logger.severe('Error getting routines by body part', e);
       return [];
     }
   }
-  Future<List<Routines>> getRoutinesByWorkoutType(int workoutTypeId) async {
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'Routines',
-      where: 'WorkoutTypeId = ?',
-      whereArgs: [workoutTypeId],
-    );
-    List<Routines> routines = [];
-    for (var map in maps) {
-      List<RoutineExercises> routineExercises = await getRoutineExercisesByRoutineId(map['Id']);
-      routines.add(Routines.fromMap({...map, 'routineExercises': routineExercises}));
-    }
-    return routines;
-  }
 
-  Future<List<Routines>> getRoutinesByBodyPartAndWorkoutType(int mainTargetedBodyPartId, int workoutTypeId) async {
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'Routines',
-      where: 'MainTargetedBodyPartId = ? AND WorkoutTypeId = ?',
-      whereArgs: [mainTargetedBodyPartId, workoutTypeId],
-    );
-    List<Routines> routines = [];
-    for (var map in maps) {
-      List<RoutineExercises> routineExercises = await getRoutineExercisesByRoutineId(map['Id']);
-      routines.add(Routines.fromMap({...map, 'routineExercises': routineExercises}));
+  Future<List<Routines>> getRoutinesByWorkoutType(int workoutTypeId) async {
+    try {
+      final db = await database;
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT r.*, 
+          GROUP_CONCAT(re.exerciseId) as exerciseIds
+        FROM Routines r
+        LEFT JOIN RoutineExercises re ON r.id = re.routineId
+        WHERE r.workoutTypeId = ?
+        GROUP BY r.id
+      ''', [workoutTypeId]);
+
+        return Future.wait(maps.map((map) async {
+          final targetedBodyParts = await txn.query(
+              'RoutineTargetedBodyParts',
+              where: 'routineId = ?',
+              whereArgs: [map['id']]
+          );
+
+          return Routines.fromMap({
+            ...map,
+            'routineExercises': map['exerciseIds']?.split(',')
+                .map((e) => {'exerciseId': int.parse(e)}).toList() ?? [],
+            'targetedBodyParts': targetedBodyParts
+          });
+        }));
+      });
+    } catch (e) {
+      _logger.severe('Error getting routines by workout type', e);
+      return [];
     }
-    return routines;
   }
 
   Future<List<Routines>> getRoutinesAlphabetically() async {
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'Routines',
-      orderBy: 'Name ASC',
-    );
-    List<Routines> routines = [];
-    for (var map in maps) {
-      List<RoutineExercises> routineExercises = await getRoutineExercisesByRoutineId(map['Id']);
-      routines.add(Routines.fromMap({...map, 'routineExercises': routineExercises}));
-    }
-    return routines;
-  }
-
-  Future<List<Routines>> getRandomRoutines(int count) async {
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.rawQuery(
-      'SELECT * FROM Routines ORDER BY RANDOM() LIMIT ?',
-      [count],
-    );
-    List<Routines> routines = [];
-    for (var map in maps) {
-      List<RoutineExercises> routineExercises = await getRoutineExercisesByRoutineId(map['Id']);
-      routines.add(Routines.fromMap({...map, 'routineExercises': routineExercises}));
-    }
-    return routines;
-  }
-
-  Future<List<WorkoutTypes>> getAllWorkoutTypes() async {
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query('WorkoutTypes');
-    print("WorkoutTypes ham veri: $maps");
-    return List.generate(maps.length, (i) => WorkoutTypes.fromMap(maps[i]));
-  }
-
-  Future<WorkoutTypes?> getWorkoutTypeById(int id) async {
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'WorkoutTypes',
-      where: 'Id = ?',
-      whereArgs: [id],
-      limit: 1,
-    );
-    if (maps.isNotEmpty) {
-      return WorkoutTypes.fromMap(maps.first);
-    }
-    return null;
-  }
-
-  Future<int> getWorkoutTypesCount() async {
-    final db = await database;
-    return Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM WorkoutTypes')) ?? 0;}
-
-
-  Future<List<WorkoutTypes>> getWorkoutTypesByName(String name) async {
-    final db = await database;
     try {
-      final List<Map<String, dynamic>> maps = await db.query(
-        'WorkoutTypes',
-        where: 'Name LIKE ?',
-        whereArgs: ['%$name%'],
-      );
-      return List.generate(maps.length, (i) => WorkoutTypes.fromMap(maps[i]));
+      final db = await database;
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT r.*, 
+          GROUP_CONCAT(re.exerciseId) as exerciseIds
+        FROM Routines r
+        LEFT JOIN RoutineExercises re ON r.id = re.routineId
+        GROUP BY r.id
+        ORDER BY r.name ASC
+      ''');
+
+        return Future.wait(maps.map((map) async {
+          final targetedBodyParts = await txn.query(
+              'RoutineTargetedBodyParts',
+              where: 'routineId = ?',
+              whereArgs: [map['id']]
+          );
+
+          return Routines.fromMap({
+            ...map,
+            'routineExercises': map['exerciseIds']?.split(',')
+                .map((e) => {'exerciseId': int.parse(e)}).toList() ?? [],
+            'targetedBodyParts': targetedBodyParts
+          });
+        }));
+      });
     } catch (e) {
-      print('Error getting workout types by name: $e');
+      _logger.severe('Error getting routines alphabetically', e);
       return [];
     }
   }
 
-  /// PartsRt işlemleri
-  Future<List<Parts>> getAllParts() async {
-    final db = await database;
+  Future<List<Routines>> getRandomRoutines(int count) async {
     try {
-      final List<Map<String, dynamic>> partMaps = await db.query('Parts');
-      print("Raw Parts data from database: $partMaps"); // Hata ayıklama için eklendi
-      final List<Map<String, dynamic>> partExerciseMaps = await db.query('PartExercises');
-      final List<PartExercise> partExercises = partExerciseMaps.map((map) => PartExercise.fromMap(map)).toList();
+      final db = await database;
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT r.*, 
+          GROUP_CONCAT(re.exerciseId) as exerciseIds
+        FROM Routines r
+        LEFT JOIN RoutineExercises re ON r.id = re.routineId
+        GROUP BY r.id
+        ORDER BY RANDOM()
+        LIMIT ?
+      ''', [count]);
 
-      List<Parts> parts = [];
-      for (var map in partMaps) {
-        try {
-          final exerciseIds = partExercises
-              .where((pe) => pe.partId == map['id'])
-              .map((pe) => pe.exerciseId)
-              .toList();
-          parts.add(Parts.fromMap(map, exerciseIds));
-        } catch (e) {
-          print('Error creating Parts object: $e');
-          print('Problematic map: $map');
-        }
-      }
-      print("Successfully created ${parts.length} Parts objects"); // Hata ayıklama için eklendi
-      return parts;
+        return Future.wait(maps.map((map) async {
+          final targetedBodyParts = await txn.query(
+              'RoutineTargetedBodyParts',
+              where: 'routineId = ?',
+              whereArgs: [map['id']]
+          );
+
+          return Routines.fromMap({
+            ...map,
+            'routineExercises': map['exerciseIds']?.split(',')
+                .map((e) => {'exerciseId': int.parse(e)}).toList() ?? [],
+            'targetedBodyParts': targetedBodyParts
+          });
+        }));
+      });
     } catch (e) {
-      print('Error getting all parts: $e');
-      throw Exception('Failed to get parts: $e');
+      _logger.severe('Error getting random routines', e);
+      return [];
+    }
+  }
+
+  Future<Map<int, int>> getTargetPercentagesForRoutine(int routineId) async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query(
+          'RoutineTargetedBodyParts',
+          columns: ['bodyPartId', 'targetPercentage'],
+          where: 'routineId = ?',
+          whereArgs: [routineId],
+          orderBy: 'targetPercentage DESC'
+      );
+
+      return Map.fromEntries(
+          maps.map((m) => MapEntry(m['bodyPartId'] as int, m['targetPercentage'] as int))
+      );
+    } catch (e) {
+      _logger.severe('Error getting target percentages', e);
+      return {};
     }
   }
 
 
 
+  Future<List<Routines>> getRoutinesByTargetPercentage(int bodyPartId, int minPercentage) async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT DISTINCT r.*, rtb.targetPercentage 
+      FROM Routines r
+      INNER JOIN RoutineTargetedBodyParts rtb ON r.id = rtb.routineId
+      WHERE rtb.bodyPartId = ? AND rtb.targetPercentage >= ?
+      ORDER BY rtb.targetPercentage DESC, r.difficulty ASC
+    ''', [bodyPartId, minPercentage]);
+
+      List<Routines> routines = [];
+      for (var map in maps) {
+        // Rutin için egzersizleri al
+        final routineExercises = await db.query(
+            'RoutineExercises',
+            where: 'routineId = ?',
+            whereArgs: [map['id']],
+            orderBy: 'orderIndex ASC'
+        );
+
+        // Hedef vücut bölümlerini al
+        final targetedBodyParts = await db.query(
+            'RoutineTargetedBodyParts',
+            where: 'routineId = ?',
+            whereArgs: [map['id']]
+        );
+
+        routines.add(Routines.fromMap({
+          ...map,
+          'routineExercises': routineExercises,
+          'targetedBodyParts': targetedBodyParts
+        }));
+      }
+      return routines;
+    } catch (e) {
+      _logger.severe('Error getting routines by target percentage', e);
+      return [];
+    }
+  }
+
+  Future<List<Routines>> getRoutinesByDifficulty(int difficulty) async {
+    try {
+      final db = await database;
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT r.*, 
+          GROUP_CONCAT(re.exerciseId) as exerciseIds
+        FROM Routines r
+        LEFT JOIN RoutineExercises re ON r.id = re.routineId
+        WHERE r.difficulty = ?
+        GROUP BY r.id
+      ''', [difficulty]);
+
+        return Future.wait(maps.map((map) async {
+          final targetedBodyParts = await txn.query(
+              'RoutineTargetedBodyParts',
+              where: 'routineId = ?',
+              whereArgs: [map['id']]
+          );
+
+          return Routines.fromMap({
+            ...map,
+            'routineExercises': map['exerciseIds']?.split(',')
+                .map((e) => {'exerciseId': int.parse(e)}).toList() ?? [],
+            'targetedBodyParts': targetedBodyParts
+          });
+        }));
+      });
+    } catch (e) {
+      _logger.severe('Error getting routines by difficulty', e);
+      return [];
+    }
+  }
+
+  Future<List<Routines>> getRoutinesByExerciseCount(int minCount, int maxCount) async {
+    try {
+      final db = await database;
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT r.*, 
+          GROUP_CONCAT(re.exerciseId) as exerciseIds,
+          COUNT(re.exerciseId) as exerciseCount
+        FROM Routines r
+        LEFT JOIN RoutineExercises re ON r.id = re.routineId
+        GROUP BY r.id
+        HAVING exerciseCount BETWEEN ? AND ?
+      ''', [minCount, maxCount]);
+
+        return Future.wait(maps.map((map) async {
+          final targetedBodyParts = await txn.query(
+              'RoutineTargetedBodyParts',
+              where: 'routineId = ?',
+              whereArgs: [map['id']]
+          );
+
+          return Routines.fromMap({
+            ...map,
+            'routineExercises': map['exerciseIds']?.split(',')
+                .map((e) => {'exerciseId': int.parse(e)}).toList() ?? [],
+            'targetedBodyParts': targetedBodyParts
+          });
+        }));
+      });
+    } catch (e) {
+      _logger.severe('Error getting routines by exercise count', e);
+      return [];
+    }
+  }
+
+  Future<List<Routines>> getRoutinesContainingExercises(List<int> exerciseIds) async {
+    try {
+      final db = await database;
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT r.*, 
+          GROUP_CONCAT(re.exerciseId) as exerciseIds
+        FROM Routines r
+        INNER JOIN RoutineExercises re ON r.id = re.routineId
+        WHERE re.exerciseId IN (${exerciseIds.join(',')})
+        GROUP BY r.id
+      ''');
+
+        return Future.wait(maps.map((map) async {
+          final targetedBodyParts = await txn.query(
+              'RoutineTargetedBodyParts',
+              where: 'routineId = ?',
+              whereArgs: [map['id']]
+          );
+
+          return Routines.fromMap({
+            ...map,
+            'routineExercises': map['exerciseIds']?.split(',')
+                .map((e) => {'exerciseId': int.parse(e)}).toList() ?? [],
+            'targetedBodyParts': targetedBodyParts
+          });
+        }));
+      });
+    } catch (e) {
+      _logger.severe('Error getting routines containing exercises', e);
+      return [];
+    }
+  }
+
+
+// Yardımcı metod
+  Map<String, dynamic> _processRoutineMap(Map<String, dynamic> map) {
+    final exerciseIds = map['exerciseIds']?.toString().split(',') ?? [];
+    final targetedParts = map['targetedBodyParts']?.toString().split(',') ?? [];
+
+    return {
+      ...map,
+      'routineExercises': exerciseIds.where((e) => e.isNotEmpty)
+          .map((e) => {'exerciseId': int.parse(e)}).toList(),
+      'targetedBodyParts': targetedParts.where((t) => t.isNotEmpty).map((t) {
+        final parts = t.split(':');
+        return {
+          'bodyPartId': int.parse(parts[0]),
+          'targetPercentage': int.parse(parts[1]),
+        };
+      }).toList(),
+    };
+  }
+
+
+
+
+  /// PartsRt işlemleri  /// PartsRt işlemleri  /// PartsRt işlemleri
+  /// PartsRt işlemleri  /// PartsRt işlemleri  /// PartsRt işlemleri
+
+  Future<List<PartTargetedBodyParts>> getPartTargets(int partId) async {
+    try {
+      final db = await database;
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT ptb.*, b.name as bodyPartName
+        FROM PartTargetedBodyParts ptb
+        LEFT JOIN BodyParts b ON ptb.bodyPartId = b.id
+        WHERE ptb.partId = ?
+        ORDER BY ptb.targetPercentage DESC, ptb.isPrimary DESC
+      ''', [partId]);
+
+        return List.generate(maps.length, (i) =>
+            PartTargetedBodyParts.fromMap(maps[i])
+        );
+      });
+    } catch (e) {
+      _logger.severe('Error getting part targets', e);
+      return [];
+    }
+  }
+
+  Future<List<Parts>> getPartsByTargetPercentage(int bodyPartId, int minPercentage) async {
+    try {
+      final db = await database;
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT p.*, 
+          GROUP_CONCAT(pe.exerciseId) as exerciseIds,
+          GROUP_CONCAT(ptb.bodyPartId) as targetedBodyPartIds,
+          ptb.targetPercentage
+        FROM Parts p
+        INNER JOIN PartTargetedBodyParts ptb ON p.id = ptb.partId
+        LEFT JOIN PartExercises pe ON p.id = pe.partId
+        WHERE ptb.bodyPartId = ? AND ptb.targetPercentage >= ?
+        GROUP BY p.id
+        ORDER BY ptb.targetPercentage DESC
+      ''', [bodyPartId, minPercentage]);
+
+        return _generatePartsFromMaps(maps);
+      });
+    } catch (e) {
+      _logger.severe('Error getting parts by target percentage', e);
+      return [];
+    }
+  }
+
+  Future<List<Parts>> getPartsWithExercise(int exerciseId) async {
+    try {
+      final db = await database;
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT p.*, 
+          GROUP_CONCAT(pe.exerciseId) as exerciseIds,
+          GROUP_CONCAT(ptb.bodyPartId) as targetedBodyPartIds
+        FROM Parts p
+        INNER JOIN PartExercises pe ON p.id = pe.partId
+        LEFT JOIN PartTargetedBodyParts ptb ON p.id = ptb.partId
+        WHERE pe.exerciseId = ?
+        GROUP BY p.id
+        ORDER BY pe.orderIndex ASC
+      ''', [exerciseId]);
+
+        return List.generate(maps.length, (i) {
+          List<dynamic> exerciseIds = [];
+          List<dynamic> targetedBodyPartIds = [];
+
+          if (maps[i]['exerciseIds'] != null) {
+            exerciseIds = maps[i]['exerciseIds']
+                .toString()
+                .split(',')
+                .map((e) => int.parse(e))
+                .toList();
+          }
+
+          if (maps[i]['targetedBodyPartIds'] != null) {
+            targetedBodyPartIds = maps[i]['targetedBodyPartIds']
+                .toString()
+                .split(',')
+                .map((e) => int.parse(e))
+                .toList();
+          }
+
+          return Parts.fromMap(maps[i], exerciseIds);
+        });
+      });
+    } catch (e) {
+      _logger.severe('Error getting parts with exercise', e);
+      return [];
+    }
+  }
+
+  Future<List<BodyParts>> getTargetedBodyPartsForPart(int partId) async {
+    try {
+      final db = await database;
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT b.*, 
+          ptb.isPrimary, 
+          ptb.targetPercentage,
+          COUNT(pe.exerciseId) as exerciseCount
+        FROM BodyParts b
+        INNER JOIN PartTargetedBodyParts ptb ON b.id = ptb.bodyPartId
+        LEFT JOIN PartExercises pe ON ptb.partId = pe.partId
+        WHERE ptb.partId = ?
+        GROUP BY b.id
+        ORDER BY ptb.targetPercentage DESC, ptb.isPrimary DESC
+      ''', [partId]);
+
+        return List.generate(maps.length, (i) => BodyParts.fromMap(maps[i]));
+      });
+    } catch (e) {
+      _logger.severe('Error getting targeted body parts for part', e);
+      return [];
+    }
+  }
+
+  Future<PartFrequency?> getPartFrequency(int partId) async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT pf.*, COUNT(pe.exerciseId) as totalExercises
+      FROM PartFrequency pf
+      LEFT JOIN PartExercises pe ON pf.partId = pe.partId
+      WHERE pf.partId = ?
+      GROUP BY pf.id
+    ''', [partId]);
+
+      if (maps.isNotEmpty) {
+        return PartFrequency.fromMap(maps.first);
+      }
+      return null;
+    } catch (e) {
+      _logger.severe('Error getting part frequency', e);
+      return null;
+    }
+  }
+
+  Future<List<PartTargetedBodyParts>> getPartTargetedBodyParts(int partId) async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        'PartTargetedBodyParts',
+        where: 'partId = ?',
+        whereArgs: [partId],
+      );
+      return List.generate(maps.length, (i) => PartTargetedBodyParts.fromMap(maps[i]));
+    } catch (e) {
+      _logger.severe('Error getting part targeted body parts', e);
+      return [];
+    }
+  }
+
+  Future<List<String>> getPartTargetedBodyPartsName(int partId) async {
+    try {
+      final db = await database;
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT b.name
+        FROM BodyParts b
+        INNER JOIN PartTargetedBodyParts ptb ON b.id = ptb.bodyPartId
+        WHERE ptb.partId = ?
+        ORDER BY ptb.targetPercentage DESC
+      ''', [partId]);
+
+        return maps.map((map) => map['name'] as String).toList();
+      });
+    } catch (e) {
+      _logger.severe('Error getting part targeted body parts names', e);
+      return [];
+    }
+  }
+
+  Future<List<PartTargetedBodyParts>> getPrimaryTargetedPartsForBodyPart(int bodyPartId) async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        'PartTargetedBodyParts',
+        where: 'bodyPartId = ? AND isPrimary = 1',
+        whereArgs: [bodyPartId],
+      );
+      return List.generate(maps.length, (i) => PartTargetedBodyParts.fromMap(maps[i]));
+    } catch (e) {
+      _logger.severe('Error getting primary targeted parts', e);
+      return [];
+    }
+  }
+
+  Future<List<PartTargetedBodyParts>> getSecondaryTargetedPartsForBodyPart(int bodyPartId) async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        'PartTargetedBodyParts',
+        where: 'bodyPartId = ? AND isPrimary = 0',
+        whereArgs: [bodyPartId],
+      );
+      return List.generate(maps.length, (i) => PartTargetedBodyParts.fromMap(maps[i]));
+    } catch (e) {
+      _logger.severe('Error getting secondary targeted parts', e);
+      return [];
+    }
+  }
 
 
   Future<Parts?> getPartById(int id) async {
-    final db = await database;
     try {
-      final List<Map<String, dynamic>> partMaps = await db.query(
-        'Parts',
-        where: 'Id = ?',
-        whereArgs: [id],
-        limit: 1,
-      );
-      if (partMaps.isNotEmpty) {
-        final List<Map<String, dynamic>> partExerciseMaps = await db.query(
-          'PartExercises',
-          where: 'partId = ?',
-          whereArgs: [id],
-        );
-        final List<int> exerciseIds = partExerciseMaps.map((map) => map['exerciseId'] as int).toList();
-        return Parts.fromMap(partMaps.first, exerciseIds);
-      }
-      return null;
+      final db = await database;
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT p.*, 
+          GROUP_CONCAT(DISTINCT pe.exerciseId) as exerciseIds,
+          GROUP_CONCAT(DISTINCT ptb.bodyPartId || '|' || 
+            ptb.isPrimary || '|' || ptb.targetPercentage) as targetedBodyParts
+        FROM Parts p
+        LEFT JOIN PartExercises pe ON p.id = pe.partId
+        LEFT JOIN PartTargetedBodyParts ptb ON p.id = ptb.partId
+        WHERE p.id = ?
+        GROUP BY p.id
+      ''', [id]);
+
+        if (maps.isEmpty) return null;
+        return _generatePartsFromMaps(maps).first;
+      });
     } catch (e) {
-      print('Error getting part by id: $e');
-      return null;
+      _logger.severe('Error getting part by id', e);
+      throw Exception('Part alınırken hata oluştu: $e');
     }
   }
 
+  List<Parts> _generatePartsFromMaps(List<Map<String, dynamic>> maps) {
+    return maps.map((map) {
+      // Egzersiz ID'lerini parse et
+      final exerciseIds = map['exerciseIds'] != null
+          ? (map['exerciseIds'] as String)
+          .split(',')
+          .where((e) => e.isNotEmpty)
+          .map((e) => int.parse(e))
+          .toList()
+          : <int>[];
+
+      // Hedef kas grupları ID'lerini parse et
+      final targetedBodyPartIds = map['targetedBodyParts'] != null
+          ? (map['targetedBodyParts'] as String)
+          .split(',')
+          .where((e) => e.isNotEmpty)
+          .map((data) {
+        final parts = data.split('|');
+        return int.parse(parts[0]); // Sadece bodyPartId'yi al
+      })
+          .toList()
+          : <int>[];
+
+      return Parts(
+        id: map['id'] as int,
+        name: map['name'] as String,
+        targetedBodyPartIds: targetedBodyPartIds,
+        setType: SetType.values[map['setType'] as int],
+        additionalNotes: map['additionalNotes'] as String? ?? '',
+        difficulty: map['difficulty'] as int? ?? 1,
+        exerciseIds: exerciseIds,
+        isFavorite: false,
+        isCustom: false,
+      );
+    }).toList();
+  }
 
   Future<List<Parts>> getPartsByBodyPart(int bodyPartId) async {
-    final db = await database;
     try {
-      final List<Map<String, dynamic>> partMaps = await db.query(
-        'Parts',
-        where: 'BodyPartId = ?',
-        whereArgs: [bodyPartId],
-      );
-      final List<Map<String, dynamic>> partExerciseMaps = await db.query('PartExercises');
-      final List<PartExercise> partExercises = partExerciseMaps.map((map) => PartExercise.fromMap(map)).toList();
-      return partMaps.map((map) => Parts.fromMap(map, partExercises.cast<int>())).toList();
+      final db = await database;
+
+      // Önce Parts tablosundan verileri al
+      final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT p.*, GROUP_CONCAT(pe.exerciseId) as exerciseIds 
+      FROM Parts p
+      INNER JOIN PartTargetedBodyParts ptb ON p.id = ptb.partId
+      LEFT JOIN PartExercises pe ON p.id = pe.partId
+      WHERE ptb.bodyPartId = ?
+      GROUP BY p.id
+    ''', [bodyPartId]);
+
+      // Her bir part için exerciseIds listesini oluştur ve Parts nesnesini döndür
+      return List.generate(maps.length, (i) {
+        List<int> exerciseIds = [];
+        if (maps[i]['exerciseIds'] != null) {
+          exerciseIds = maps[i]['exerciseIds']
+              .toString()
+              .split(',')
+              .map((e) => int.parse(e))
+              .toList();
+        }
+        return Parts.fromMap(maps[i], exerciseIds);
+      });
     } catch (e) {
-      print('Error getting parts by body part: $e');
+      _logger.severe('Error getting parts by body part', e);
       return [];
     }
   }
@@ -669,18 +1772,19 @@ class SQLProvider {
   }
 
   Future<List<Parts>> searchPartsByName(String name) async {
-    final db = await database;
     try {
-      final List<Map<String, dynamic>> partMaps = await db.query(
-        'Parts',
-        where: 'Name LIKE ?',
-        whereArgs: ['%$name%'],
-      );
-      final List<Map<String, dynamic>> partExerciseMaps = await db.query('PartExercises');
-      final List<PartExercise> partExercises = partExerciseMaps.map((map) => PartExercise.fromMap(map)).toList();
-      return partMaps.map((map) => Parts.fromMap(map, partExercises.cast<int>())).toList();
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT p.*, GROUP_CONCAT(pe.exerciseId) as exerciseIds
+      FROM Parts p
+      LEFT JOIN PartExercises pe ON p.id = pe.partId
+      WHERE p.name LIKE ?
+      GROUP BY p.id
+    ''', ['%$name%']);
+
+      return _generatePartsFromMaps(maps);
     } catch (e) {
-      print('Error searching parts by name: $e');
+      _logger.severe('Error searching parts by name', e);
       return [];
     }
   }
@@ -701,13 +1805,48 @@ class SQLProvider {
     }
   }
 
-  Future<List<PartExercise>> getAllPartExercises() async {
+  Future<List<Parts>> getPartsByDifficulty(int difficulty) async {
     final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'Parts',
+      where: 'difficulty = ?',
+      whereArgs: [difficulty],
+    );
+
+    return List.generate(maps.length, (i) {
+      return Parts.fromMap(maps[i], []);  // exerciseIds'i boş liste olarak geçiyoruz
+    });
+  }
+
+  Future<List<Parts>> getPartsByBodyPartId(int bodyPartId) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'Parts',
+      where: 'bodyPartId = ?',
+      whereArgs: [bodyPartId],
+    );
+
+    return List.generate(maps.length, (i) {
+      return Parts.fromMap(maps[i], []);  // exerciseIds'i boş liste olarak geçiyoruz
+    });
+  }
+
+  Future<List<PartExercise>> getAllPartExercises() async {
     try {
-      final List<Map<String, dynamic>> maps = await db.query('PartExercises');
-      return List.generate(maps.length, (i) => PartExercise.fromMap(maps[i]));
+      final db = await database;
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT pe.*, p.name as partName, e.name as exerciseName
+        FROM PartExercises pe
+        LEFT JOIN Parts p ON pe.partId = p.id
+        LEFT JOIN Exercises e ON pe.exerciseId = e.id
+        ORDER BY pe.orderIndex ASC
+      ''');
+
+        return List.generate(maps.length, (i) => PartExercise.fromMap(maps[i]));
+      });
     } catch (e) {
-      print('Error getting all part exercises: $e');
+      _logger.severe('Error getting all part exercises', e);
       return [];
     }
   }
@@ -732,16 +1871,21 @@ class SQLProvider {
   }
 
   Future<List<PartExercise>> getPartExercisesByPartId(int partId) async {
-    final db = await database;
     try {
-      final List<Map<String, dynamic>> maps = await db.query(
-        'PartExercises',
-        where: 'partId = ?',
-        whereArgs: [partId],
-      );
-      return List.generate(maps.length, (i) => PartExercise.fromMap(maps[i]));
+      final db = await database;
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT pe.*, e.name as exerciseName
+        FROM PartExercises pe
+        LEFT JOIN Exercises e ON pe.exerciseId = e.id
+        WHERE pe.partId = ?
+        ORDER BY pe.orderIndex ASC
+      ''', [partId]);
+
+        return List.generate(maps.length, (i) => PartExercise.fromMap(maps[i]));
+      });
     } catch (e) {
-      print('Error getting part exercises by part id: $e');
+      _logger.severe('Error getting part exercises by part id', e);
       return [];
     }
   }
@@ -762,33 +1906,38 @@ class SQLProvider {
   }
 
   Future<List<int>> getExerciseIdsForPart(int partId) async {
-    final db = await database;
     try {
-      final List<Map<String, dynamic>> maps = await db.query(
-        'PartExercises',
-        columns: ['exerciseId'],
-        where: 'partId = ?',
-        whereArgs: [partId],
-      );
-      return List.generate(maps.length, (i) => maps[i]['exerciseId'] as int);
+      final db = await database;
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT exerciseId 
+        FROM PartExercises 
+        WHERE partId = ? 
+        ORDER BY orderIndex ASC
+      ''', [partId]);
+
+        return maps.map((map) => map['exerciseId'] as int).toList();
+      });
     } catch (e) {
-      print('Error getting exercise ids for part: $e');
+      _logger.severe('Error getting exercise ids for part', e);
       return [];
     }
   }
 
   Future<List<int>> getPartIdsForExercise(int exerciseId) async {
-    final db = await database;
     try {
-      final List<Map<String, dynamic>> maps = await db.query(
-        'PartExercises',
-        columns: ['partId'],
-        where: 'exerciseId = ?',
-        whereArgs: [exerciseId],
-      );
-      return List.generate(maps.length, (i) => maps[i]['partId'] as int);
+      final db = await database;
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT DISTINCT partId 
+        FROM PartExercises 
+        WHERE exerciseId = ?
+      ''', [exerciseId]);
+
+        return maps.map((map) => map['partId'] as int).toList();
+      });
     } catch (e) {
-      print('Error getting part ids for exercise: $e');
+      _logger.severe('Error getting part ids for exercise', e);
       return [];
     }
   }
@@ -847,127 +1996,308 @@ class SQLProvider {
     return null;
   }
 
+  Future<List<Parts>> getPartsByWorkoutType(int workoutTypeId) async {
+    try {
+      final db = await database;
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT DISTINCT p.*, 
+          GROUP_CONCAT(pe.exerciseId) as exerciseIds,
+          GROUP_CONCAT(ptb.bodyPartId) as targetedBodyPartIds
+        FROM Parts p
+        INNER JOIN PartExercises pe ON p.id = pe.partId
+        INNER JOIN Exercises e ON pe.exerciseId = e.id
+        LEFT JOIN PartTargetedBodyParts ptb ON p.id = ptb.partId
+        WHERE e.workoutTypeId = ?
+        GROUP BY p.id
+        ORDER BY p.name ASC
+      ''', [workoutTypeId]);
 
-  Future<int?> getDifficultyForBodyPart(int bodyPartId) async {
+        final parts = _generatePartsFromMaps(maps);
+        _logger.info('Fetched ${parts.length} parts for workout type: $workoutTypeId');
+        return parts;
+      });
+    } catch (e, stackTrace) {
+      _logger.severe('Error in getPartsByWorkoutType', e, stackTrace);
+      rethrow;
+    }
+  }
+
+  Future<List<Parts>> getPartsWithTargetedBodyParts(int bodyPartId, {bool isPrimary = true}) async {
+    try {
+      final db = await database;
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT p.*, 
+          GROUP_CONCAT(pe.exerciseId) as exerciseIds,
+          GROUP_CONCAT(ptb.bodyPartId) as targetedBodyPartIds,
+          MAX(ptb.targetPercentage) as maxTargetPercentage
+        FROM Parts p
+        INNER JOIN PartTargetedBodyParts ptb ON p.id = ptb.partId
+        LEFT JOIN PartExercises pe ON p.id = pe.partId
+        WHERE ptb.bodyPartId = ? AND ptb.isPrimary = ?
+        GROUP BY p.id
+        ORDER BY maxTargetPercentage DESC
+      ''', [bodyPartId, isPrimary ? 1 : 0]);
+
+        return _generatePartsFromMaps(maps);
+      });
+    } catch (e) {
+      _logger.severe('Error getting parts with targeted body parts', e);
+      return [];
+    }
+  }
+
+
+  Future<List<Parts>> getPartsWithTargetPercentage(int bodyPartId, int minPercentage) async {
+    try {
+      final db = await database;
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT p.*, 
+          GROUP_CONCAT(pe.exerciseId) as exerciseIds,
+          GROUP_CONCAT(ptb.bodyPartId) as targetedBodyPartIds,
+          ptb.targetPercentage
+        FROM Parts p
+        INNER JOIN PartTargetedBodyParts ptb ON p.id = ptb.partId
+        LEFT JOIN PartExercises pe ON p.id = pe.partId
+        WHERE ptb.bodyPartId = ? AND ptb.targetPercentage >= ?
+        GROUP BY p.id
+        ORDER BY ptb.targetPercentage DESC
+      ''', [bodyPartId, minPercentage]);
+
+        return _generatePartsFromMaps(maps);
+      });
+    } catch (e) {
+      _logger.severe('Error getting parts with target percentage', e);
+      return [];
+    }
+  }
+
+  Future<List<Parts>> getPartsWithMultipleTargets() async {
+    try {
+      final db = await database;
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT p.*, 
+          GROUP_CONCAT(pe.exerciseId) as exerciseIds,
+          GROUP_CONCAT(DISTINCT ptb.bodyPartId) as targetedBodyPartIds,
+          COUNT(DISTINCT ptb.bodyPartId) as targetCount
+        FROM Parts p
+        INNER JOIN PartTargetedBodyParts ptb ON p.id = ptb.partId
+        LEFT JOIN PartExercises pe ON p.id = pe.partId
+        GROUP BY p.id
+        HAVING targetCount > 1
+        ORDER BY targetCount DESC
+      ''');
+
+        return _generatePartsFromMaps(maps);
+      });
+    } catch (e) {
+      _logger.severe('Error getting parts with multiple targets', e);
+      return [];
+    }
+  }
+
+  Future<Map<int, List<Parts>>> getPartsGroupedByBodyPart() async {
+    try {
+      final db = await database;
+      return await db.transaction((txn) async {
+        // Ana vücut bölümlerini al (isCompound = 1 olanlar)
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        WITH MainBodyParts AS (
+          SELECT id, name
+          FROM BodyParts
+          WHERE parentBodyPartId IS NULL
+          ORDER BY id
+        )
+        SELECT 
+          mbp.id as mainBodyPartId,
+          p.*,
+          GROUP_CONCAT(DISTINCT pe.exerciseId) as exerciseIds,
+          ptb.isPrimary,
+          ptb.targetPercentage
+        FROM MainBodyParts mbp
+        LEFT JOIN PartTargetedBodyParts ptb ON ptb.bodyPartId = mbp.id
+        LEFT JOIN Parts p ON ptb.partId = p.id
+        LEFT JOIN PartExercises pe ON p.id = pe.partId
+        WHERE ptb.isPrimary = 1
+        GROUP BY mbp.id, p.id
+        HAVING p.id IS NOT NULL
+        ORDER BY 
+          mbp.id ASC,
+          p.difficulty DESC
+        ''');
+
+        if (maps.isEmpty) {
+          _logger.warning('Hiç program bulunamadı');
+          return {};
+        }
+
+        // Sonuçları grupla
+        final Map<int, List<Parts>> groupedParts = {};
+        for (var map in maps) {
+          final mainBodyPartId = map['mainBodyPartId'] as int;
+
+          // Egzersiz ID'lerini parse et
+          final exerciseIds = map['exerciseIds']?.toString()
+              .split(',')
+              .where((e) => e.isNotEmpty)
+              .map((e) => int.parse(e))
+              .toList() ?? [];
+
+          final part = Parts.fromMap(map, exerciseIds);
+
+          groupedParts.putIfAbsent(mainBodyPartId, () => []).add(part);
+        }
+
+        _logger.info('${groupedParts.length} ana vücut bölümü için programlar getirildi');
+        return groupedParts;
+      });
+    } catch (e, stackTrace) {
+      _logger.severe('Parts gruplandırılırken hata oluştu', e, stackTrace);
+      throw Exception('Veri tabanı hatası: $e');
+    }
+  }
+
+  Future<List<Parts>> getPartsWithExerciseCount(int minCount, int maxCount) async {
+    try {
+      final db = await database;
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT p.*, 
+          GROUP_CONCAT(pe.exerciseId) as exerciseIds,
+          GROUP_CONCAT(ptb.bodyPartId) as targetedBodyPartIds,
+          COUNT(pe.exerciseId) as exerciseCount
+        FROM Parts p
+        LEFT JOIN PartExercises pe ON p.id = pe.partId
+        LEFT JOIN PartTargetedBodyParts ptb ON p.id = ptb.partId
+        GROUP BY p.id
+        HAVING exerciseCount BETWEEN ? AND ?
+        ORDER BY exerciseCount DESC
+      ''', [minCount, maxCount]);
+
+        return _generatePartsFromMaps(maps);
+      });
+    } catch (e) {
+      _logger.severe('Error getting parts with exercise count', e);
+      return [];
+    }
+  }
+
+  Future<List<Parts>> getRelatedParts(int partId) async {
+    try {
+      final db = await database;
+      return await db.transaction((txn) async {
+        final List<Map<String, dynamic>> maps = await txn.rawQuery('''
+        SELECT DISTINCT p.*, 
+          GROUP_CONCAT(pe.exerciseId) as exerciseIds,
+          GROUP_CONCAT(ptb2.bodyPartId) as targetedBodyPartIds,
+          COUNT(DISTINCT ptb1.bodyPartId) as commonTargets
+        FROM Parts p
+        INNER JOIN PartTargetedBodyParts ptb1 ON p.id = ptb1.partId
+        LEFT JOIN PartTargetedBodyParts ptb2 ON p.id = ptb2.partId
+        LEFT JOIN PartExercises pe ON p.id = pe.partId
+        WHERE ptb1.bodyPartId IN (
+          SELECT bodyPartId 
+          FROM PartTargetedBodyParts 
+          WHERE partId = ?
+        )
+        AND p.id != ?
+        GROUP BY p.id
+        ORDER BY commonTargets DESC, ptb1.targetPercentage DESC
+      ''', [partId, partId]);
+
+        return _generatePartsFromMaps(maps);
+      });
+    } catch (e) {
+      _logger.severe('Error getting related parts', e);
+      return [];
+    }
+  }
+
+
+
+//yardımcı
+  Map<String, dynamic> _processPartMap(Map<String, dynamic> map) {
+    // Egzersiz ID'lerini parse et
+    final exerciseIds = map['exerciseIds']?.toString().split(',')
+        .where((e) => e.isNotEmpty)
+        .map((e) => int.parse(e))
+        .toList() ?? <int>[];
+
+    // Hedef kas grupları bilgilerini parse et
+    final targetedBodyParts = map['targetedBodyParts']?.toString().split(',')
+        .where((t) => t.isNotEmpty)
+        .map((t) {
+      final parts = t.split(':');
+      return {
+        'bodyPartId': int.parse(parts[0]),
+        'targetPercentage': int.parse(parts[1]),
+        'isPrimary': parts[2] == '1'
+      };
+    }).toList() ?? [];
+
+    return {
+      ...map,
+      'exerciseIds': exerciseIds,
+      'targetedBodyPartIds': targetedBodyParts.map((t) => t['bodyPartId'] as int).toList(),
+    };
+  }
+
+
+
+
+  ///workouttypes  ///workouttypes  ///workouttypes
+  ///workouttypes  ///workouttypes  ///workouttypes
+
+
+  Future<WorkoutTypes?> getWorkoutTypeById(int id) async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query(
-      'Parts',
-      columns: ['difficulty'],
-      where: 'bodyPartId = ?',
-      whereArgs: [bodyPartId],
+      'WorkoutTypes',
+      where: 'Id = ?',
+      whereArgs: [id],
       limit: 1,
     );
-
     if (maps.isNotEmpty) {
-      return maps.first['difficulty'] as int?;
+      return WorkoutTypes.fromMap(maps.first);
     }
     return null;
   }
 
-
-  Future<List<Parts>> getPartsByDifficulty(int difficulty) async {
+  Future<List<WorkoutTypes>> getAllWorkoutTypes() async {
     final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'Parts',
-      where: 'difficulty = ?',
-      whereArgs: [difficulty],
-    );
-
-    return List.generate(maps.length, (i) {
-      return Parts.fromMap(maps[i], []);  // exerciseIds'i boş liste olarak geçiyoruz
-    });
+    final List<Map<String, dynamic>> maps = await db.query('WorkoutTypes');
+    print("WorkoutTypes ham veri: $maps");
+    return List.generate(maps.length, (i) => WorkoutTypes.fromMap(maps[i]));
   }
 
-
-
-  Future<List<Parts>> getPartsByBodyPartId(int bodyPartId) async {
+  Future<List<WorkoutTypes>> getWorkoutTypesByName(String name) async {
     final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'Parts',
-      where: 'bodyPartId = ?',
-      whereArgs: [bodyPartId],
-    );
-
-    return List.generate(maps.length, (i) {
-      return Parts.fromMap(maps[i], []);  // exerciseIds'i boş liste olarak geçiyoruz
-    });
+    try {
+      final List<Map<String, dynamic>> maps = await db.query(
+        'WorkoutTypes',
+        where: 'Name LIKE ?',
+        whereArgs: ['%$name%'],
+      );
+      return List.generate(maps.length, (i) => WorkoutTypes.fromMap(maps[i]));
+    } catch (e) {
+      print('Error getting workout types by name: $e');
+      return [];
+    }
   }
 
+  Future<int> getWorkoutTypesCount() async {
+    final db = await database;
+    return Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM WorkoutTypes')) ?? 0;}
 
 
 
 
-  Future<void> _createTables(Database db) async {
-    await db.execute('''
-    CREATE TABLE BodyParts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      mainTargetedBodyPart INTEGER NOT NULL
-    )
-  ''');
 
-    await db.execute('''
-    CREATE TABLE Exercises (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      defaultWeight REAL NOT NULL,
-      defaultSets INTEGER NOT NULL,
-      defaultReps INTEGER NOT NULL,
-      workoutTypeId INTEGER NOT NULL,
-      mainTargetedBodyPartId INTEGER NOT NULL
-    )
-  ''');
 
-    await db.execute('''
-    CREATE TABLE PartExercises (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      partId INTEGER NOT NULL,
-      exerciseId INTEGER NOT NULL,
-      FOREIGN KEY (partId) REFERENCES Parts (id),
-      FOREIGN KEY (exerciseId) REFERENCES Exercises (id)
-    )
-  ''');
 
-    await db.execute('''
-    CREATE TABLE Parts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      bodyPartId INTEGER NOT NULL,
-      setType INTEGER NOT NULL,
-      additionalNotes TEXT,
-      FOREIGN KEY (bodyPartId) REFERENCES BodyParts (id)
-    )
-  ''');
-
-    await db.execute('''
-    CREATE TABLE RoutineExercises (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      routineId INTEGER NOT NULL,
-      exerciseId INTEGER NOT NULL,
-      FOREIGN KEY (routineId) REFERENCES Routines (id),
-      FOREIGN KEY (exerciseId) REFERENCES Exercises (id)
-    )
-  ''');
-
-    await db.execute('''
-    CREATE TABLE Routines (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      description TEXT,
-      mainTargetedBodyPartId INTEGER,
-      workoutTypeId INTEGER,
-      FOREIGN KEY (mainTargetedBodyPartId) REFERENCES BodyParts (id),
-      FOREIGN KEY (workoutTypeId) REFERENCES WorkoutTypes (id)
-    )
-  ''');
-
-    await db.execute('''
-    CREATE TABLE WorkoutTypes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL
-    )
-  ''');
-  }
 
 }
 
