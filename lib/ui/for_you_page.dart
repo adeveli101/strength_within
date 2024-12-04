@@ -9,11 +9,13 @@ import '../ai_services/ai_bloc/ai_bloc.dart';
 import '../ai_services/ai_bloc/ai_state.dart';
 import '../blocs/for_you_bloc.dart';
 import '../data_bloc_part/PartRepository.dart';
+import '../data_bloc_part/part_bloc.dart';
 import '../data_bloc_routine/RoutineRepository.dart';
 import '../data_provider/firebase_provider.dart';
 import '../data_provider/sql_provider.dart';
 import '../models/Parts.dart';
 import '../models/routines.dart';
+import '../z.app_theme/app_theme.dart';
 import 'list_pages/parts_page.dart';
 import 'list_pages/routines_page.dart';
 
@@ -295,7 +297,19 @@ class _ForYouPageState extends State<ForYouPage> {
                   child: PartCard(
                     part: part,
                     userId: widget.userId,
+                    repository: context.read<PartRepository>(),
+                    onTap: () => _showPartDetailBottomSheet(part.id),
+                    onFavoriteChanged: (isFavorite) {
+                      context.read<PartsBloc>().add(
+                        TogglePartFavorite(
+                          userId: widget.userId,
+                          partId: part.id.toString(),
+                          isFavorite: isFavorite,
+                        ),
+                      );
+                    },
                   ),
+
                 ),
               );
             },
@@ -308,6 +322,31 @@ class _ForYouPageState extends State<ForYouPage> {
       ],
     );
   }
+
+  void _showPartDetailBottomSheet(int partId) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.9,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (context, scrollController) => Container(
+          decoration: BoxDecoration(
+            color: AppTheme.darkBackground,
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(AppTheme.borderRadiusLarge),
+            ),
+          ),
+          child: PartDetailBottomSheet(
+            partId: partId, userId: widget.userId,
+          ),
+        ),
+      ),
+    );
+  }
+
 
   void _showRoutineDetails(BuildContext context, Routines routine) {
     showModalBottomSheet(

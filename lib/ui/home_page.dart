@@ -10,6 +10,7 @@ import 'package:workout/ui/part_ui/part_card.dart';
 import 'package:workout/ui/part_ui/part_detail.dart';
 import 'package:workout/ui/routine_ui/routine_card.dart';
 import 'package:workout/ui/routine_ui/routine_detail.dart';
+import '../data_bloc_part/PartRepository.dart';
 import '../data_bloc_part/part_bloc.dart';
 import '../data_bloc_routine/routines_bloc.dart';
 import 'package:logging/logging.dart';
@@ -28,17 +29,21 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin {
+
+  final _logger = Logger('HomePage');
+
   late RoutinesBloc _routinesBloc;
   late PartsBloc _partsBloc;
-  final _logger = Logger('HomePage');
+
   List<Routines> _randomRoutines = [];
   List<Parts> _randomParts = [];
+  bool _isLoading = true;
 
   // AutomaticKeepAliveClientMixin için gerekli
   @override
   bool get wantKeepAlive => true;
 
-  @override
+
   @override
   void initState() {
     super.initState();
@@ -60,20 +65,33 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
   final List<int> _updatedPartIds = [];
 
   void _loadAllData({bool resetRandomParts = false}) {
+    if (_isLoading) return;
+    _isLoading = true;
+
     _logger.info('Loading all data for user: ${widget.userId}');
+
+    // Load data using BLoC events
     _partsBloc.add(FetchParts());
     _routinesBloc.add(FetchRoutines());
 
+    // Reset random parts if needed
     if (resetRandomParts) {
       setState(() {
         _randomParts = [];
+        _randomRoutines = [];
       });
-    } else if (_updatedPartIds.isNotEmpty) {
+    }
+    // Handle updated parts
+    else if (_updatedPartIds.isNotEmpty) {
       _reloadUpdatedParts();
+      setState(() {
+        _randomRoutines = [];
+      });
     }
 
-    setState(() {
-      _randomRoutines = [];
+    // Reset loading state after delay
+    Future.delayed(const Duration(milliseconds: 500), () {
+      _isLoading = false;
     });
   }
 
@@ -96,7 +114,22 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
     });
   }
 
+  @override
+  void dispose() {
+    _routinesBloc.close();
+    _partsBloc.close();
+    super.dispose();
+  }
 
+  void _handleError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppTheme.primaryRed.withOpacity(0.8),
+      ),
+    );
+  }
 
 
   @override
@@ -153,9 +186,7 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
       },
       builder: (context, state) {
         if (state is PartsLoading) {
-          return Center(
-
-          );
+          return Center(child: CircularProgressIndicator());
         }
 
         if (state is PartsLoaded) {
@@ -244,21 +275,27 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
           ),
           SizedBox(
             height: isWideScreen ? 280 : 230,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              padding: EdgeInsets.symmetric(horizontal: AppTheme.paddingSmall),
-              itemCount: parts.length,
-              itemBuilder: (context, index) {
-                return _buildPartCard(parts[index], constraints);
+            child: PartCard.buildPartCardList(
+              parts: parts,
+              userId: widget.userId,
+              repository: context.read<PartRepository>(),
+              onTap: _showPartDetailBottomSheet,
+              onFavoriteChanged: (isFavorite, partId) {
+                setState(() {
+                  final index = _randomParts.indexWhere((p) => p.id.toString() == partId);
+                  if (index != -1) {
+                    _randomParts[index] = _randomParts[index].copyWith(isFavorite: isFavorite);
+                  }
+                });
               },
+              scrollController: ScrollController(),
+              isGridView: false,
             ),
           ),
         ],
       ),
     );
   }
-
   Widget _buildPartCard(Parts part, BoxConstraints constraints) {
     final isWideScreen = constraints.maxWidth > AppTheme.tabletBreakpoint;
     final cardWidth = isWideScreen ? 200.0 : 240.0;
@@ -276,10 +313,10 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
           key: ValueKey(part.id),
           part: part,
           userId: widget.userId,
+          repository: context.read<PartRepository>(), // Add this line
           onTap: () => _showPartDetailBottomSheet(part.id),
           onFavoriteChanged: (isFavorite) {
             setState(() {
-              // Favori durumunu güncelle
               final updatedPart = part.copyWith(isFavorite: isFavorite);
               final index = _randomParts.indexWhere((p) => p.id == part.id);
               if (index != -1) {
@@ -288,6 +325,7 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
             });
           },
         ),
+
       ),
     );
   }

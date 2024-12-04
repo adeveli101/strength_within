@@ -3,6 +3,13 @@ import 'package:get/get.dart';
 import '../models/BodyPart.dart';
 import '../models/WorkoutType.dart';
 import '../models/Parts.dart';
+
+extension StringExtension on String {
+  String capitalize() {
+    if (isEmpty) return this;
+    return "${this[0].toUpperCase()}${substring(1)}";
+  }
+}
 enum SetType {
   regular,  // Normal set
   drop,     // Drop set
@@ -13,13 +20,15 @@ enum SetType {
 }
 // Kas grubu dönüştürücüler
 String bodyPartToStringConverter(BodyParts bodyPart) {
-  return bodyPart.name.capitalize!;
+  return GetStringUtils(bodyPart.name).capitalize!;
 }
 
-String bodyPartIdToStringConverter(int bodyPartId,  bodyParts) {
-  // BodyPart ID'sine göre ismi döndür
-  final bodyPart = bodyParts.firstWhere((part) => part.id == bodyPartId, orElse: () => BodyParts(id: -1, name: 'Bilinmiyor'));
-  return bodyPart.name.capitalize!;
+String bodyPartIdToStringConverter(int bodyPartId, List<BodyParts> bodyParts) {
+  final bodyPart = bodyParts.firstWhere(
+          (part) => part.id == bodyPartId,
+      orElse: () => BodyParts(id: -1, name: 'Unknown')
+  );
+  return GetStringUtils(bodyPart.name).capitalize!;
 }
 
 String workoutTypeToStringConverter(WorkoutTypes workoutType) {
@@ -84,7 +93,7 @@ int setTypeToExerciseCountConverter(SetType setType) {
   }
 }
 
-// Kas grubu ikon dönüştürücüsü
+//todo
 Widget bodyPartToIconConverter(BodyParts bodyPart) {
   double scale = 30;
 

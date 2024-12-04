@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:logging/logging.dart';
 import '../data_provider/sql_provider.dart';
 import '../data_provider/firebase_provider.dart';
+import '../data_provider_cache/app_cache.dart';
 import '../models/PartTargetedBodyParts.dart';
 import '../models/exercises.dart';
 import '../models/BodyPart.dart';
@@ -23,14 +24,207 @@ class PartRepository {
   PartRepository(this._sqlProvider, this._firebaseProvider);
 
 
+  final _bodyPartNamesCache = <int, String>{};
+  final AppCache _cache = AppCache();
 
+  //cache key'ler (ana listeler için)
+  static const String PARTS_CACHE_KEY = 'all_parts';
+  static const String EXERCISES_CACHE_KEY = 'all_exercises';
+  static const String BODYPARTS_CACHE_KEY = 'all_bodyparts';
+  static const String WORKOUTTYPE_CACHE_KEY = 'workout_types';
+  static const String MAIN_BODYPARTS_KEY = 'main_bodyparts';
+
+  // yardımcı
+  static const String GROUPED_PARTS_CACHE_KEY = 'grouped_parts';
+  static const String EXERCISE_LIST_CACHE_KEY = 'exercise_list';
+
+  static const String PART_FREQUENCY_CACHE_KEY = 'part_frequency';
+  static const String PART_DIFFICULTY_CACHE_KEY = 'part_difficulty';
+
+  // İlişkisel sorgular için cache key
+  static String partExercises(int partId) => 'part_exercises_$partId';
+  static String partTargets(int partId) => 'part_targets_$partId';
+  static String partsByBodyPart(int bodyPartId) => 'parts_by_bodypart_$bodyPartId';
+  static String partFrequency(int partId) => 'part_frequency_$partId';
+  static String bodyPartsByParent(int? parentId) => 'bodyparts_parent_$parentId';
+
+
+// Exercise ilişkili sorgular
+  static String exercisesByPart(int partId) => 'exercises_by_part_$partId';
+  static String exerciseListForPart(int partId) => 'exercise_list_part_$partId';
+
+// Arama ve filtreleme
+  static String searchParts(String query) => 'search_parts_$query';
+  static String partsWithExerciseRange(int min, int max) => 'parts_exercise_count_${min}_$max';
+
+
+
+  Future<List<BodyParts>> getMainBodyParts() async {
+    try {
+      final cachedData = _cache.get<List<BodyParts>>(MAIN_BODYPARTS_KEY);
+      if (cachedData != null) {
+        _logger.info('Returning ${cachedData.length} main body parts from cache');
+        return cachedData;
+      }
+
+      final result = await _sqlProvider.getMainBodyParts();
+      _cache.set(MAIN_BODYPARTS_KEY, result, expiry: AppCache.BODY_PARTS_EXPIRY);
+      _logger.info('Ana vücut bölümleri getirildi: ${result.length} adet');
+      return result;
+    } catch (e) {
+      _logger.severe('Ana vücut bölümleri getirilirken hata oluştu', e);
+      return [];
+    }
+  }
+
+  Future<Map<int, List<Parts>>> getPartsGroupedByBodyPart() async {
+    try {
+      final cachedData = _cache.get<Map<int, List<Parts>>>(GROUPED_PARTS_CACHE_KEY);
+      if (cachedData != null) {
+        _logger.info('Returning grouped parts from cache');
+        return cachedData;
+      }
+
+      final mainBodyParts = await getMainBodyParts();
+      final result = <int, List<Parts>>{};
+
+      await Future.wait(
+          mainBodyParts.map((bodyPart) async {
+            try {
+              final parts = await getPartsByBodyPart(bodyPart.id);
+              if (parts.isNotEmpty) {
+                result[bodyPart.id] = parts;
+              }
+            } catch (e) {
+              _logger.warning('Vücut bölümü ${bodyPart.id} için programlar alınırken hata: $e');
+            }
+          })
+      );
+
+      _cache.set(GROUPED_PARTS_CACHE_KEY, result, expiry: AppCache.JOIN_QUERY_EXPIRY);
+      return result;
+    } catch (e, stackTrace) {
+      _logger.severe('Programlar gruplandırılırken hata', e, stackTrace);
+      throw Exception('Programlar yüklenirken bir hata oluştu: $e');
+    }
+  }
+
+  Future<List<PartTargetedBodyParts>> getPartTargetedBodyParts(int partId) async {
+    try {
+      final cacheKey = partTargets(partId);
+      final cachedData = _cache.get<List<PartTargetedBodyParts>>(cacheKey);
+      if (cachedData != null) {
+        _logger.info('Returning ${cachedData.length} targeted body parts for part $partId from cache');
+        return cachedData;
+      }
+
+      final targets = await _sqlProvider.getPartTargetedBodyParts(partId);
+      _cache.set(cacheKey, targets, expiry: AppCache.JOIN_QUERY_EXPIRY);
+      _logger.info('Fetched ${targets.length} targeted body parts for part: $partId');
+      return targets;
+    } catch (e, stackTrace) {
+      _logger.severe('Error getting part targeted body parts', e, stackTrace);
+      rethrow;
+    }
+  }
+
+  Future<PartFrequency?> getPartFrequency(int partId) async {
+    try {
+      final cacheKey = partFrequency(partId);
+      final cachedData = _cache.get<PartFrequency>(cacheKey);
+      if (cachedData != null) {
+        _logger.info('Returning frequency for part $partId from cache');
+        return cachedData;
+      }
+
+      final frequency = await _sqlProvider.getPartFrequency(partId);
+      if (frequency != null) {
+        _cache.set(cacheKey, frequency, expiry: AppCache.PARTS_EXPIRY);
+        _logger.info('Part frequency fetched for ID: $partId');
+      }
+      return frequency;
+    } catch (e, stackTrace) {
+      _logger.severe('Error getting part frequency', e, stackTrace);
+      return null;
+    }
+  }
+
+  Future<List<PartExercise>> getPartExercisesByPartId(int partId) async {
+    try {
+      final cacheKey = partExercises(partId);
+      final cachedData = _cache.get<List<PartExercise>>(cacheKey);
+      if (cachedData != null) {
+        _logger.info('Returning ${cachedData.length} exercises for part $partId from cache');
+        return cachedData;
+      }
+
+      final exercises = await _sqlProvider.getPartExercisesByPartId(partId);
+      _cache.set(cacheKey, exercises, expiry: AppCache.JOIN_QUERY_EXPIRY);
+      _logger.info('Fetched ${exercises.length} exercises for part: $partId');
+      return exercises;
+    } catch (e, stackTrace) {
+      _logger.severe('Error in getPartExercisesByPartId', e, stackTrace);
+      rethrow;
+    }
+  }
+  //*
   Future<List<Parts>> getAllParts() async {
     try {
+      // Cache kontrolü
+      final cachedData = _cache.get<List<Parts>>(PARTS_CACHE_KEY);
+      if (cachedData != null) {
+        _logger.info('Returning ${cachedData.length} parts from cache');
+        return cachedData;
+      }
+
+      // Cache'de yoksa veritabanından al
       final parts = await _sqlProvider.getAllParts();
-      _logger.info('Fetched ${parts.length} parts successfully');
+
+      // Cache'e kaydet
+      _cache.set(PARTS_CACHE_KEY, parts, expiry: AppCache.PARTS_EXPIRY);
+
+      _logger.info('Fetched ${parts.length} parts from database');
       return parts;
     } catch (e, stackTrace) {
       _logger.severe('Error in getAllParts', e, stackTrace);
+      rethrow;
+    }
+  }
+
+  Future<List<BodyParts>> getAllBodyParts() async {
+    try {
+      final cachedData = _cache.get<List<BodyParts>>(BODYPARTS_CACHE_KEY);
+      if (cachedData != null) {
+        _logger.info('Returning ${cachedData.length} body parts from cache');
+        return cachedData;
+      }
+
+      final bodyParts = await _sqlProvider.getAllBodyParts();
+      _cache.set(BODYPARTS_CACHE_KEY, bodyParts, expiry: AppCache.BODY_PARTS_EXPIRY);
+
+      _logger.info('Fetched ${bodyParts.length} body parts from database');
+      return bodyParts;
+    } catch (e, stackTrace) {
+      _logger.severe('Error in getAllBodyParts', e, stackTrace);
+      rethrow;
+    }
+  }
+
+  Future<List<WorkoutTypes>> getAllWorkoutTypes() async {
+    try {
+      final cachedData = _cache.get<List<WorkoutTypes>>(WORKOUTTYPE_CACHE_KEY);
+      if (cachedData != null) {
+        _logger.info('Returning ${cachedData.length} workout types from cache');
+        return cachedData;
+      }
+
+      final workoutTypes = await _sqlProvider.getAllWorkoutTypes();
+      _cache.set(WORKOUTTYPE_CACHE_KEY, workoutTypes, expiry: AppCache.WORKOUT_TYPES_EXPIRY);
+
+      _logger.info('Fetched ${workoutTypes.length} workout types from database');
+      return workoutTypes;
+    } catch (e, stackTrace) {
+      _logger.severe('Error in getAllWorkoutTypes', e, stackTrace);
       rethrow;
     }
   }
@@ -60,28 +254,6 @@ class PartRepository {
       return parts;
     } catch (e, stackTrace) {
       _logger.severe('Error in getPartsSortedByName', e, stackTrace);
-      rethrow;
-    }
-  }
-
-  Future<List<WorkoutTypes>> getAllWorkoutTypes() async {
-    try {
-      final workoutTypes = await _sqlProvider.getAllWorkoutTypes();
-      _logger.info('Fetched ${workoutTypes.length} workout types');
-      return workoutTypes;
-    } catch (e, stackTrace) {
-      _logger.severe('Error in getAllWorkoutTypes', e, stackTrace);
-      rethrow;
-    }
-  }
-
-  Future<List<BodyParts>> getAllBodyParts() async {
-    try {
-      final bodyParts = await _sqlProvider.getAllBodyParts();
-      _logger.info('Fetched ${bodyParts.length} body parts');
-      return bodyParts;
-    } catch (e, stackTrace) {
-      _logger.severe('Error in getAllBodyParts', e, stackTrace);
       rethrow;
     }
   }
@@ -137,27 +309,7 @@ class PartRepository {
     }
   }
 
-  Future<List<PartExercise>> getAllPartExercises() async {
-    try {
-      final exercises = await _sqlProvider.getAllPartExercises();
-      _logger.info('Fetched ${exercises.length} part exercises');
-      return exercises;
-    } catch (e, stackTrace) {
-      _logger.severe('Error in getAllPartExercises', e, stackTrace);
-      rethrow;
-    }
-  }
 
-  Future<List<PartExercise>> getPartExercisesByPartId(int partId) async {
-    try {
-      final exercises = await _sqlProvider.getPartExercisesByPartId(partId);
-      _logger.info('Fetched ${exercises.length} exercises for part: $partId');
-      return exercises;
-    } catch (e, stackTrace) {
-      _logger.severe('Error in getPartExercisesByPartId', e, stackTrace);
-      rethrow;
-    }
-  }
 
   Future<Exercises?> getExerciseById(int id) async {
     try {
@@ -284,43 +436,6 @@ class PartRepository {
     }
   }
 
-  Future<Map<int, List<Parts>>> getPartsGroupedByBodyPart() async {
-    try {
-      // Ana vücut bölümlerini tek seferde al
-      final mainBodyParts = await getMainBodyParts();
-      final result = <int, List<Parts>>{};
-
-      // Paralel sorgu için Future.wait kullan
-      await Future.wait(
-          mainBodyParts.map((bodyPart) async {
-            try {
-              final parts = await getPartsByBodyPart(bodyPart.id);
-              if (parts.isNotEmpty) {
-                result[bodyPart.id] = parts;
-              }
-            } catch (e) {
-              _logger.warning(
-                  'Vücut bölümü ${bodyPart.id} için programlar alınırken hata: $e'
-              );
-            }
-          })
-      );
-
-      if (result.isEmpty) {
-        _logger.warning('Hiçbir program bulunamadı');
-      } else {
-        _logger.info('${result.length} vücut bölümü için programlar getirildi');
-      }
-
-      return result;
-    } catch (e, stackTrace) {
-      _logger.severe('Programlar gruplandırılırken hata', e, stackTrace);
-      throw Exception('Programlar yüklenirken bir hata oluştu: $e');
-    }
-  }
-
-
-  final _bodyPartNamesCache = <int, String>{};
 
   Future<String> getBodyPartName(int bodyPartId) async {
     if (_bodyPartNamesCache.containsKey(bodyPartId)) {
@@ -362,31 +477,6 @@ class PartRepository {
     }
   }
 
-  Future<PartFrequency?> getPartFrequency(int partId) async {
-    try {
-      final frequency = await _sqlProvider.getPartFrequency(partId);
-      if (frequency != null) {
-        _logger.info('Part frequency fetched for ID: $partId');
-      } else {
-        _logger.warning('No frequency data found for part ID: $partId');
-      }
-      return frequency;
-    } catch (e, stackTrace) {
-      _logger.severe('Error getting part frequency', e, stackTrace);
-      return null;
-    }
-  }
-
-  Future<List<PartTargetedBodyParts>> getPartTargetedBodyParts(int partId) async {
-    try {
-      final targets = await _sqlProvider.getPartTargetedBodyParts(partId);
-      _logger.info('Fetched ${targets.length} targeted body parts for part: $partId');
-      return targets;
-    } catch (e, stackTrace) {
-      _logger.severe('Error getting part targeted body parts', e, stackTrace);
-      rethrow;
-    }
-  }
 
   Future<List<String>> getPartTargetedBodyPartsName(int partId) async {
     try {
@@ -529,17 +619,6 @@ class PartRepository {
       return result;
     } catch (e) {
       _logger.severe('Secondary hedef parçalar getirilirken hata oluştu', e);
-      return [];
-    }
-  }
-
-  Future<List<BodyParts>> getMainBodyParts() async {
-    try {
-      final result = await _sqlProvider.getMainBodyParts();
-      _logger.info('Ana vücut bölümleri getirildi: ${result.length} adet');
-      return result;
-    } catch (e) {
-      _logger.severe('Ana vücut bölümleri getirilirken hata oluştu', e);
       return [];
     }
   }

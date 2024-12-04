@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 
 class AppTheme {
   // Ana Renkler
-  static const Color primaryRed = Color(0xFFE53935);
-  static const Color secondaryRed = Color(0xFFEF5350);
+  static const Color primaryRed = Color(0xFFFF0000);
+  static const Color secondaryRed = Color(0xFFD3110E);
   static const Color darkBackground = Color(0xFF121212);
   static const Color cardBackground = Color(0xFF1E1E1E);
   static const Color surfaceColor = Color(0xFF2C2C2C);
