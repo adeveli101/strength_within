@@ -104,26 +104,36 @@ dependencies:
   crypto: ^3.0.6
   mockito: ^5.4.4
 
+  icon: ^2.2.1
+  animated_text_kit: ^4.2.2
 
 
+
+
+# Splash screen yapılandırması
 flutter_native_splash:
   color: "#121212"
-  image: assets/main_logo.png
+  image: assets/logo_circle.png
   android: true
   ios: true
-
-  # Ek özelleştirmeler
-  android_12:
-    image: assets/main_logo.png
-    icon_background_color: "#121212"
-    image_dark: assets/main_logo.png
-    icon_background_color_dark: "#121212"
-
-  # Diğer özelleştirmeler
   fullscreen: true
   android_gravity: center
   ios_content_mode: center
   web: false
+
+  android_12:
+    # Android 12+ için splash screen ayarları
+    image: assets/logo_circle.png
+    icon_background_color: "#121212"
+    image_dark: assets/logo_circle.png
+    icon_background_color_dark: "#121212"
+    # Logo etrafındaki beyaz alanı kaldırmak için
+    branding_mode: bottom
+
+
+flutter_launcher_icons:
+  android: true
+  image_path: "assets/logo_circle.png"
 
 dev_dependencies:
 
@@ -136,25 +146,27 @@ flutter:
 
 
   assets:
-    - database/esek.db
-    - assets/abs-96.png
-    - assets/app_icon.png
-    - assets/back-96.png
-    - assets/chest-24.png
-    - assets/chest-48.png
-    - assets/chest-96.png
-    - assets/dumbbell-24.png
-    - assets/dumbbell-48.png
-    - assets/dumbbell-96.png
-    - assets/dumbbells.png
-    - assets/ic_launcher.png
-    - assets/leg-96.png
-    - assets/muscle-96.png
-    - assets/stopwatch.png
-    - assets/test.jpg
-    - assets/main_logo.png
-    - assets/logo2_small.png
-    - assets/logo3_small.png
+    - android/app/src/main/res/
+    - android/app/src/main/res/values/
+    - android/app/src/main/res/drawable/
+    - android/app/src/main/res/values-v31/
+    - android/app/src/main/res/drawable-v21/
+    - android/app/src/main/res/values-night/
+    - android/app/src/main/res/drawable-hdpi/
+    - android/app/src/main/res/drawable-mdpi/
+    - android/app/src/main/res/drawable-xhdpi/
+    - android/app/src/main/res/drawable-xxhdpi/
+    - android/app/src/main/res/drawable-xxxhdpi/
+    - android/app/src/main/res/values-night-v31/
+    - android/app/src/main/res/drawable-night-hdpi/
+    - android/app/src/main/res/drawable-night-mdpi/
+    - android/app/src/main/res/drawable-night-xhdpi/
+    - android/app/src/main/res/drawable-night-xxhdpi/
+    - android/app/src/main/res/drawable-night-xxxhdpi/
+    - pubspec.yaml
+    - lib/generated/assets.dart
+    - assets/
+    - database/
 
 
 

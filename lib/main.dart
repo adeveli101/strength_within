@@ -18,6 +18,7 @@ import 'package:workout/ui/list_pages/program_merger/program_merger_page.dart';
 import 'package:workout/ui/setting_pages.dart';
 import 'package:workout/z.app_theme/app_theme.dart';
 import 'package:workout/z.app_theme/circular_logo.dart';
+import 'package:workout/z.app_theme/splash_screen.dart';
 import 'ai_services/ai_bloc/ai_bloc.dart';
 import 'blocs/for_you_bloc.dart';
 import 'data_bloc_part/PartRepository.dart';
@@ -35,7 +36,7 @@ final _logger = Logger('Main');
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Firebase başlatma
+  // Firebase initialization first
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
@@ -43,100 +44,94 @@ Future<void> main() async {
     androidProvider: AndroidProvider.playIntegrity,
   );
 
-  // Providers
-  final sqlProvider = SQLProvider();
-  await sqlProvider.initDatabase();
-  final firebaseProvider = FirebaseProvider();
+  // Show splash screen immediately
+  runApp(
+    MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: SplashScreen(
+        onInitComplete: (String? userId) async {
+          if (userId != null) {
+            // Initialize providers and repositories
+            final sqlProvider = SQLProvider();
+            await sqlProvider.initDatabase();
+            final firebaseProvider = FirebaseProvider();
 
-  // Repositories
-  final routineRepository = RoutineRepository(sqlProvider, firebaseProvider);
-  final partRepository = PartRepository(sqlProvider, firebaseProvider);
-  final exerciseRepository = ExerciseRepository(
-    sqlProvider: sqlProvider,
-    firebaseProvider: firebaseProvider,
+            final routineRepository = RoutineRepository(sqlProvider, firebaseProvider);
+            final partRepository = PartRepository(sqlProvider, firebaseProvider);
+            final exerciseRepository = ExerciseRepository(
+              sqlProvider: sqlProvider,
+              firebaseProvider: firebaseProvider,
+            );
+            final scheduleRepository = ScheduleRepository(firebaseProvider, sqlProvider);
+
+            // Launch main app with all providers initialized
+            runApp(
+              MultiRepositoryProvider(
+                providers: [
+                  RepositoryProvider<SQLProvider>(create: (context) => sqlProvider),
+                  RepositoryProvider<FirebaseProvider>(create: (context) => firebaseProvider),
+                  RepositoryProvider<ExerciseRepository>(create: (context) => exerciseRepository),
+                  RepositoryProvider<ScheduleRepository>(create: (context) => scheduleRepository),
+                  RepositoryProvider<PartRepository>(create: (context) => partRepository),
+                  RepositoryProvider<RoutineRepository>(create: (context) => routineRepository),
+                ],
+                child: MultiBlocProvider(
+                  providers: [
+                    BlocProvider(
+                      create: (context) => RoutinesBloc(
+                        repository: routineRepository,
+                        scheduleRepository: scheduleRepository,
+                        userId: userId,
+                      ),
+                    ),
+                    BlocProvider(
+                      create: (context) => PartsBloc(
+                        repository: partRepository,
+                        scheduleRepository: scheduleRepository,
+                        userId: userId,
+                      )..add(FetchParts()),
+                    ),
+                    BlocProvider(
+                      create: (context) => ScheduleBloc(
+                        repository: scheduleRepository,
+                        userId: userId,
+                      ),
+                    ),
+                    BlocProvider(
+                      create: (context) => ForYouBloc(
+                        partRepository: partRepository,
+                        routineRepository: routineRepository,
+                        scheduleRepository: scheduleRepository,
+                        userId: userId,
+                      ),
+                    ),
+                    BlocProvider(create: (context) => AIBloc()),
+                  ],
+                  child: App(userId: userId),
+                ),
+              ),
+            );
+          } else {
+            _logger.severe('Anonim giriş başarısız oldu.');
+            runApp(
+              MaterialApp(
+                home: Scaffold(
+                  body: Center(
+                    child: Text('Giriş yapılamadı. Lütfen tekrar deneyin.'),
+                  ),
+                ),
+              ),
+            );
+          }
+        },
+      ),
+    ),
   );
-  final scheduleRepository = ScheduleRepository(firebaseProvider, sqlProvider);
-  // Anonim giriş
+
+  // Perform anonymous login
+  final firebaseProvider = FirebaseProvider();
   String? userId = await firebaseProvider.signInAnonymously();
-
-  if (userId != null) {
-    runApp(
-      MultiRepositoryProvider(
-        providers: [
-          RepositoryProvider<SQLProvider>(
-            create: (context) => sqlProvider,
-          ),
-          RepositoryProvider<FirebaseProvider>(
-            create: (context) => firebaseProvider,
-          ),
-          RepositoryProvider<ExerciseRepository>(
-            create: (context) => exerciseRepository,
-          ),
-          RepositoryProvider<ScheduleRepository>(
-            create: (context) => scheduleRepository,
-          ),
-          RepositoryProvider<PartRepository>(
-            create: (context) => partRepository,
-          ),
-          RepositoryProvider<RoutineRepository>(
-            create: (context) => routineRepository,
-          ),
-        ],
-        child: MultiBlocProvider(
-          providers: [
-            BlocProvider(
-              create: (context) => RoutinesBloc(
-                repository: routineRepository,
-                scheduleRepository: scheduleRepository,
-                userId: userId,
-              ),
-            ),
-            BlocProvider(
-              create: (context) => PartsBloc(
-                repository: partRepository,
-                scheduleRepository: scheduleRepository,
-                userId: userId,
-              )..add(FetchParts()),
-            ),
-            // main.dart içinde
-
-            BlocProvider(
-              create: (context) => ScheduleBloc(
-                repository: scheduleRepository, // scheduleRepository yerine repository
-                userId: userId,
-              ),
-            ),
-            BlocProvider(
-              create: (context) => ForYouBloc(
-                partRepository: partRepository,
-                routineRepository: routineRepository,
-                scheduleRepository: scheduleRepository,
-                userId: userId,
-              ),
-            ),
-            BlocProvider(
-              create: (context) => AIBloc(),
-            ),
-          ],
-          child: App(userId: userId),
-        ),
-      ),
-    );
-  } else {
-    _logger.severe('Anonim giriş başarısız oldu.');
-    // Hata durumunda basit bir hata ekranı göster
-    runApp(
-      MaterialApp(
-        home: Scaffold(
-          body: Center(
-            child: Text('Giriş yapılamadı. Lütfen tekrar deneyin.'),
-          ),
-        ),
-      ),
-    );
-  }
 }
-
 class App extends StatelessWidget {
   final String userId;
 
@@ -148,14 +143,30 @@ class App extends StatelessWidget {
       builder: (context, child) => ResponsiveBreakpoints.builder(
         child: child!,
         breakpoints: [
-          const Breakpoint(start: 0, end: 450, name: MOBILE),
-          const Breakpoint(start: 451, end: 800, name: TABLET),
-          const Breakpoint(start: 801, end: 1920, name: DESKTOP),
-          const Breakpoint(start: 1921, end: double.infinity, name: '4K'),
+          const Breakpoint(
+              start: 0,
+              end: AppTheme.mobileBreakpoint, // 450
+              name: MOBILE
+          ),
+          const Breakpoint(
+              start: AppTheme.mobileBreakpoint + 1,
+              end: AppTheme.tabletBreakpoint, // 800
+              name: TABLET
+          ),
+          const Breakpoint(
+              start: AppTheme.tabletBreakpoint + 1,
+              end: AppTheme.desktopBreakpoint, // 1920
+              name: DESKTOP
+          ),
+          const Breakpoint(
+              start: AppTheme.desktopBreakpoint + 1,
+              end: double.infinity,
+              name: '4K'
+          ),
         ],
       ),
-      title: 'Fitness App',
-      theme: AppTheme.darkTheme, // custom theme
+      title: 'Strenght Within',
+      theme: AppTheme.darkTheme,
       home: MainScreen(userId: userId),
     );
   }
@@ -262,9 +273,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: TweenAnimationBuilder<double>(
-        tween: Tween(begin: 0.95, end: _isHovered ? 1.05 : 1.0),
+        tween: Tween(begin: 0.95, end: _isHovered ? 1.08 : 1.0),
         duration: AppTheme.quickAnimation,
-        curve: Curves.easeOutBack,
+        curve: Curves.elasticOut,
         builder: (context, value, child) {
           return Transform.scale(
             scale: value,
@@ -273,27 +284,51 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  const Color(0xFF00B4D8),
-                  const Color(0xFF0077B6),
-                  const Color(0xFFFF4D6D),
+                  const Color(0xFF590000),
+                  AppTheme.primaryRed,
+                  const Color(0xFFB71C1C),
+                  const Color(0xFF590000),
                 ],
-                stops: const [0.0, 0.5, 1.0],
+                stops: const [0.0, 0.3, 0.7, 1.0],
               ).createShader(bounds),
-              child: Text(
-                'Workout App',
-                style: AppTheme.headingSmall.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.8,
-                  height: 1.1,
-                  shadows: [
-                    Shadow(
-                      color: const Color(0xFF00B4D8).withOpacity(0.3),
-                      offset: const Offset(1, 1),
-                      blurRadius: 2,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Shadow layer
+                  Text(
+                    'Strength Within',
+                    style: AppTheme.headingSmall.copyWith(
+                      color: Colors.black87,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 2.0,
+                      height: 1.0,
+                      fontSize: 20,
                     ),
-                  ],
-                ),
+                  ),
+                  // Main text layer
+                  Text(
+                    'Strength Within',
+                    style: AppTheme.headingSmall.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 2.0,
+                      height: 1.0,
+                      fontSize: 20,
+                      shadows: [
+                        Shadow(
+                          color: AppTheme.primaryRed.withOpacity(0.8),
+                          offset: const Offset(2, 2),
+                          blurRadius: 4,
+                        ),
+                        Shadow(
+                          color: Colors.black.withOpacity(0.5),
+                          offset: const Offset(-1, -1),
+                          blurRadius: 2,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           );
@@ -301,6 +336,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       ),
     );
   }
+
 
   Widget _buildSettingsButton() {
     return Container(

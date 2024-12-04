@@ -34,7 +34,7 @@ class SQLProvider {
 
   static Database? _database;
   static const String DB_NAME = 'esek.db';
-  static const int DB_VERSION = 1; // Veritabanı versiyonunu takip etmek için
+  static const int DB_VERSION = 1; // Veritabanı versiyonu
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -257,82 +257,34 @@ class SQLProvider {
 
 
 
-  ///cache ///cache ///cache ///cache ///cache ///cache
-  ///cache ///cache ///cache ///cache ///cache ///cache
-  final AppCache _cache = AppCache();
-
-  static const String ROUTINES_CACHE_KEY = 'all_routines';
-  static const String EXERCISES_CACHE_KEY = 'all_exercises';
-  static const String BODYPARTS_CACHE_KEY = 'all_bodyparts';
-  static const String WORKOUTTYPE_CACHE_KEY = 'workout_types';
-  static const String PARTS_CACHE_KEY = 'all_parts';
 
 
-  Future<List<T>> getCachedData<T>(String key, Future<List<T>> Function() dbQuery) async {
-    // Önce cache'den kontrol et
-    final cachedData = _cache.get<List<T>>(key);
-    if (cachedData != null) {
-      return cachedData;
-    }
 
-    // Cache'de yoksa DB'den al ve cache'e kaydet
-    final data = await dbQuery();
-    _cache.set(key, data);
-    return data;
-  }
-
-
-  //büyük sorgular için cache
+  // ana sorgular
 
   Future<List<Exercises>> getAllExercises() async {
-    // Cache kontrolü
-    final cachedExercises = _cache.get<List<Exercises>>(EXERCISES_CACHE_KEY);
-    if (cachedExercises != null) {
-      return cachedExercises;
-    }
-
     try {
       final db = await database;
       final List<Map<String, dynamic>> maps = await db.query('Exercises');
-      final exercises = List.generate(maps.length, (i) => Exercises.fromMap(maps[i]));
-
-      // Sonuçları cache'e kaydet
-      _cache.set(EXERCISES_CACHE_KEY, exercises);
-      return exercises;
+      return List.generate(maps.length, (i) => Exercises.fromMap(maps[i]));
     } catch (e) {
       _logger.severe('Error getting all exercises', e);
       return [];
     }
   }
 
-
   Future<List<BodyParts>> getAllBodyParts() async {
-    final cachedBodyParts = _cache.get<List<BodyParts>>(BODYPARTS_CACHE_KEY);
-    if (cachedBodyParts != null) {
-      return cachedBodyParts;
-    }
-
     try {
       final db = await database;
       final List<Map<String, dynamic>> maps = await db.query('BodyParts');
-      final bodyParts = List.generate(maps.length, (i) => BodyParts.fromMap(maps[i]));
-
-      _cache.set(BODYPARTS_CACHE_KEY, bodyParts);
-      return bodyParts;
+      return List.generate(maps.length, (i) => BodyParts.fromMap(maps[i]));
     } catch (e) {
       _logger.severe('Error getting all body parts', e);
       return [];
     }
   }
 
-
-
   Future<List<Parts>> getAllParts() async {
-    final cachedParts = _cache.get<List<Parts>>(PARTS_CACHE_KEY);
-    if (cachedParts != null) {
-      return cachedParts;
-    }
-
     try {
       final db = await database;
       return await db.transaction((txn) async {
@@ -355,14 +307,7 @@ class SQLProvider {
     }
   }
 
-
   Future<List<Routines>> getAllRoutines() async {
-    // Önce cache'i kontrol et
-    final cachedRoutines = _cache.get<List<Routines>>(ROUTINES_CACHE_KEY);
-    if (cachedRoutines != null) {
-      return cachedRoutines;
-    }
-
     try {
       final db = await database;
       return await db.transaction((txn) async {
@@ -377,7 +322,7 @@ class SQLProvider {
         ORDER BY r.id
       ''');
 
-        final routines = await Future.wait(maps.map((map) async {
+        return Future.wait(maps.map((map) async {
           final targetedBodyParts = await txn.query(
               'RoutineTargetedBodyParts',
               where: 'routineId = ?',
@@ -391,11 +336,6 @@ class SQLProvider {
             'targetedBodyParts': targetedBodyParts
           });
         }));
-
-        // Sonuçları cache'e kaydet
-        _cache.set(ROUTINES_CACHE_KEY, routines);
-        return routines;
-
       });
     } catch (e, stackTrace) {
       _logger.severe('Error getting all routines', e, stackTrace);
@@ -405,22 +345,6 @@ class SQLProvider {
 
 
 
-// Cache'i temizleme metodları
-  void invalidatePartssCache() {
-    _cache.invalidatePattern('^parts_.*');
-  }
-
-  void invalidateRoutinesCache() {
-    _cache.invalidatePattern('^routines_.*');
-  }
-
-  void invalidateExercisesCache() {
-    _cache.invalidatePattern('^exercises_.*');
-  }
-
-  void clearAllCache() {
-    _cache.clear();
-  }
 
 
 
