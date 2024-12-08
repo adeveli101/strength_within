@@ -6,18 +6,19 @@ mixin PartTargetValidation {
     required int partId,
     required int bodyPartId,
     required int targetPercentage,
+    bool isPrimary = false,
   }) {
     if (partId <= 0) {
       return ValidationResult(
         isValid: false,
-        message: 'Geçersiz part ID',
+        message: 'Geçersiz part ID: $partId',
       );
     }
 
     if (bodyPartId <= 0) {
       return ValidationResult(
         isValid: false,
-        message: 'Geçersiz vücut bölgesi ID',
+        message: 'Geçersiz vücut bölgesi ID: $bodyPartId',
       );
     }
 
@@ -25,7 +26,14 @@ mixin PartTargetValidation {
         targetPercentage > MAX_TARGET_PERCENTAGE) {
       return ValidationResult(
         isValid: false,
-        message: 'Hedef yüzdesi $MIN_TARGET_PERCENTAGE-$MAX_TARGET_PERCENTAGE arasında olmalıdır',
+        message: 'Hedef yüzdesi $MIN_TARGET_PERCENTAGE-$MAX_TARGET_PERCENTAGE arasında olmalıdır. Girilen: $targetPercentage',
+      );
+    }
+
+    if (isPrimary && targetPercentage <= 30) {
+      return ValidationResult(
+        isValid: false,
+        message: 'Birincil hedef için yüzde 30\'dan büyük olmalıdır',
       );
     }
 
@@ -39,8 +47,9 @@ class PartTargetedBodyParts with PartTargetValidation {
   final int bodyPartId;
   final bool isPrimary;
   final int targetPercentage;
+  String? bodyPartName;
 
-  const PartTargetedBodyParts._({
+  PartTargetedBodyParts._({
     this.id,
     required this.partId,
     required this.bodyPartId,
@@ -71,6 +80,22 @@ class PartTargetedBodyParts with PartTargetValidation {
       bodyPartId: bodyPartId,
       isPrimary: isPrimary,
       targetPercentage: targetPercentage,
+    );
+  }
+
+  PartTargetedBodyParts copyWith({
+    int? id,
+    int? partId,
+    int? bodyPartId,
+    bool? isPrimary,
+    int? targetPercentage,
+  }) {
+    return PartTargetedBodyParts(
+      id: id ?? this.id,
+      partId: partId ?? this.partId,
+      bodyPartId: bodyPartId ?? this.bodyPartId,
+      isPrimary: isPrimary ?? this.isPrimary,
+      targetPercentage: targetPercentage ?? this.targetPercentage,
     );
   }
 

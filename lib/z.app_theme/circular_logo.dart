@@ -83,7 +83,7 @@ class _CircularLogoState extends State<CircularLogo> with SingleTickerProviderSt
                 ),
                 child: ClipOval(
                   child: Image.asset(
-                    'assets/logo_circle.png',
+                    'assets/logo_rect.png',
                     fit: BoxFit.contain,
                   ),
                 ),

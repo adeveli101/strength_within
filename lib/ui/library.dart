@@ -204,7 +204,7 @@ class LibraryPage extends StatelessWidget {
                       color: Colors.white,
                     ),
                   ),
-                  const SizedBox(height: AppTheme.paddingSmall),
+                  SizedBox(height: AppTheme.paddingSmall),
                   Text(
                     'İlerleme %${routine.userProgress ?? 0}',
                     style: const TextStyle(color: Colors.white70),
@@ -247,7 +247,7 @@ class LibraryPage extends StatelessWidget {
                       color: Colors.white,
                     ),
                   ),
-                  const SizedBox(height: AppTheme.paddingSmall),
+                  SizedBox(height: AppTheme.paddingSmall),
                   Text(
                     'İlerleme %${part.userProgress ?? 0}',
                     style: const TextStyle(color: Colors.white70),

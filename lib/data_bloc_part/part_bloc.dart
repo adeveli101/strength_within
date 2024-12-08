@@ -126,7 +126,6 @@ class FetchScheduleStatistics extends PartsEvent {
   List<Object> get props => [];
 }
 
-
 class AssignPartToWeekday extends PartsEvent {
   final int partId;
   final int weekday;
@@ -180,7 +179,6 @@ class UpdatePart extends PartsEvent {
   List<Object?> get props => [updatedPart];
 }
 
-
 class FetchPartsByBodyPart extends PartsEvent {
   final int bodyPartId;
   const FetchPartsByBodyPart({required this.bodyPartId});
@@ -188,7 +186,6 @@ class FetchPartsByBodyPart extends PartsEvent {
   @override
   List<Object> get props => [bodyPartId];
 }
-
 class FetchPartsByWorkoutType extends PartsEvent {
   final int workoutTypeId;
   const FetchPartsByWorkoutType({required this.workoutTypeId});
@@ -197,13 +194,13 @@ class FetchPartsByWorkoutType extends PartsEvent {
   List<Object> get props => [workoutTypeId];
 }
 
-
 class WeeklyScheduleLoading extends PartsState {
   const WeeklyScheduleLoading({
     required String userId,
     required PartRepository repository,
   }) : super(userId: userId, repository: repository);
 }
+
 class PartTargetsUpdated extends PartsState {
   final List<PartTargetedBodyParts> targets;
 
@@ -284,6 +281,19 @@ class TogglePartFavorite extends PartsEvent {
 
   @override
   List<Object?> get props => [userId, partId, isFavorite];
+}
+
+class PartDifficultyLoaded extends PartsState {
+  final int difficulty;
+
+  const PartDifficultyLoaded({
+    required String userId,
+    required PartRepository repository,
+    required this.difficulty,
+  }) : super(userId: userId, repository: repository);
+
+  @override
+  List<Object> get props => [userId, repository, difficulty];
 }
 
 

@@ -44,6 +44,7 @@ Future<void> main() async {
     androidProvider: AndroidProvider.playIntegrity,
   );
 
+
   // Show splash screen immediately
   runApp(
     MaterialApp(
@@ -132,6 +133,8 @@ Future<void> main() async {
   final firebaseProvider = FirebaseProvider();
   String? userId = await firebaseProvider.signInAnonymously();
 }
+
+
 class App extends StatelessWidget {
   final String userId;
 

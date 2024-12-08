@@ -57,7 +57,21 @@ class PartRepository {
   static String searchParts(String query) => 'search_parts_$query';
   static String partsWithExerciseRange(int min, int max) => 'parts_exercise_count_${min}_$max';
 
+  Future<List<String>> getBodyPartNames(List<int> ids) async {
+    final cacheKey = 'bodypart_names_${ids.join('_')}';
 
+    // Cache kontrolü
+    final cachedNames = _cache.get<List<String>>(cacheKey);
+    if (cachedNames != null) {
+      return cachedNames;
+    }
+
+    // Cache'de yoksa veritabanından al
+    final names = await _sqlProvider.getBodyPartNamesByIds(ids);
+    _cache.set(cacheKey, names, expiry: AppCache.BODY_PARTS_EXPIRY);
+
+    return names;
+  }
 
   Future<List<BodyParts>> getMainBodyParts() async {
     try {

@@ -28,11 +28,12 @@ dependencies:
   flutter_test:
     sdk: flutter
   collection: ^1.18.0
+  cloud_firestore: ^5.5.0
+  cloud_functions: ^5.1.5
   image_picker: ^1.1.2
   android_intent_plus: ^5.2.0
   built_value: ^8.9.2
-  cloud_firestore: ^5.5.0
-  cloud_functions: ^5.1.5
+
   confetti: ^0.8.0
   connectivity_plus: ^6.1.0
   cupertino_icons: ^1.0.8
@@ -106,6 +107,7 @@ dependencies:
 
   icon: ^2.2.1
   animated_text_kit: ^4.2.2
+  flutter_any_logo: ^1.1.1
 
 
 
@@ -113,7 +115,7 @@ dependencies:
 # Splash screen yapılandırması
 flutter_native_splash:
   color: "#121212"
-  image: assets/logo_circle.png
+  image: assets/logo_rect.png
   android: true
   ios: true
   fullscreen: true
@@ -123,9 +125,9 @@ flutter_native_splash:
 
   android_12:
     # Android 12+ için splash screen ayarları
-    image: assets/logo_circle.png
+    image: assets/logo_rect.png
     icon_background_color: "#121212"
-    image_dark: assets/logo_circle.png
+    image_dark: assets/logo_rect.png
     icon_background_color_dark: "#121212"
     # Logo etrafındaki beyaz alanı kaldırmak için
     branding_mode: bottom
@@ -133,7 +135,7 @@ flutter_native_splash:
 
 flutter_launcher_icons:
   android: true
-  image_path: "assets/logo_circle.png"
+  image_path: "assets/logo_rect.png"
 
 dev_dependencies:
 
