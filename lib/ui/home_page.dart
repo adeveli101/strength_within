@@ -296,39 +296,6 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
       ),
     );
   }
-  Widget _buildPartCard(Parts part, BoxConstraints constraints) {
-    final isWideScreen = constraints.maxWidth > AppTheme.tabletBreakpoint;
-    final cardWidth = isWideScreen ? 200.0 : 240.0;
-    final cardHeight = isWideScreen ? 320.0 : 230.0;
-    return SizedBox(
-      width: cardWidth,
-      height: cardHeight,
-      child: Card(
-        margin: EdgeInsets.all(AppTheme.borderRadiusMedium),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
-        ),
-        color: AppTheme.cardBackground,
-        child: PartCard(
-          key: ValueKey(part.id),
-          part: part,
-          userId: widget.userId,
-          repository: context.read<PartRepository>(), // Add this line
-          onTap: () => _showPartDetailBottomSheet(part.id),
-          onFavoriteChanged: (isFavorite) {
-            setState(() {
-              final updatedPart = part.copyWith(isFavorite: isFavorite);
-              final index = _randomParts.indexWhere((p) => p.id == part.id);
-              if (index != -1) {
-                _randomParts[index] = updatedPart;
-              }
-            });
-          },
-        ),
-
-      ),
-    );
-  }
 
 
   List<Parts> _getRandomParts(List<Parts> parts) {
@@ -352,9 +319,6 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
     // Bottom sheet kapandıktan sonra verileri yeniden yükle
     _loadAllData();
   }
-
-
-
 
   Widget _buildRoutines(BoxConstraints constraints) {
     return BlocConsumer<RoutinesBloc, RoutinesState>(
@@ -523,7 +487,6 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
       ),
     );
   }
-
 
   Widget _buildRoutineCard(Routines routine) {
     return Card(

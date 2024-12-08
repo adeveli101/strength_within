@@ -102,7 +102,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
     return Container(
       decoration: BoxDecoration(
         gradient: AppTheme.cardGradient,
-        borderRadius: const BorderRadius.vertical(
+        borderRadius: BorderRadius.vertical(
           top: Radius.circular(AppTheme.borderRadiusSmall),
         ),
         boxShadow: [
@@ -210,7 +210,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
             color: AppTheme.primaryRed,
             size: 48,
           ),
-          const SizedBox(height: AppTheme.paddingMedium),
+          SizedBox(height: AppTheme.paddingMedium),
           Text(
             'Hata: $message',
             style: AppTheme.bodyMedium.copyWith(
@@ -330,7 +330,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
     Widget? trailing,
   }) {
     return Container(
-      margin: const EdgeInsets.symmetric(
+      margin: EdgeInsets.symmetric(
         horizontal: AppTheme.paddingMedium,
         vertical: AppTheme.paddingSmall,
       ),
@@ -347,7 +347,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
           initiallyExpanded: initiallyExpanded,
           maintainState: true,
           leading: Container(
-            padding: const EdgeInsets.all(AppTheme.paddingSmall),
+            padding:  EdgeInsets.all(AppTheme.paddingSmall),
             decoration: BoxDecoration(
               gradient: AppTheme.primaryGradient,
               borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
@@ -428,7 +428,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
 // Quick Stats Builder
   Widget _buildQuickStats(Routines routine) {
     return Container(
-      padding: const EdgeInsets.all(AppTheme.paddingMedium),
+      padding:  EdgeInsets.all(AppTheme.paddingMedium),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.05),
         borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
@@ -461,7 +461,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
     return Column(
       children: exerciseListByBodyPart.entries.map((entry) {
         return Container(
-          margin: const EdgeInsets.symmetric(
+          margin: EdgeInsets.symmetric(
             horizontal: AppTheme.paddingSmall,
             vertical: AppTheme.paddingSmall,
           ),
@@ -486,7 +486,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
               backgroundColor: Colors.transparent,
               collapsedBackgroundColor: Colors.transparent,
               leading: Container(
-                padding: const EdgeInsets.all(AppTheme.paddingSmall),
+                padding: EdgeInsets.all(AppTheme.paddingSmall),
                 decoration: BoxDecoration(
                   gradient: AppTheme.primaryGradient,
                   borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
@@ -502,7 +502,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
                 style: AppTheme.headingSmall,
               ),
               trailing: Container(
-                padding: const EdgeInsets.symmetric(
+                padding: EdgeInsets.symmetric(
                   horizontal: AppTheme.paddingSmall,
                   vertical: AppTheme.paddingSmall / 2,
                 ),
@@ -517,7 +517,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
               ),
               children: entry.value.asMap().entries.map((exercise) {
                 return Container(
-                  margin: const EdgeInsets.only(bottom: AppTheme.paddingSmall),
+                  margin: EdgeInsets.only(bottom: AppTheme.paddingSmall),
                   decoration: BoxDecoration(
                     color: AppTheme.surfaceColor,
                     borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
@@ -526,7 +526,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
                     ),
                   ),
                   child: ListTile(
-                    contentPadding: const EdgeInsets.all(AppTheme.paddingSmall),
+                    contentPadding:  EdgeInsets.all(AppTheme.paddingSmall),
                     leading: CircleAvatar(
                       backgroundColor: AppTheme.primaryRed.withOpacity(0.1),
                       child: Text(
@@ -546,12 +546,12 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
                             Icons.repeat,
                             '${exercise.value['defaultSets']} set',
                           ),
-                          const SizedBox(width: AppTheme.paddingMedium),
+                          SizedBox(width: AppTheme.paddingMedium),
                           _buildExerciseInfo(
                             Icons.fitness_center,
                             '${exercise.value['defaultReps']} tekrar',
                           ),
-                          const SizedBox(width: AppTheme.paddingMedium),
+                          SizedBox(width: AppTheme.paddingMedium),
                           _buildExerciseInfo(
                             Icons.monitor_weight_outlined,
                             '${exercise.value['defaultWeight']} kg',
@@ -580,7 +580,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
 
   Widget _buildExerciseGroup(List<Map<String, dynamic>> exercises) {
     return Container(
-      padding: const EdgeInsets.all(AppTheme.paddingMedium),
+      padding:  EdgeInsets.all(AppTheme.paddingMedium),
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor,
         borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
@@ -589,7 +589,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         itemCount: exercises.length,
-        separatorBuilder: (context, index) => const SizedBox(height: AppTheme.paddingSmall),
+        separatorBuilder: (context, index) => SizedBox(height: AppTheme.paddingSmall),
         itemBuilder: (context, index) => _buildExerciseCard(exercises[index], index),
       ),
     );
@@ -597,7 +597,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
 
   Widget _buildExerciseCard(Map<String, dynamic> exercise, int index) {
     return Container(
-      margin: const EdgeInsets.only(bottom: AppTheme.paddingSmall),
+      margin: EdgeInsets.only(bottom: AppTheme.paddingSmall),
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor,
         borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
@@ -606,7 +606,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
         ),
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.all(AppTheme.paddingSmall),
+        contentPadding:  EdgeInsets.all(AppTheme.paddingSmall),
         leading: CircleAvatar(
           backgroundColor: AppTheme.primaryRed.withOpacity(0.1),
           child: Text(
@@ -626,12 +626,12 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
                 Icons.repeat,
                 '${exercise['defaultSets']} set',
               ),
-              const SizedBox(width: AppTheme.paddingMedium),
+              SizedBox(width: AppTheme.paddingMedium),
               _buildExerciseInfo(
                 Icons.fitness_center,
                 '${exercise['defaultReps']} tekrar',
               ),
-              const SizedBox(width: AppTheme.paddingMedium),
+              SizedBox(width: AppTheme.paddingMedium),
               _buildExerciseInfo(
                 Icons.monitor_weight_outlined,
                 '${exercise['defaultWeight']} kg',
@@ -654,18 +654,18 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
 
   Widget _buildBodyPartExercises(String bodyPart, List<Map<String, dynamic>> exercises) {
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: AppTheme.paddingSmall),
+      margin: EdgeInsets.symmetric(vertical: AppTheme.paddingSmall),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppTheme.paddingMedium),
+            padding: EdgeInsets.symmetric(horizontal: AppTheme.paddingMedium),
             child: Text(
               bodyPart,
               style: AppTheme.headingSmall,
             ),
           ),
-          const SizedBox(height: AppTheme.paddingSmall),
+          SizedBox(height: AppTheme.paddingSmall),
           ...exercises.asMap().entries.map((e) => _buildExerciseCard(e.value, e.key)),
         ],
       ),
@@ -675,10 +675,10 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
 
   Widget _buildHeaderSection(Routines routine) {
     return Container(
-      padding: const EdgeInsets.all(AppTheme.paddingMedium),
+      padding:  EdgeInsets.all(AppTheme.paddingMedium),
       decoration: BoxDecoration(
         gradient: AppTheme.cardGradient,
-        borderRadius: const BorderRadius.only(
+        borderRadius:  BorderRadius.only(
           bottomLeft: Radius.circular(AppTheme.borderRadiusSmall),
           bottomRight: Radius.circular(AppTheme.borderRadiusSmall),
         ),
@@ -738,7 +738,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
             }
           },
           child: Container(
-            padding: const EdgeInsets.symmetric(
+            padding: EdgeInsets.symmetric(
               horizontal: AppTheme.paddingMedium,
               vertical: AppTheme.paddingSmall,
             ),
@@ -758,7 +758,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
                   size: 16,
                   color: hasSchedule ? Colors.white : Colors.white70,
                 ),
-                const SizedBox(width: AppTheme.paddingSmall),
+                SizedBox(width: AppTheme.paddingSmall),
                 Text(
                   hasSchedule ? 'Programı Düzenle' : 'Programa Ekle',
                   style: AppTheme.bodySmall.copyWith(
@@ -779,7 +779,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
         .fold(0, (sum, exercises) => sum + exercises.length);
 
     return Container(
-      padding: const EdgeInsets.symmetric(
+      padding: EdgeInsets.symmetric(
         horizontal: AppTheme.paddingMedium,
         vertical: AppTheme.paddingSmall,
       ),
@@ -796,7 +796,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
 
   Widget _buildDescriptionContent(Routines routine) {
     return Container(
-      padding: const EdgeInsets.all(AppTheme.paddingMedium),
+      padding:  EdgeInsets.all(AppTheme.paddingMedium),
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor,
         borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
@@ -825,7 +825,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
   Widget _buildProgressContent(Routines routine) {
     final progress = routine.userProgress ?? 0;
     return Container(
-      padding: const EdgeInsets.all(AppTheme.paddingMedium),
+      padding:  EdgeInsets.all(AppTheme.paddingMedium),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -838,7 +838,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
               minHeight: 8,
             ),
           ),
-          const SizedBox(height: AppTheme.paddingSmall),
+          SizedBox(height: AppTheme.paddingSmall),
           Text(
             'Toplam İlerleme: %$progress',
             style: AppTheme.bodyMedium,
@@ -852,7 +852,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
     return Column(
       children: exerciseListByBodyPart.entries.map((entry) {
         return Container(
-          margin: const EdgeInsets.symmetric(
+          margin: EdgeInsets.symmetric(
             horizontal: AppTheme.paddingSmall,
             vertical: AppTheme.paddingSmall,
           ),
@@ -877,7 +877,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
               backgroundColor: Colors.transparent,
               collapsedBackgroundColor: Colors.transparent,
               leading: Container(
-                padding: const EdgeInsets.all(AppTheme.paddingSmall),
+                padding:  EdgeInsets.all(AppTheme.paddingSmall),
                 decoration: BoxDecoration(
                   gradient: AppTheme.primaryGradient,
                   borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
@@ -893,7 +893,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
                 style: AppTheme.headingSmall,
               ),
               trailing: Container(
-                padding: const EdgeInsets.symmetric(
+                padding: EdgeInsets.symmetric(
                   horizontal: AppTheme.paddingSmall,
                   vertical: AppTheme.paddingSmall / 2,
                 ),
@@ -908,7 +908,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
               ),
               children: entry.value.asMap().entries.map((exercise) {
                 return Container(
-                  margin: const EdgeInsets.only(bottom: AppTheme.paddingSmall),
+                  margin: EdgeInsets.only(bottom: AppTheme.paddingSmall),
                   decoration: BoxDecoration(
                     color: AppTheme.surfaceColor,
                     borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
@@ -917,7 +917,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
                     ),
                   ),
                   child: ListTile(
-                    contentPadding: const EdgeInsets.all(AppTheme.paddingSmall),
+                    contentPadding:  EdgeInsets.all(AppTheme.paddingSmall),
                     leading: CircleAvatar(
                       backgroundColor: AppTheme.primaryRed.withOpacity(0.1),
                       child: Text(
@@ -937,12 +937,12 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
                             Icons.repeat,
                             '${exercise.value['defaultSets']} set',
                           ),
-                          const SizedBox(width: AppTheme.paddingMedium),
+                          SizedBox(width: AppTheme.paddingMedium),
                           _buildExerciseInfo(
                             Icons.fitness_center,
                             '${exercise.value['defaultReps']} tekrar',
                           ),
-                          const SizedBox(width: AppTheme.paddingMedium),
+                          SizedBox(width: AppTheme.paddingMedium),
                           _buildExerciseInfo(
                             Icons.monitor_weight_outlined,
                             '${exercise.value['defaultWeight']} kg',
@@ -976,8 +976,8 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
           final isSmallScreen = constraints.maxWidth < 120;
           final iconSize = isSmallScreen ? 20.0 : 24.0;
           final padding = isSmallScreen
-              ? const EdgeInsets.all(AppTheme.paddingSmall / 2)
-              : const EdgeInsets.all(AppTheme.paddingSmall);
+              ? EdgeInsets.all(AppTheme.paddingSmall / 2)
+              : EdgeInsets.all(AppTheme.paddingSmall);
 
           return Container(
             padding: padding,
@@ -1045,7 +1045,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
 
   Widget _buildExerciseInfo(IconData icon, String text) {
     return Container(
-      padding: const EdgeInsets.symmetric(
+      padding: EdgeInsets.symmetric(
         horizontal: AppTheme.paddingMedium,
         vertical: AppTheme.paddingSmall,
       ),
@@ -1072,7 +1072,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
             size: 16,
             color: AppTheme.primaryRed,
           ),
-          const SizedBox(width: AppTheme.paddingSmall),
+          SizedBox(width: AppTheme.paddingSmall),
           Text(
             text,
             style: AppTheme.bodySmall.copyWith(
@@ -1086,7 +1086,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
 
   Widget _buildStatsContent(Routines routine) {
     return Container(
-      padding: const EdgeInsets.all(AppTheme.paddingMedium),
+      padding: EdgeInsets.all(AppTheme.paddingMedium),
       child: Row(
         children: [
 
@@ -1129,7 +1129,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
           width: 1,
         ),
       ),
-      padding: const EdgeInsets.all(AppTheme.paddingSmall),
+      padding: EdgeInsets.all(AppTheme.paddingSmall),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -1137,7 +1137,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(AppTheme.paddingSmall),
+                padding: EdgeInsets.all(AppTheme.paddingSmall),
                 decoration: BoxDecoration(
                   gradient: AppTheme.primaryGradient,
                   borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
@@ -1148,7 +1148,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
                   size: 20,
                 ),
               ),
-              const SizedBox(width: AppTheme.paddingMedium),
+              SizedBox(width: AppTheme.paddingMedium),
               Text(
                 'Detaylar',
                 style: AppTheme.headingSmall,
@@ -1160,7 +1160,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
             color: AppTheme.primaryRed.withOpacity(0.2),
           ),
           _buildTargetedBodyPartsList(routine.targetedBodyPartIds),
-          const SizedBox(height: AppTheme.paddingSmall),
+          SizedBox(height: AppTheme.paddingSmall),
           _buildExerciseInfo(Icons.category, 'Tip: ${getWorkoutTypeName(routine.workoutTypeId)}'),
         ],
       ),
@@ -1169,7 +1169,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
 
   Widget _buildInfoSection(Routines routine) {
     return Container(
-      margin: const EdgeInsets.symmetric(
+      margin: EdgeInsets.symmetric(
         horizontal: AppTheme.paddingMedium,
         vertical: AppTheme.paddingSmall,
       ),
@@ -1189,7 +1189,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(AppTheme.paddingSmall),
+        padding: EdgeInsets.all(AppTheme.paddingSmall),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -1197,7 +1197,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(AppTheme.paddingSmall),
+                  padding: EdgeInsets.all(AppTheme.paddingSmall),
                   decoration: BoxDecoration(
                     gradient: AppTheme.primaryGradient,
                     borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
@@ -1208,14 +1208,14 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
                     size: 20,
                   ),
                 ),
-                const SizedBox(width: AppTheme.paddingMedium),
+                SizedBox(width: AppTheme.paddingMedium),
                 Text(
                   'Rutin Bilgileri',
                   style: AppTheme.headingSmall,
                 ),
               ],
             ),
-            const SizedBox(height: AppTheme.paddingMedium),
+            SizedBox(height: AppTheme.paddingMedium),
             _buildTargetedBodyPartsInfo(routine.targetedBodyPartIds),
             _buildInfoRow(Icons.category, 'Antrenman Tipi', getWorkoutTypeName(routine.workoutTypeId)),
             if (routine.lastUsedDate != null)
@@ -1289,7 +1289,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
           width: 1,
         ),
       ),
-      padding: const EdgeInsets.all(AppTheme.paddingMedium),
+      padding: EdgeInsets.all(AppTheme.paddingMedium),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -1300,7 +1300,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(AppTheme.paddingSmall),
+                    padding: EdgeInsets.all(AppTheme.paddingSmall),
                     decoration: BoxDecoration(
                       gradient: AppTheme.primaryGradient,
                       borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
@@ -1311,7 +1311,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
                       size: 20,
                     ),
                   ),
-                  const SizedBox(width: AppTheme.paddingMedium),
+                  SizedBox(width: AppTheme.paddingMedium),
                   Text(
                     'İlerleme',
                     style: AppTheme.headingSmall,
@@ -1319,7 +1319,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
                 ],
               ),
               Container(
-                padding: const EdgeInsets.symmetric(
+                padding: EdgeInsets.symmetric(
                   horizontal: AppTheme.paddingMedium,
                   vertical: AppTheme.paddingSmall,
                 ),
@@ -1336,7 +1336,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
               ),
             ],
           ),
-          const SizedBox(height: AppTheme.paddingMedium),
+          SizedBox(height: AppTheme.paddingMedium),
           Container(
             height: AppTheme.progressBarHeight,
             decoration: BoxDecoration(
@@ -1358,7 +1358,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
 
   Widget _buildCompactInfoRow(IconData icon, String label, String value) {
     return Container(
-      padding: const EdgeInsets.symmetric(
+      padding: EdgeInsets.symmetric(
         vertical: AppTheme.paddingSmall,
         horizontal: AppTheme.paddingMedium,
       ),
@@ -1380,7 +1380,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
                 size: 16,
                 color: AppTheme.primaryRed,
               ),
-              const SizedBox(width: AppTheme.paddingSmall),
+              SizedBox(width: AppTheme.paddingSmall),
               Text(
                 label,
                 style: AppTheme.bodySmall,
@@ -1401,7 +1401,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
 
   Widget _buildExerciseSection(String bodyPartName, List<Map<String, dynamic>> exercises) {
     return Container(
-      margin: const EdgeInsets.symmetric(
+      margin: EdgeInsets.symmetric(
         horizontal: AppTheme.paddingMedium,
         vertical: AppTheme.paddingSmall,
       ),
@@ -1504,12 +1504,12 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
               child: ListView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(AppTheme.paddingMedium),
+                padding: EdgeInsets.all(AppTheme.paddingMedium),
                 itemCount: exercises.length,
                 itemBuilder: (context, index) {
                   final exercise = exercises[index];
                   return Container(
-                    margin: const EdgeInsets.only(bottom: AppTheme.paddingSmall),
+                    margin: EdgeInsets.only(bottom: AppTheme.paddingSmall),
                     child: LayoutBuilder(
                       builder: (context, constraints) {
                         final isSmallScreen = constraints.maxWidth < AppTheme.mobileBreakpoint;
@@ -1601,7 +1601,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
                                     ),
                                   ),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(
+                                    padding: EdgeInsets.symmetric(
                                       horizontal: AppTheme.paddingSmall,
                                       vertical: AppTheme.paddingSmall / 2,
                                     ),
@@ -1662,7 +1662,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
     final color = _getProgressColor(progress);
 
     return Container(
-      margin: const EdgeInsets.symmetric(
+      margin: EdgeInsets.symmetric(
         horizontal: AppTheme.paddingMedium,
         vertical: AppTheme.paddingSmall,
       ),
@@ -1682,11 +1682,11 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(AppTheme.paddingMedium),
+        padding: EdgeInsets.all(AppTheme.paddingMedium),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(AppTheme.paddingSmall),
+              padding: EdgeInsets.all(AppTheme.paddingSmall),
               decoration: BoxDecoration(
                 gradient: AppTheme.primaryGradient,
                 borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
@@ -1697,7 +1697,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
                 size: 24,
               ),
             ),
-            const SizedBox(width: AppTheme.paddingMedium),
+            SizedBox(width: AppTheme.paddingMedium),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1707,7 +1707,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
                     'İlerleme',
                     style: AppTheme.headingSmall,
                   ),
-                  const SizedBox(height: AppTheme.paddingSmall),
+                  SizedBox(height: AppTheme.paddingSmall),
                   Container(
                     height: AppTheme.progressBarHeight,
                     decoration: BoxDecoration(
@@ -1725,9 +1725,9 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
                 ],
               ),
             ),
-            const SizedBox(width: AppTheme.paddingMedium),
+            SizedBox(width: AppTheme.paddingMedium),
             Container(
-              padding: const EdgeInsets.symmetric(
+              padding: EdgeInsets.symmetric(
                 horizontal: AppTheme.paddingMedium,
                 vertical: AppTheme.paddingSmall,
               ),
@@ -1750,8 +1750,8 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
 
   Widget _buildInfoRow(IconData icon, String label, String value) {
     return Container(
-      margin: const EdgeInsets.only(bottom: AppTheme.paddingSmall),
-      padding: const EdgeInsets.symmetric(
+      margin: EdgeInsets.only(bottom: AppTheme.paddingSmall),
+      padding: EdgeInsets.symmetric(
         vertical: AppTheme.paddingSmall,
         horizontal: AppTheme.paddingMedium,
       ),
@@ -1774,7 +1774,7 @@ class _RoutineDetailBottomSheetState extends State<RoutineDetailBottomSheet> {
                 size: 16,
                 color: AppTheme.primaryRed,
               ),
-              const SizedBox(width: AppTheme.paddingSmall),
+              SizedBox(width: AppTheme.paddingSmall),
               Text(
                 label,
                 style: AppTheme.bodySmall,

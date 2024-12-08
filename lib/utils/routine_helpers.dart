@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../models/BodyPart.dart';
+import '../models/PartTargetedBodyParts.dart';
 import '../models/WorkoutType.dart';
 import '../models/Parts.dart';
-
+final Map<int, String> _cache = {};
 extension StringExtension on String {
   String capitalize() {
     if (isEmpty) return this;
@@ -22,6 +23,28 @@ enum SetType {
 String bodyPartToStringConverter(BodyParts bodyPart) {
   return GetStringUtils(bodyPart.name).capitalize!;
 }
+
+String bodyPartidToName(int bodyPartId, List<BodyParts> bodyParts) {
+  if (_cache.containsKey(bodyPartId)) {
+    return _cache[bodyPartId]!;
+  }
+
+  final bodyPart = bodyParts.firstWhere(
+        (part) => part.id == bodyPartId,
+    orElse: () => BodyParts(id: -1, name: 'Bilinmeyen'),
+  );
+
+  final capitalizedName = GetStringUtils(bodyPart.name).capitalize!;
+  _cache[bodyPartId] = capitalizedName;
+
+  return capitalizedName;
+}
+
+ void clearCache() {
+_cache.clear();
+}
+
+
 
 String bodyPartIdToStringConverter(int bodyPartId, List<BodyParts> bodyParts) {
   final bodyPart = bodyParts.firstWhere(
@@ -94,35 +117,37 @@ int setTypeToExerciseCountConverter(SetType setType) {
 }
 
 //todo
-Widget bodyPartToIconConverter(BodyParts bodyPart) {
-  double scale = 30;
 
-  // Ana kas gruplarına göre ikon seçimi
-  if (bodyPart.parentBodyPartId == null) {
-    switch (bodyPart.id) {
-      case 1: // Göğüs
-        return Image.asset('assets/chest-96.png', scale: scale);
-      case 2: // Sırt
-        return Image.asset('assets/back-96.png', scale: scale);
-      case 3: // Bacak
-        return Image.asset('assets/leg-96.png', scale: scale);
-      case 4: // Omuz
-      case 5: // Kol
-        return Image.asset('assets/muscle-96.png', scale: scale);
-      case 6: // Karın
-        return Image.asset('assets/abs-96.png', scale: scale);
+
+
+Widget buildTargetIcon(PartTargetedBodyParts target, bool isPrimary) {
+  String getBodyPartAsset(int bodyPartId) {
+    switch (bodyPartId) {
+      case 1: // Chest
+        return 'assets/chests-modified.png';
+      case 2: // Back
+        return 'assets/back-modified.png';
+      case 3: // Legs
+        return 'assets/leg-modif.png';
+      case 4: // Shoulders
+        return 'assets/shoulder-modified.png';
+      case 5: // Arms
+        return 'assets/arm-modified.png';
+      case 6: // Abs/Core
+        return 'assets/core-modified.png';
       default:
-        return Image.asset('assets/muscle-96.png', scale: scale);
+        return 'assets/core-modified.png';
     }
-  } else {
-    // Alt kas grupları için parent'ın ikonunu kullan
-    return bodyPartToIconConverter(BodyParts(
-      id: bodyPart.parentBodyPartId!,
-      name: '',
-      parentBodyPartId: null,
-    ));
   }
+
+  return Image.asset(
+    getBodyPartAsset(target.bodyPartId),
+    width: isPrimary ? 24 : 20,
+    height: isPrimary ? 24 : 20,
+    color: isPrimary ? Colors.white : Colors.white70,
+  );
 }
+
 
 
   int getTimestampNow() {

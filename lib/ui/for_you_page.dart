@@ -335,7 +335,7 @@ class _ForYouPageState extends State<ForYouPage> {
         builder: (context, scrollController) => Container(
           decoration: BoxDecoration(
             color: AppTheme.darkBackground,
-            borderRadius: const BorderRadius.vertical(
+            borderRadius:  BorderRadius.vertical(
               top: Radius.circular(AppTheme.borderRadiusLarge),
             ),
           ),

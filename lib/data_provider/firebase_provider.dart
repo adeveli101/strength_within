@@ -69,6 +69,14 @@ class FirebaseProvider {
     return sha256.convert(utf8.encode(deviceData)).toString();
   }
 
+  Future<bool> validateDeviceId(String userId, String deviceId) async {
+    final doc = await _firestore
+        .collection('users')
+        .doc(userId)
+        .get();
+    return doc.data()?['deviceId'] == deviceId;
+  }
+
 
   // MARK: - Schedule Operations
   Future<void> addUserSchedule(UserSchedule schedule) async {

@@ -105,7 +105,7 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
             return Container(
               decoration: BoxDecoration(
                 gradient: AppTheme.cardGradient,
-                borderRadius: const BorderRadius.vertical(
+                borderRadius:  BorderRadius.vertical(
                   top: Radius.circular(AppTheme.borderRadiusLarge),
                 ),
                 boxShadow: [
@@ -155,7 +155,7 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
 
                       if (state is PartExercisesLoaded) {
                         return ClipRRect(
-                          borderRadius: const BorderRadius.vertical(
+                          borderRadius: BorderRadius.vertical(
                             top: Radius.circular(AppTheme.borderRadiusLarge),
                           ),
                           child: _buildLoadedContent(state, controller),
@@ -172,7 +172,7 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
                                 color: AppTheme.primaryRed,
                                 size: 48,
                               ),
-                              const SizedBox(height: AppTheme.paddingMedium),
+                              SizedBox(height: AppTheme.paddingMedium),
                               Text(
                                 'Hata: ${state.message}',
                                 style: AppTheme.bodyMedium.copyWith(
@@ -565,7 +565,7 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
 
     return exerciseListByBodyPart.entries.map((entry) {
       return Container(
-        margin: const EdgeInsets.symmetric(
+        margin: EdgeInsets.symmetric(
           horizontal: AppTheme.paddingMedium,
           vertical: AppTheme.paddingSmall,
         ),
@@ -612,7 +612,7 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
             size: 30,
           ),
         ),
-        const SizedBox(width: AppTheme.paddingMedium),
+        SizedBox(width: AppTheme.paddingMedium),
         // Başlık ve Alt Başlık
         Expanded(
           child: Column(
@@ -633,7 +633,7 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
     return Container(
       decoration:
       BoxDecoration(color: AppTheme.surfaceColor, borderRadius:
-      const BorderRadius.only(bottomLeft:
+      BorderRadius.only(bottomLeft:
       Radius.circular(AppTheme.borderRadiusLarge), bottomRight:
       Radius.circular(AppTheme.borderRadiusLarge)),
       ),
@@ -641,14 +641,14 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
       ListView.builder(shrinkWrap:
       true, physics:
       const NeverScrollableScrollPhysics(), padding:
-      const EdgeInsets.all(AppTheme.paddingMedium), itemCount:
+      EdgeInsets.all(AppTheme.paddingMedium), itemCount:
       entry.value.length, itemBuilder:
           (context, index) {
         final exerciseMap = entry.value[index];
         final exerciseData = Exercises.fromMap(exerciseMap);
 
         return Padding(padding:
-        const EdgeInsets.only(bottom:
+        EdgeInsets.only(bottom:
         AppTheme.paddingSmall), child:
         Container(decoration:
         BoxDecoration(gradient:
@@ -713,7 +713,7 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
   Widget _buildStatItem(IconData icon, String label, String value, {Color? color}) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.all(AppTheme.paddingMedium),
+        padding: EdgeInsets.all(AppTheme.paddingMedium),
         decoration: BoxDecoration(
           gradient: AppTheme.cardGradient,
           borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
@@ -728,7 +728,7 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
         child: Column(
           children: [
             Container(
-              padding: const EdgeInsets.all(AppTheme.paddingSmall),
+              padding: EdgeInsets.all(AppTheme.paddingSmall),
               decoration: BoxDecoration(
                 gradient: AppTheme.primaryGradient,
                 borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
@@ -739,7 +739,7 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
                 size: 24,
               ),
             ),
-            const SizedBox(height: AppTheme.paddingSmall),
+            SizedBox(height: AppTheme.paddingSmall),
             Text(
               label,
               style: AppTheme.bodySmall,
@@ -759,7 +759,7 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
 
   Widget _buildExerciseInfo(IconData icon, String text) {
     return Container(
-      padding: const EdgeInsets.symmetric(
+      padding: EdgeInsets.symmetric(
         horizontal: AppTheme.paddingMedium,
         vertical: AppTheme.paddingSmall,
       ),
@@ -786,7 +786,7 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
             size: 16,
             color: AppTheme.primaryRed,
           ),
-          const SizedBox(width: AppTheme.paddingSmall),
+          SizedBox(width: AppTheme.paddingSmall),
           Text(
             text,
             style: AppTheme.bodySmall.copyWith(
