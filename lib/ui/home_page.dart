@@ -34,6 +34,7 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
 
   late RoutinesBloc _routinesBloc;
   late PartsBloc _partsBloc;
+  final List<int> _updatedPartIds = [];
 
   List<Routines> _randomRoutines = [];
   List<Parts> _randomParts = [];
@@ -62,7 +63,7 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
     });
   }
 
-  final List<int> _updatedPartIds = [];
+
 
   void _loadAllData({bool resetRandomParts = false}) {
     if (_isLoading) return;
@@ -168,8 +169,6 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
       ),
     );
   }
-
-
 
   Widget _buildParts(BoxConstraints constraints) {
     return BlocConsumer<PartsBloc, PartsState>(
@@ -296,7 +295,6 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
       ),
     );
   }
-
 
   List<Parts> _getRandomParts(List<Parts> parts) {
     if (_randomParts.isEmpty && parts.isNotEmpty) {
