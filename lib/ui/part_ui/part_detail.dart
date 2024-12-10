@@ -810,6 +810,7 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
     return exerciseListByBodyPart.values
         .fold(0, (sum, exercises) => sum + exercises.length);
   }
+
   Widget _buildExerciseListTile(Map<String, dynamic> exercise) {
     return ListTile(
       title: Text(exercise['name']),

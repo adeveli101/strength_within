@@ -40,8 +40,8 @@ class AppTheme {
       'starAngle': 0.1,
       'starBaseSize': 18.0,
       'starIncrement': 0.5,
-      'baseOpacity': 0.6,
-      'opacityIncrement': 0.07,
+      'baseOpacity': 0.82,
+      'opacityIncrement': 0.042,
     }
   };
 

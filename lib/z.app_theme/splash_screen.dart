@@ -39,7 +39,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
     );
 
-    _opacityAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+    _opacityAnimation = Tween<double>(begin: 0.5, end: 1.0).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeIn),
     );
 
