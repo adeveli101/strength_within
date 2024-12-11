@@ -10,6 +10,7 @@ import '../../data_bloc_part/PartRepository.dart';
 import '../../data_bloc_part/part_bloc.dart';
 import '../../data_schedule_bloc/schedule_bloc.dart';
 import '../../models/BodyPart.dart';
+import '../../models/PartExercises.dart';
 import '../../models/PartTargetedBodyParts.dart';
 import '../../models/Parts.dart';
 import '../../utils/routine_helpers.dart';
@@ -134,24 +135,61 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
   Offset? _cardOffset;
   Size? _cardSize;
 
-  late PartsBloc _partsBloc;
+  late final PartsBloc _partsBloc;
   int exerciseCount = 0;
-
 
 
   @override
   void initState() {
     super.initState();
+    _partsBloc = context.read<PartsBloc>();
     _initializeAnimations();
     _loadTargetedParts();
-    _loadPartExercisesCount();
+    _loadExerciseCount();  }
+
+
+  Future<void> _loadExerciseCount() async {
+    try {
+      final exercises = await _partsBloc.repository.getPartExercisesByPartId(widget.part.id);
+      if (mounted) {
+        setState(() {
+          exerciseCount = exercises.length;
+        });
+      }
+    } catch (e) {
+      debugPrint('Egzersiz sayısı yükleme hatası: $e');
+      setState(() {
+        exerciseCount = 0;
+      });
+    }
   }
 
-  Future<void> _loadPartExercisesCount() async {
-    int count = await _partsBloc.repository.getPartExercisesCount();
-    setState(() {
-      exerciseCount = count; // Değeri güncelle
-    });
+  Widget _buildExerciseCounter() {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppTheme.paddingMedium,
+        vertical: AppTheme.paddingSmall,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.black26,
+        borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.fitness_center, size: 16, color: Colors.white70),
+          SizedBox(width: 8),
+          Text(
+            '$exerciseCount Egzersiz',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.white,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
 
@@ -183,7 +221,6 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
-    _loadPartExercisesCount();
     return GestureDetector(
       onTap: () {
         if (!_isHandlingGesture) {
@@ -581,6 +618,8 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
     }
   }
 
+
+
   Widget _buildTargetIndicator(PartTargetedBodyParts target,
       {bool isPrimary = false}) {
     return FutureBuilder<String>(
@@ -677,7 +716,6 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
     );
   }
 
-
   Widget _buildExpandedHeader() {
     return Container(
       decoration: AppTheme.decoration(
@@ -730,7 +768,7 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
           Text(
             widget.part.additionalNotes,
             style: AppTheme.bodySmall.copyWith(color: Colors.white70),
-            maxLines: 4,
+            maxLines: 3,
             overflow: TextOverflow.ellipsis,
           ),
         ],
@@ -745,25 +783,25 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
         color: Colors.black12,
         borderRadius: AppTheme.getBorderRadius(all: AppTheme.borderRadiusSmall),
       ),
-      padding: EdgeInsets.all(AppTheme.paddingMedium),
+      padding: EdgeInsets.all(AppTheme.paddingSmall),
       child: Row(
         children: [
           Icon(
             Icons.fitness_center,
-            color: Colors.white,
+            color: AppTheme.primaryGreen,
             size: 20,
           ),
           SizedBox(width: AppTheme.paddingSmall),
           Text(
             'Set Type: ',
-            style: AppTheme.bodySmall.copyWith(
+            style: AppTheme.bodyMedium.copyWith(
               fontWeight: FontWeight.bold,
-              color: Colors.white,
+              color: AppTheme.textColorSecondary,
             ),
           ),
           Text(
             widget.part.setTypeString,
-            style: AppTheme.bodySmall.copyWith(color: Colors.white70),
+            style: AppTheme.bodyMedium.copyWith(color: Colors.white70),
           ),
         ],
       ),
@@ -871,7 +909,6 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
     );
   }
 
-
   Widget _buildExpandedTargetsCard() {
     if (_primaryTargets.isEmpty && _secondaryTargets.isEmpty) {
       return const SizedBox.shrink();
@@ -897,8 +934,8 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
 
     return Container(
       margin: EdgeInsets.symmetric(
-        horizontal: AppTheme.paddingSmall / 2,
-        vertical: AppTheme.paddingSmall / 4,
+        horizontal: AppTheme.paddingSmall ,
+        vertical: AppTheme.paddingSmall ,
       ),
       // Consider using Flexible or remove fixed height
       decoration: AppTheme.decoration(
@@ -930,7 +967,7 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
                     child: _buildTargetInfo(target, isPrimary),
                   ),
                   Container(
-                    width: 32, // Fixed width for percentage display
+                    width: 40, // Fixed width for percentage display
                     alignment: Alignment.center,
                     child: Text(
                       '${target.targetPercentage}%',
@@ -948,9 +985,6 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
       ),
     );
   }
-
-
-
 
   Widget _buildExpandedCardContent(double width, double height) {
     final direction = _calculateExpansionDirection();
@@ -980,41 +1014,28 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
               ),
               borderRadius: AppTheme.getBorderRadius(all: AppTheme.borderRadiusMedium),
             ),
-            padding: EdgeInsets.all(AppTheme.paddingMedium / 2),
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Pass the exercise count to the header
-                  _buildExpandedHeader(),
-                  SizedBox(height: AppTheme.paddingSmall / 2),
-                  _buildExpandedTargetsCard(),
-                  if (widget.part.additionalNotes.isNotEmpty)
-                    SizedBox(height: height * 0.25, child: _buildAdditionalInfo()),
-                  SizedBox(height: height * 0.15, child: _buildSetTypeDetails()),
-                  SizedBox(
-                    height: height * 0.15,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Egzersiz Sayısı: $exerciseCount', // Egzersiz sayısı
-                          style: TextStyle(fontSize: 12), // Yazı stili
-                        ),
-                      ],
-                    ),
-                  ),
-
+            padding: EdgeInsets.all(AppTheme.paddingMedium),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildExpandedHeader(),
+                SizedBox(height: AppTheme.paddingMedium),
+                _buildExpandedTargetsCard(),
+                if (widget.part.additionalNotes.isNotEmpty) ...[
+                  SizedBox(height: AppTheme.paddingMedium),
+                  _buildAdditionalInfo(),
                 ],
-              ),
+                SizedBox(height: AppTheme.paddingMedium),
+                _buildSetTypeDetails(),
+                SizedBox(height: AppTheme.paddingMedium),
+                _buildExerciseCounter(),
+              ],
             ),
           ),
         ),
       ),
     );
   }
-
 
   Offset _calculateTransformOffset(ExpansionDirection direction, double width, double height) {
     final progress = 1 - _expandAnimation.value;
@@ -1037,59 +1058,110 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
     final screenSize = MediaQuery.of(context).size;
     final cardWidth = _cardSize!.width;
     final cardHeight = _cardSize!.height;
-    final expandedWidth = screenSize.width * 0.85;
-    final expandedHeight = screenSize.height * 0.7;
+    final expandedWidth = screenSize.width * 0.95;
+    final expandedHeight = screenSize.height * 0.90;
+
+    // Kartın ekrandaki görünür pozisyonunu hesapla
+    final visibleOffset = _ensureVisiblePosition(
+        originalOffset: _cardOffset!,
+        expandedSize: Size(expandedWidth, expandedHeight),
+        screenSize: screenSize
+    );
 
     switch (direction) {
       case ExpansionDirection.left:
+      case ExpansionDirection.right:
         return Offset(
-          _cardOffset!.dx - expandedWidth + cardWidth,
-          _cardOffset!.dy,
-        );
-      case ExpansionDirection.down:
-        return Offset(
-          _cardOffset!.dx - (expandedWidth - cardWidth) / 2,
-          _cardOffset!.dy - expandedHeight + cardHeight,
+          // Yatayda ekranın ortasına hizala
+          (screenSize.width - expandedWidth) / 2,
+          // Dikeyde kartın pozisyonunu koru ama ekran sınırları içinde tut
+          visibleOffset.dy.clamp(
+              0,
+              screenSize.height - expandedHeight
+          ),
         );
       case ExpansionDirection.up:
+      case ExpansionDirection.down:
         return Offset(
-          _cardOffset!.dx - (expandedWidth - cardWidth) / 2,
-          _cardOffset!.dy,
+          // Yatayda ekranın ortasına hizala
+          (screenSize.width - expandedWidth) / 2,
+          // Dikeyde kartın pozisyonunu koru ama ekran sınırları içinde tut
+          visibleOffset.dy.clamp(
+              0,
+              screenSize.height - expandedHeight
+          ),
         );
-      case ExpansionDirection.right:
-        return _cardOffset!;
       default:
-        return Offset.zero; // Fallback case
+        return Offset.zero;
     }
+  }
+
+// Kartın görünür pozisyonunu hesapla
+  Offset _ensureVisiblePosition({
+    required Offset originalOffset,
+    required Size expandedSize,
+    required Size screenSize,
+  }) {
+    double dx = originalOffset.dx;
+    double dy = originalOffset.dy;
+
+    // Yatayda ekran dışına taşmayı engelle
+    if (dx < 0) {
+      dx = 0;
+    } else if (dx + expandedSize.width > screenSize.width) {
+      dx = screenSize.width - expandedSize.width;
+    }
+
+    // Dikeyde ekran dışına taşmayı engelle
+    if (dy < 0) {
+      dy = 0;
+    } else if (dy + expandedSize.height > screenSize.height) {
+      dy = screenSize.height - expandedSize.height;
+    }
+
+    return Offset(dx, dy);
   }
 
   Size _calculateExpandedContentSize() {
     final screenSize = MediaQuery.of(context).size;
 
-    // Fixed heights for the UI elements
-    const double headerHeight = 56.0;
-    const double targetItemHeight = 40.0;
-    const double notesHeight = 120.0;
-    const double setTypeHeight = 48.0;
-    const double spacing = 24.0;
+    // Yükseklik değerleri artırıldı
+    const double headerHeight = 80.0;        // Header yüksekliği
+    const double targetItemHeight = 64.0;    // Her bir hedef öğe yüksekliği
+    const double notesHeight = 160.0;        // Notlar bölümü yüksekliği
+    const double setTypeHeight = 72.0;       // Set tipi yüksekliği
+    const double exerciseCountHeight = 64.0; // Egzersiz sayacı yüksekliği
+    const double spacing = 24.0;             // Boşluklar artırıldı
 
-    // Start with the header height
-    double contentHeight = headerHeight + spacing;
+    // Başlangıç yüksekliği
+    double contentHeight = headerHeight + spacing * 2;
 
-    final targetCount = min(_primaryTargets.length, 3) + min(_secondaryTargets.length, 2);
-    contentHeight += (targetCount * targetItemHeight) + spacing;
+    // Hedef kartları için yükseklik
+    final targetCount = min(_primaryTargets.length, 4) + min(_secondaryTargets.length, 2);
+    contentHeight += (targetCount * targetItemHeight) + (spacing * (targetCount + 1));
 
-    // Add heights for notes and set type if needed
+    // Additional Notes yüksekliği
     if (widget.part.additionalNotes.isNotEmpty) {
-      contentHeight += notesHeight + spacing;
+      contentHeight += notesHeight + spacing * 2;
     }
-    contentHeight += setTypeHeight + spacing; // Add extra spacing
 
-    // Set max dimensions based on screen size
-    final maxWidth = min(screenSize.width * 0.9, 800.0); // Flexible max width
-    final maxHeight = min(contentHeight + spacing * 2, screenSize.height * 0.85); // Flexible max height
+    // Set tipi yüksekliği
+    contentHeight += setTypeHeight + spacing;
 
-    return Size(maxWidth, maxHeight);
+    // Egzersiz sayacı yüksekliği
+    contentHeight += exerciseCountHeight + spacing;
+
+    // Ekstra padding için yükseklik
+    contentHeight += spacing * 4;
+
+    // Maksimum boyutlar
+    final maxWidth = screenSize.width * 0.95;
+    final maxHeight = screenSize.height * 0.95; // Yükseklik sınırı artırıldı
+
+    return Size(
+        maxWidth.clamp(0, screenSize.width),
+        maxHeight.clamp(0, screenSize.height)
+    );
   }
 
   ExpansionDirection _calculateExpansionDirection() {
@@ -1149,23 +1221,46 @@ class _PartCardState extends State<PartCard> with SingleTickerProviderStateMixin
     return spaces.entries.reduce((a, b) => a.value > b.value ? a : b).key;
   }
 
-
-
   void _handleLongPress() {
-    if (_isHandlingGesture) return;
+    // Eğer zaten bir gesture işlemi devam ediyorsa işlemi engelle
+    if (_isHandlingGesture || _isExpanded) return;
+
+    // Gesture işlemini başlat
     setState(() => _isHandlingGesture = true);
+
+    // Kartın pozisyonunu ve boyutunu hesapla
     final box = context.findRenderObject() as RenderBox;
     _cardOffset = box.localToGlobal(Offset.zero);
     _cardSize = box.size;
 
-    final contentSize = _calculateExpandedContentSize();
-    if (contentSize.width > 0 && contentSize.height > 0) {
-      _isExpanded = true;  // Set `_isExpanded` to true when the card is expanded
+    // Ekran boyutlarını al
+    final screenSize = MediaQuery.of(context).size;
+
+    // Genişletilmiş içerik boyutunu hesapla
+    final contentSize = Size(
+      screenSize.width * 0.92, // Ekran genişliğinin %92'si
+      screenSize.height * 0.85, // Ekran yüksekliğinin %85'i
+    );
+
+    // İçerik boyutu geçerliyse genişletme işlemini başlat
+    if (_isValidContentSize(contentSize)) {
+      _isExpanded = true;
       _showOverlay();
-      _expandController.forward();
+      _expandController.forward().then((_) {
+        if (mounted) {
+          setState(() => _isHandlingGesture = false);
+        }
+      });
     } else {
       setState(() => _isHandlingGesture = false);
     }
+  }
+
+  bool _isValidContentSize(Size size) {
+    return size.width > 0 &&
+        size.height > 0 &&
+        size.width <= MediaQuery.of(context).size.width &&
+        size.height <= MediaQuery.of(context).size.height;
   }
 
   void _showOverlay() {

@@ -1,7 +1,9 @@
 import 'package:logging/logging.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:workout/models/ExerciseTargetedBodyParts.dart';
 import '../data_provider/firebase_provider.dart';
 import '../data_provider/sql_provider.dart';
+import '../data_provider_cache/app_cache.dart';
 import '../models/PartExercises.dart';
 import '../models/exercises.dart';
 
@@ -22,6 +24,14 @@ class ExerciseRepository {
     });
   }
 
+
+  static const String EXERCISES_CACHE_KEY = 'all_exercises';
+  static const String BODYPARTS_CACHE_KEY = 'all_bodyparts';
+
+
+  final _bodyPartNamesCache = <int, String>{};
+  final AppCache _cache = AppCache();
+
   // Tüm egzersizleri getir
   Future<List<Exercises>> getAllExercises() async {
     try {
@@ -31,9 +41,6 @@ class ExerciseRepository {
       throw Exception("Egzersizler alınırken hata oluştu: $e");
     }
   }
-
-
-
 
   Future<List<Exercises>> getExercisesByPartId(int partId) async {
     try {
@@ -79,7 +86,6 @@ class ExerciseRepository {
     }
   }
 
-
   Future<List<Exercises>> getExercisesByIds(List<int> ids) async {
     try {
       return await sqlProvider.getExercisesByIds(ids);
@@ -89,6 +95,18 @@ class ExerciseRepository {
     }
   }
 
+  Future<List<ExerciseTargetedBodyParts>> getTargetedBodyParts(int exerciseId) async {
+    final db = await sqlProvider.database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'ExerciseTargetedBodyParts',
+      where: 'exerciseId = ?',
+      whereArgs: [exerciseId],
+    );
+
+    return List.generate(maps.length, (i) {
+      return ExerciseTargetedBodyParts.fromMap(maps[i]);
+    });
+  }
 
       // İsme göre egzersiz ara
       Future<List<Exercises>> searchExercisesByName(String name) async {
@@ -111,8 +129,6 @@ class ExerciseRepository {
               "Çalışma türüne göre egzersizler alınırken hata oluştu: $e");
         }
       }
-
-
 
       // Egzersiz tamamlanma durumunu güncelle
       Future<void> updateExerciseCompletion(String userId, int exerciseId,
@@ -143,4 +159,17 @@ class ExerciseRepository {
           throw Exception("Egzersiz sıralaması güncellenirken hata oluştu: $e");
         }
       }
+
+      Future<String> getBodyPartName(int bodyPartId) async {
+    if (_bodyPartNamesCache.containsKey(bodyPartId)) {
+      return _bodyPartNamesCache[bodyPartId]!;
     }
+
+    final name = await sqlProvider.getBodyPartName(bodyPartId);
+    _bodyPartNamesCache[bodyPartId] = name;
+    return name;
+  }
+
+
+
+}

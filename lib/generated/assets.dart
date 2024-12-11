@@ -16,7 +16,8 @@ class Assets {
   static const String assetsChestsModified = 'assets/chests-modified.png';
   static const String assetsCoreModified = 'assets/core-modified.png';
   static const String assetsLegModif = 'assets/leg-modif.png';
-  static const String assetsLogoCircle = 'assets/logo_rect.png';
+  static const String assetsLogoCircle = 'assets/logo_circle.png';
+  static const String assetsLogoRect = 'assets/logo_rect.png';
   static const String assetsLogoSixtangle = 'assets/logo_sixtangle.png';
   static const String assetsShoulderModified = 'assets/shoulder-modified.png';
   static const String databaseDbWorkout = 'database/db_workout.db';

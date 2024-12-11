@@ -148,7 +148,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                             ),
                           ],
                         ),
-                        child: Image.asset('assets/logo_rect.png'),
+                        child: Image.asset('assets/logo_circle.png'),
                       ),
                     ),
                   );

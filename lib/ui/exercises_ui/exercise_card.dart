@@ -3,6 +3,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../models/exercises.dart';
+import '../../z.app_theme/app_theme.dart';
 import 'exercise_details.dart';
 
 
@@ -65,105 +66,150 @@ class _ExerciseCardState extends State<ExerciseCard> {
 
   @override
   Widget build(BuildContext context) {
+    return _buildCardContainer(
+      child: _buildCardContent(),
+    );
+  }
+
+  Widget _buildCardContainer({required Widget child}) {
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      margin: EdgeInsets.symmetric(
+        vertical: AppTheme.paddingSmall / 2,
+        horizontal: AppTheme.paddingSmall,
+      ),
       child: Card(
-        elevation: 2,
+        elevation: AppTheme.elevations['card'],
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
         ),
-        child: InkWell(
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ExerciseDetails(
-                exerciseId: widget.exercise.id, userId: widget.userId,
-              ),
-            ),
+        child: child,
+      ),
+    );
+  }
+
+  Widget _buildCardContent() {
+    return InkWell(
+      onTap: () => _navigateToDetails(),
+      borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
+      child: Container(
+        padding: EdgeInsets.all(AppTheme.paddingMedium),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
+          gradient: AppTheme.createGradient(
+            colors: [
+              isCompleted
+                  ? AppTheme.successGreen.withOpacity(AppTheme.primaryOpacity)
+                  : AppTheme.primaryRed.withOpacity(AppTheme.primaryOpacity),
+              isCompleted
+                  ? AppTheme.successGreen.withOpacity(AppTheme.cardOpacity)
+                  : AppTheme.secondaryRed.withOpacity(AppTheme.cardOpacity),
+            ],
           ),
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  isCompleted ? Colors.green.withOpacity(0.7) : Colors.blue.withOpacity(0.7),
-                  isCompleted ? Colors.green.withOpacity(0.3) : Colors.blue.withOpacity(0.3),
-                ],
-              ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        widget.exercise.name,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          _buildCompactInfo(Icons.repeat, '${widget.exercise.defaultSets} set'),
-                          const SizedBox(width: 8),
-                          _buildCompactInfo(Icons.fitness_center, '${widget.exercise.defaultReps} tekrar'),
-                          const SizedBox(width: 8),
-                          _buildCompactInfo(Icons.monitor_weight_outlined, '${widget.exercise.defaultWeight} kg'),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                Checkbox(
-                  value: isCompleted,
-                  onChanged: (bool? value) {
-                    if (value != null) {
-                      setState(() {
-                        isCompleted = value;
-                      });
-                      _updateCompletionStatus(value);
-                    }
-                  },
-                  checkColor: Colors.white,
-                  fillColor: WidgetStateProperty.resolveWith(
-                        (states) => Colors.transparent,
-                  ),
-                ),
-              ],
-            ),
-          ),
+        ),
+        child: _buildExerciseInfo(),
+      ),
+    );
+  }
+
+  void _navigateToDetails() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ExerciseDetails(
+          exerciseId: widget.exercise.id,
+          userId: widget.userId,
         ),
       ),
     );
   }
 
-  Widget _buildCompactInfo(IconData icon, String text) {
+  Widget _buildExerciseInfo() {
     return Row(
-      mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
-          icon,
-          size: 14,
-          color: Colors.white70,
-        ),
-        const SizedBox(width: 4),
-        Text(
-          text,
-          style: const TextStyle(
-            fontSize: 12,
-            color: Colors.white70,
+        Expanded(
+          flex: 3,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                widget.exercise.name,
+                style: AppTheme.bodyLarge.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              SizedBox(height: AppTheme.paddingSmall / 2),
+              _buildExerciseMetrics(),
+            ],
           ),
         ),
+        _buildCompletionCheckbox(),
       ],
+    );
+  }
+
+  Widget _buildExerciseMetrics() {
+    return Row(
+      children: [
+        if (widget.exercise.defaultSets > 0) ...[
+          _buildCompactInfo(Icons.repeat, '${widget.exercise.defaultSets} set'),
+          SizedBox(width: AppTheme.paddingSmall),
+        ],
+        if (widget.exercise.defaultReps > 0) ...[
+          _buildCompactInfo(Icons.fitness_center, '${widget.exercise.defaultReps} tekrar'),
+          SizedBox(width: AppTheme.paddingSmall),
+        ],
+        if (widget.exercise.defaultWeight > 0)
+          _buildCompactInfo(Icons.monitor_weight_outlined, '${widget.exercise.defaultWeight} kg'),
+      ],
+    );
+  }
+
+  Widget _buildCompletionCheckbox() {
+    return Checkbox(
+      value: isCompleted,
+      onChanged: (bool? value) {
+        if (value != null) {
+          setState(() {
+            isCompleted = value;
+          });
+          _updateCompletionStatus(value);
+        }
+      },
+      checkColor: AppTheme.textPrimary,
+      fillColor: WidgetStateProperty.resolveWith(
+            (states) => Colors.transparent,
+      ),
+    );
+  }
+
+  Widget _buildCompactInfo(IconData icon, String text) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: AppTheme.cardGradient,
+        borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
+      ),
+      padding: EdgeInsets.symmetric(
+        horizontal: AppTheme.paddingSmall,
+        vertical: AppTheme.paddingSmall / 2,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 14,
+            color: Colors.white.withOpacity(AppTheme.secondaryOpacity),
+          ),
+          SizedBox(width: AppTheme.paddingSmall / 2),
+          Text(
+            text,
+            style: AppTheme.bodySmall.copyWith(
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
