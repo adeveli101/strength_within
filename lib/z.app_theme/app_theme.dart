@@ -1,22 +1,51 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  // Temel Renk Paleti
-  static const Color primaryRed = Color(0xFFFF0000);
-  static const Color secondaryRed = Color(0xFFD3110E);
+
+  // Ana Renkler
+  static const Color primaryRed = Color(0xFFE53935);
+  static const Color secondaryRed = Color(0xFFD32F2F);
   static const Color darkBackground = Color(0xFF121212);
   static const Color cardBackground = Color(0xFF1E1E1E);
   static const Color surfaceColor = Color(0xFF2C2C2C);
+
+  // Durum Renkleri
+  static const Color successGreen = Color(0xFF43A047);
+  static const Color warningYellow = Color(0xFFFFB300);
+  static const Color warningOrange = Color(0xFFFF9800);
+  static const Color errorRed = Color(0xFFD32F2F);
+  static const Color infoBlue = Color(0xFF1E88E5);
+
+// Aksan Renkleri
+  static const Color accentBlue = Color(0xFF2196F3);
+  static const Color accentPurple = Color(0xFF9C27B0);
+  static const Color accentTeal = Color(0xFF009688);
+  static const Color accentAmber = Color(0xFFFFB300);
+  static const Color accentIndigo = Color(0xFF3F51B5);
+
+
   static const Color warningColor = Color(0xFFEA0707);
   static const Color textColorSecondary = Color(0xFF757575);
   static const Color disabledColor = Color(0xFFBDBDBD);
   static const Color primaryGreen = Color(0xFF4CAF50);
-  static const Color warningYellow = Color(0xFFFFD200);
-  static const Color errorRed = Color(0xFF801010);
-  static const Color accentBlue = Color(0xFF2196F3);
-  static const Color accentPurple = Color(0xFF9C27B0);
 
-  // Metrik Değerler
+
+// Metin Renkleri
+  static const Color textPrimary = Color(0xFFFFFFFF);
+  static const Color textSecondary = Color(0xFFB3B3B3);
+  static const Color textTertiary = Color(0xFF757575);
+  static const Color textDisabled = Color(0xFF616161);
+  static const Color textHint = Color(0xFF9E9E9E);
+
+// Gradient Renkleri
+  static const Color gradientStart = Color(0xFFE53935);
+  static const Color gradientEnd = Color(0xFFD32F2F);
+  static const Color gradientAccent = Color(0xFFFF5252);
+
+// Gölge Renkleri
+  static const Color overlayColor = Color(0x1FFFFFFF);
+
+
   static const metrics = {
     'opacity': {
       'primary': 0.8,
@@ -45,7 +74,7 @@ class AppTheme {
     }
   };
 
-  // Getter metodları
+  // Getters
   static double get paddingSmall => metrics['padding']!['small']!;
   static double get paddingMedium => metrics['padding']!['medium']!;
   static double get paddingLarge => metrics['padding']!['large']!;

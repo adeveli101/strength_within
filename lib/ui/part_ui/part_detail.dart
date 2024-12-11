@@ -73,396 +73,542 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
-
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (bool didPop, dynamic result) async {
         if (didPop) return;
-
-        final state = _partsBloc.state;
-        if (state is PartExercisesLoaded) {
-          _partsBloc.add(UpdatePart(state.part));
-          _partsBloc.add(FetchParts());
-        }
+        _updateAndFetchParts();
         Navigator.of(context).pop();
       },
-      child: BlocListener<PartsBloc, PartsState>(
-        listener: (context, state) {
-          if (state is PartsError) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(state.message),
-                backgroundColor: AppTheme.primaryRed,
-              ),
-            );
+      child: NotificationListener<DraggableScrollableNotification>(
+        onNotification: (notification) {
+          if (notification.extent <= notification.minExtent) {
+            _updateAndFetchParts();
+            Navigator.of(context).pop();
           }
+          return true;
         },
         child: DraggableScrollableSheet(
           initialChildSize: 0.9,
           minChildSize: 0.5,
           maxChildSize: 0.95,
           builder: (_, controller) {
-            return Container(
-              decoration: BoxDecoration(
-                gradient: AppTheme.cardGradient,
-                borderRadius:  BorderRadius.vertical(
-                  top: Radius.circular(AppTheme.borderRadiusLarge),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.shadowColor,
-                    blurRadius: 15,
-                    offset: const Offset(0, -5),
-                  ),
-                ],
-              ),
-              child: Stack(
-                children: [
-                  // Süsleme elementleri
-                  Positioned(
-                    top: -20,
-                    right: -20,
-                    child: Container(
-                      width: 100,
-                      height: 100,
-                      decoration: BoxDecoration(
-                        gradient: AppTheme.primaryGradient,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.primaryRed.withOpacity(0.2),
-                            blurRadius: 20,
-                            spreadRadius: -5,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  // Ana içerik
-                  BlocBuilder<PartsBloc, PartsState>(
-                    builder: (context, state) {
-                      _logger.info('PartDetailBottomSheet state: $state');
-
-                      if (state is PartsLoading) {
-                        return Center(
-                          child: CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              AppTheme.primaryRed,
-                            ),
-                          ),
-                        );
-                      }
-
-                      if (state is PartExercisesLoaded) {
-                        return ClipRRect(
-                          borderRadius: BorderRadius.vertical(
-                            top: Radius.circular(AppTheme.borderRadiusLarge),
-                          ),
-                          child: _buildLoadedContent(state, controller),
-                        );
-                      }
-
-                      if (state is PartsError) {
-                        return Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.error_outline,
-                                color: AppTheme.primaryRed,
-                                size: 48,
-                              ),
-                              SizedBox(height: AppTheme.paddingMedium),
-                              Text(
-                                'Hata: ${state.message}',
-                                style: AppTheme.bodyMedium.copyWith(
-                                  color: AppTheme.primaryRed,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-
-                      return Center(
-                        child: Text(
-                          'Beklenmeyen durum: ${state.runtimeType }',
-                          style: AppTheme.bodyMedium,
-                        ),
-                      );
-                    },
-                  ),
-                  // Üst kısım çubuğu
-                  Positioned(
-                    top: AppTheme.paddingSmall,
-                    left: 0,
-                    right: 0,
-                    child: Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(
-                            AppTheme.borderRadiusSmall,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
+            return _buildMainContainer(controller);
           },
         ),
       ),
     );
   }
 
-  Widget _buildLoadedContent(PartExercisesLoaded state, ScrollController controller) {
+  Widget _buildMainContainer(ScrollController controller) {
     return Container(
-      color: const Color(0xFF1E1E1E),
-      child: ListView(
-        controller: controller,
-        padding: EdgeInsets.zero,
+      decoration: BoxDecoration(
+        gradient: AppTheme.cardGradient,
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppTheme.borderRadiusLarge),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.shadowColor,
+            blurRadius: 15,
+            offset: const Offset(0, -5),
+          ),
+        ],
+      ),
+      child: Stack(
         children: [
-          // Üst Bilgi Bölümü
-          Container(
-            padding: const EdgeInsets.all(20.0),
-            decoration: BoxDecoration(
-              gradient: AppTheme.cardGradient,
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(30),
-                bottomRight: Radius.circular(30),
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Başlık ve Schedule Butonu
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      state.part.name,
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    BlocBuilder<ScheduleBloc, ScheduleState>(
-                      builder: (context, scheduleState) {
-                        bool hasSchedule = false;
-                        if (scheduleState is SchedulesLoaded) {
-                          hasSchedule = scheduleState.schedules.any(
-                                (schedule) =>
-                            schedule.itemId == state.part.id &&
-                                schedule.type == 'part',
-                          );
-                        }
-                        return InkWell(
-                          onTap: () => _showScheduleModal(
-                            context,
-                            state.part,
-                            state.exerciseListByBodyPart,
-                          ),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              gradient: hasSchedule ? AppTheme.primaryGradient : null,
-                              color: hasSchedule ? null : Colors.white.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(20),
-                              border: hasSchedule
-                                  ? null
-                                  : Border.all(color: Colors.white.withOpacity(0.2)),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.calendar_today,
-                                  size: 16,
-                                  color: hasSchedule ? Colors.white : Colors.white70,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  hasSchedule ? 'Programı Düzenle' : 'Programa Ekle',
-                                  style: TextStyle(
-                                    color: hasSchedule ? Colors.white : Colors.white70,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          // Açılıp Kapanabilir Bölümler
-          // 2. İstatistikler
-          ExpansionTile(
-            initiallyExpanded: true,
-            title: Text(
-              'İstatistikler',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            leading: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppTheme.primaryRed.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                Icons.analytics_outlined,
-                color: AppTheme.primaryRed,
-                size: 20,
-              ),
-            ),
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    _buildStatItem(
-                      Icons.fitness_center,
-                      'Egzersiz Sayısı',
-                      _getTotalExerciseCount(state.exerciseListByBodyPart).toString(),
-                    ),
-                    _buildStatItem(
-                      Icons.category,
-                      'Bölge',
-                      state.part.name,
-                    ),
-                    _buildStatItem(
-                      Icons.trending_up,
-                      'İlerleme',
-                      '${state.part.userProgress ?? 0}%',
-                      color: _getProgressColor(state.part.userProgress ?? 0),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          if (state.part.additionalNotes != null &&
-              state.part.additionalNotes.isNotEmpty)
-            ExpansionTile(
-              initiallyExpanded: true,
-              title: Text(
-                'Açıklama',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryRed.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  Icons.info_outline,
-                  color: AppTheme.primaryRed,
-                  size: 20,
-                ),
-              ),
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    state.part.additionalNotes,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.8),
-                      fontSize: 14,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-
-          // 4. Egzersizler
-          ExpansionTile(
-            initiallyExpanded: true,
-            title: Text(
-              'Egzersizler',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            leading: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppTheme.primaryRed.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                Icons.fitness_center,
-                color: AppTheme.primaryRed,
-                size: 20,
-              ),
-            ),
-            trailing: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 6,
-              ),
-              decoration: BoxDecoration(
-                color: AppTheme.primaryRed.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                '${_getTotalExerciseCount(state.exerciseListByBodyPart)} egzersiz',
-                style: TextStyle(
-                  color: AppTheme.primaryRed,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            children: [
-              ..._buildExerciseList(state.exerciseListByBodyPart),
-            ],
-          ),
-
-          const SizedBox(height: 16),
+          _buildDecorativeElements(),
+          _buildContent(controller),
+          _buildDragHandle(),
         ],
       ),
     );
   }
 
+  void _updateAndFetchParts() {
+    final state = _partsBloc.state;
+    if (state is PartExercisesLoaded) {
+      _partsBloc.add(UpdatePart(state.part));
+      _partsBloc.add(FetchParts());
+    }
+  }
+
+  Widget _buildDragHandle() {
+    return Positioned(
+      top: AppTheme.paddingSmall,
+      left: 0,
+      right: 0,
+      child: Center(
+        child: Container(
+          width: 40,
+          height: 4,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContent(ScrollController controller) {
+    return BlocBuilder<PartsBloc, PartsState>(
+      builder: (context, state) {
+        if (state is PartsLoading) {
+          return _buildLoadingState();
+        }
+        if (state is PartExercisesLoaded) {
+          return ClipRRect(
+            borderRadius: BorderRadius.vertical(
+              top: Radius.circular(AppTheme.borderRadiusLarge),
+            ),
+            child: _buildLoadedContent(state, controller),
+          );
+        }
+        if (state is PartsError) {
+          return _buildErrorState(state.message);
+        }
+        return _buildUnexpectedState(state);
+      },
+    );
+  }
+
+  Widget _buildLoadedContent(PartExercisesLoaded state, ScrollController controller) {
+    return Container(
+      color: AppTheme.darkBackground,
+      child: ListView(
+        controller: controller,
+        padding: EdgeInsets.zero,
+        children: [
+          _buildHeader(state),
+          _buildStatisticsSection(state),
+          if (state.part.additionalNotes.isNotEmpty)
+            _buildDescriptionSection(state),
+          _buildExercisesSection(state),
+          SizedBox(height: AppTheme.paddingLarge),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDifficultyIndicator() {
+    return ConstrainedBox(
+      constraints: BoxConstraints(minWidth: AppTheme.paddingSmall), // Maksimum genişlik sınırı
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: AppTheme.paddingLarge,
+          vertical: AppTheme.paddingMedium,
+        ),
+        decoration: BoxDecoration(
+          gradient: AppTheme.cardGradient,
+          borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
+          border: Border.all(
+            color: Colors.white.withOpacity(0.1),
+          ),
+        ),
+
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: AppTheme.buildDifficultyStars(widget.partId),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryRed),
+          ),
+          SizedBox(height: AppTheme.paddingMedium),
+          Text(
+            'Yükleniyor...',
+            style: AppTheme.bodyMedium.copyWith(color: Colors.white70),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState(String message) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.error_outline,
+            color: AppTheme.primaryRed,
+            size: 48,
+          ),
+          SizedBox(height: AppTheme.paddingMedium),
+          Text(
+            'Hata: $message',
+            style: AppTheme.bodyMedium.copyWith(
+              color: AppTheme.primaryRed,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUnexpectedState(PartsState state) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.warning_amber_rounded,
+            color: AppTheme.warningYellow,
+            size: 48,
+          ),
+          SizedBox(height: AppTheme.paddingMedium),
+          Text(
+            'Beklenmeyen durum: ${state.runtimeType}',
+            style: AppTheme.bodyMedium.copyWith(
+              color: AppTheme.warningYellow,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader(PartExercisesLoaded state) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppTheme.paddingLarge,
+        vertical: AppTheme.paddingMedium,
+      ),
+      decoration: AppTheme.decoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.primaryRed.withOpacity(0.2),
+            AppTheme.darkBackground.withOpacity(0.15),
+          ],
+        ),
+        borderRadius: AppTheme.getBorderRadius(
+          bottomLeft: AppTheme.borderRadiusLarge,
+          bottomRight: AppTheme.borderRadiusLarge,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: EdgeInsets.all(AppTheme.paddingSmall),
+            decoration: AppTheme.decoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppTheme.primaryRed.withOpacity(0.2),
+                  AppTheme.darkBackground.withOpacity(0.15),
+                ],
+              ),
+              borderRadius: AppTheme.getBorderRadius(all: AppTheme.borderRadiusSmall),
+            ),
+            child: Icon(
+              Icons.fitness_center,
+              color: Colors.white70,
+              size: 20,
+            ),
+          ),
+          SizedBox(width: AppTheme.paddingMedium),
+          Expanded(
+            child: Text(
+              state.part.name,
+              style: AppTheme.headingMedium.copyWith(
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          _buildScheduleButton(state),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScheduleButton(PartExercisesLoaded state) {
+    return BlocBuilder<ScheduleBloc, ScheduleState>(
+      builder: (context, scheduleState) {
+        bool hasSchedule = false;
+
+        if (scheduleState is SchedulesLoaded) {
+          hasSchedule = scheduleState.schedules.any(
+                (schedule) => schedule.itemId == state.part.id && schedule.type == 'part',
+          );
+        }
+
+        return InkWell(
+          onTap: () => _showScheduleModal(
+            context,
+            state.part,
+            state.exerciseListByBodyPart,
+          ),
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: AppTheme.paddingMedium,
+              vertical: AppTheme.paddingSmall,
+            ),
+            decoration: BoxDecoration(
+              gradient: hasSchedule ? AppTheme.primaryGradient : null,
+              color: hasSchedule ? null : Colors.white.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(AppTheme.borderRadiusLarge),
+              border: hasSchedule
+                  ? null
+                  : Border.all(color: Colors.white.withOpacity(0.2)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.calendar_today,
+                  size: 16,
+                  color: hasSchedule ? Colors.white : Colors.white70,
+                ),
+                SizedBox(width: AppTheme.paddingSmall),
+                Text(
+                  hasSchedule ? 'Programı Düzenle' : 'Programa Ekle',
+                  style: AppTheme.bodySmall.copyWith(
+                    color: hasSchedule ? Colors.white : Colors.white70,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStatisticsSection(PartExercisesLoaded state) {
+    return _buildExpandableSection(
+      title: 'İstatistikler',
+      icon: Icons.analytics_outlined,
+      initiallyExpanded: true,
+      child: Container(
+        padding: EdgeInsets.all(AppTheme.paddingMedium),
+        margin: EdgeInsets.all(AppTheme.paddingMedium),
+        decoration: AppTheme.decoration(
+          gradient: LinearGradient(
+            colors: [
+              AppTheme.primaryRed.withOpacity(0.1),
+              AppTheme.darkBackground.withOpacity(0.15),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: AppTheme.getBorderRadius(all: AppTheme.borderRadiusMedium),
+        ),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildStatItem(
+                  Icons.fitness_center,
+                  'Egzersiz Sayısı',
+                  _getTotalExerciseCount(state.exerciseListByBodyPart).toString(),
+                ),
+                _buildStatItem(
+                  Icons.category,
+                  'Bölge',
+                  state.part.name,
+                ),
+                _buildStatItem(
+                  Icons.trending_up,
+                  'İlerleme',
+                  '${state.part.userProgress ?? 0}%',
+                  color: _getProgressColor(state.part.userProgress ?? 0),
+                ),
+              ],
+            ),
+            SizedBox(height: AppTheme.paddingMedium),
+            Container(
+              padding: EdgeInsets.symmetric(
+                vertical: AppTheme.paddingSmall,
+                horizontal: AppTheme.paddingMedium,
+              ),
+              decoration: AppTheme.decoration(
+                gradient: LinearGradient(
+                  colors: [
+                    AppTheme.primaryRed.withOpacity(0.1),
+                    AppTheme.darkBackground.withOpacity(0.15),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: AppTheme.getBorderRadius(all: AppTheme.borderRadiusSmall),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildDifficultyIndicator(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDescriptionSection(PartExercisesLoaded state) {
+    return _buildExpandableSection(
+      title: 'Açıklama',
+      icon: Icons.insert_drive_file_rounded,
+      initiallyExpanded: true,
+      child: Container(
+        padding: EdgeInsets.all(AppTheme.paddingMedium),
+        margin: EdgeInsets.all(AppTheme.paddingMedium),
+        decoration: AppTheme.decoration(
+          gradient: LinearGradient(
+            colors: [
+              AppTheme.primaryRed.withOpacity(0.2),
+              AppTheme.darkBackground.withOpacity(0.15),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: AppTheme.getBorderRadius(all: AppTheme.borderRadiusMedium),
+        ),
+        child: Text(
+          state.part.additionalNotes,
+          style: AppTheme.bodyMedium.copyWith(
+            color: Colors.white.withOpacity(0.8),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExercisesSection(PartExercisesLoaded state) {
+    return _buildExpandableSection(
+      title: 'Egzersizler',
+      icon: Icons.fitness_center,
+      initiallyExpanded: true,
+      trailing: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: AppTheme.paddingMedium,
+          vertical: AppTheme.paddingSmall,
+        ),
+        decoration: AppTheme.decoration(
+          gradient: LinearGradient(
+            colors: [
+              AppTheme.primaryRed.withOpacity(0.2),
+              AppTheme.darkBackground.withOpacity(0.15),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: AppTheme.getBorderRadius(all: AppTheme.borderRadiusSmall),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.fitness_center,
+              size: 14,
+              color: Colors.white70,
+            ),
+            SizedBox(width: AppTheme.paddingSmall),
+            Text(
+              '${_getTotalExerciseCount(state.exerciseListByBodyPart)} egzersiz',
+              style: AppTheme.bodySmall.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+      child: Container(
+        decoration: AppTheme.decoration(
+          gradient: LinearGradient(
+            colors: [
+              AppTheme.primaryRed.withOpacity(0.01),
+              AppTheme.darkBackground.withOpacity(0.01),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: AppTheme.getBorderRadius(
+            bottomLeft: AppTheme.borderRadiusSmall,
+            bottomRight: AppTheme.borderRadiusSmall,
+          ),
+        ),
+        child: Column(
+          children: [
+            Container(
+              padding: EdgeInsets.all(AppTheme.paddingMedium),
+              decoration: AppTheme.decoration(
+                gradient: LinearGradient(
+                  colors: [
+                    AppTheme.primaryRed.withOpacity(0.2),
+                    AppTheme.darkBackground.withOpacity(0.15),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: AppTheme.getBorderRadius(all: AppTheme.borderRadiusMedium),
+              ),
+              child: Column(
+                children: _buildExerciseList(state.exerciseListByBodyPart),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExpandableSection({
+    required String title,
+    required IconData icon,
+    required Widget child,
+    required bool initiallyExpanded,
+    Widget? trailing,
+  }) {
+    return ExpansionTile(
+      initiallyExpanded: initiallyExpanded,
+      title: Text(title, style: AppTheme.headingSmall),
+      leading: Container(
+        padding: EdgeInsets.all(AppTheme.paddingSmall),
+        decoration: AppTheme.decoration(
+          gradient: LinearGradient(
+            colors: [
+              AppTheme.primaryRed.withOpacity(0.1),
+              AppTheme.darkBackground.withOpacity(0.8),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: AppTheme.getBorderRadius(all: AppTheme.borderRadiusSmall),
+        ),
+        child: Icon(
+          icon,
+          color: Colors.white70,
+          size: 20,
+        ),
+      ),
+      trailing: trailing,
+      children: [child],
+    );
+  }
+
+
   Future<List<String>> _getBodyPartName(List<int> bodyPartIds) async {
-    // BLoC'dan repository'yi kullanarak body part isimlerini al
     final bodyPartNames = await BlocProvider.of<PartsBloc>(context).repository.getBodyPartNamesByIds(bodyPartIds);
     if (bodyPartNames.isEmpty) {
       return List.filled(bodyPartIds.length, 'Bilinmiyor');
@@ -470,7 +616,6 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
 
     return bodyPartNames;
   }
-
 
   void _showScheduleModal(
       BuildContext context,
@@ -485,7 +630,7 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
         backgroundColor: Colors.transparent,
         isScrollControlled: true,
         builder: (context) => ScheduleModal(
-          userId: 'currentUserId', // Kullanıcı ID'sini buradan geçirin
+          userId: widget.userId, // Kullanıcı ID'sini buradan geçirin
           type: 'part',
           itemId: part.id,
           itemName: part.name,
@@ -497,7 +642,6 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
       _logger.severe('Modal açılırken hata oluştu', e);
     }
   }
-
 
   Map<int, List<Map<String, dynamic>>> groupExercisesByDay(
       Map<String, List<Map<String, dynamic>>> exerciseListByBodyPart,
@@ -550,14 +694,24 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
     }
   }
 
-
   List<Widget> _buildExerciseList(Map<String, List<Map<String, dynamic>>> exerciseListByBodyPart) {
     if (exerciseListByBodyPart.isEmpty) {
       return [
-        Center(
-          child: Text(
-            'Egzersiz bulunamadı.',
-            style: TextStyle(color: Colors.white70),
+        Container(
+          padding: EdgeInsets.all(AppTheme.paddingLarge),
+          child: Column(
+            children: [
+              Icon(
+                Icons.fitness_center,
+                size: 48,
+                color: Colors.white.withOpacity(0.3),
+              ),
+              SizedBox(height: AppTheme.paddingMedium),
+              Text(
+                'Egzersiz bulunamadı.',
+                style: AppTheme.bodyMedium.copyWith(color: Colors.white70),
+              ),
+            ],
           ),
         ),
       ];
@@ -569,114 +723,124 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
           horizontal: AppTheme.paddingMedium,
           vertical: AppTheme.paddingSmall,
         ),
+        decoration: AppTheme.decoration(
+          color: Colors.white.withOpacity(0.05),
+          borderRadius: AppTheme.getBorderRadius(all: AppTheme.borderRadiusMedium),
+        ),
         child: ExpansionTile(
-          title: Text(
-            entry.key,
-            style: AppTheme.headingSmall,
-          ),
-          children: entry.value.map((exercise) {
-            return ListTile(
-              title: Text(exercise['name']),
-              subtitle: Text(
-                'Setler: ${exercise['defaultSets']}, Tekrarlar: ${exercise['defaultReps']}',
-              ),
-              trailing: Text('${exercise['defaultWeight']} kg'),
-            );
-          }).toList(),
+          title: _buildExpansionTileTitle(entry),
+          children: [_buildExerciseListView(entry)],
         ),
       );
     }).toList();
   }
-// Başlık ve Alt Başlık için yardımcı metod
+
   Widget _buildExpansionTileTitle(MapEntry<String, List<Map<String, dynamic>>> entry) {
-    return Row(
-      children: [
-        // İkon Container
-        Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(
-            gradient: AppTheme.primaryGradient,
-            borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.primaryRed.withOpacity(0.3),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
+    return Container(
+      padding: EdgeInsets.all(AppTheme.paddingMedium),
+      child: Row(
+        children: [
+          Container(
+            padding: EdgeInsets.all(AppTheme.paddingMedium),
+            decoration: AppTheme.decoration(
+              gradient: AppTheme.getPartGradient(
+                difficulty: 1,
+                secondaryColor: AppTheme.getTargetColor(1),
               ),
-            ],
+              borderRadius: AppTheme.getBorderRadius(all: AppTheme.borderRadiusSmall),
+            ),
+            child:Image.asset(
+              _getBodyPartAsset(entry.key),
+              width: 24,
+              height: 24,
+              color: Colors.white70,
+            )
+
           ),
-          child: Icon(
-            _getBodyPartIcon(entry.key), // Ana kas grubunun ikonunu al
-            color: Colors.white,
-            size: 30,
+          SizedBox(width: AppTheme.paddingMedium),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  entry.key,
+                  style: AppTheme.headingSmall.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: AppTheme.paddingSmall / 2),
+                Text(
+                  '${entry.value.length} egzersiz',
+                  style: AppTheme.bodySmall.copyWith(
+                    color: Colors.white70,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        SizedBox(width: AppTheme.paddingMedium),
-        // Başlık ve Alt Başlık
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(entry.key, style: AppTheme.headingSmall), // Ana kas grubunun adı
-              const SizedBox(height: 4),
-              Text('${entry.value.length} egzersiz', style: AppTheme.bodySmall), // Egzersiz sayısı
-            ],
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-// Egzersizleri listeleyen view için yardımcı metod
   Widget _buildExerciseListView(MapEntry<String, List<Map<String, dynamic>>> entry) {
     return Container(
-      decoration:
-      BoxDecoration(color: AppTheme.surfaceColor, borderRadius:
-      BorderRadius.only(bottomLeft:
-      Radius.circular(AppTheme.borderRadiusLarge), bottomRight:
-      Radius.circular(AppTheme.borderRadiusLarge)),
+      decoration: AppTheme.decoration(
+        color: AppTheme.primaryRed.withOpacity(0.2),
+        borderRadius: AppTheme.getBorderRadius(
+          bottomLeft: AppTheme.borderRadiusLarge,
+          bottomRight: AppTheme.borderRadiusLarge,
+        ),
       ),
-      child:
-      ListView.builder(shrinkWrap:
-      true, physics:
-      const NeverScrollableScrollPhysics(), padding:
-      EdgeInsets.all(AppTheme.paddingMedium), itemCount:
-      entry.value.length, itemBuilder:
-          (context, index) {
-        final exerciseMap = entry.value[index];
-        final exerciseData = Exercises.fromMap(exerciseMap);
+      child: ListView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        padding: EdgeInsets.all(AppTheme.paddingMedium),
+        itemCount: entry.value.length,
+        itemBuilder: (context, index) {
+          final exerciseMap = entry.value[index];
+          final exerciseData = Exercises.fromMap(exerciseMap);
 
-        return Padding(padding:
-        EdgeInsets.only(bottom:
-        AppTheme.paddingSmall), child:
-        Container(decoration:
-        BoxDecoration(gradient:
-        AppTheme.cardGradient, borderRadius:
-        BorderRadius.circular(AppTheme.borderRadiusMedium), border:
-        Border.all(color:
-        AppTheme.primaryRed.withOpacity(0.1), width:
-        1), boxShadow:[
-          BoxShadow(color:
-          AppTheme.shadowColor, blurRadius:
-          8, offset:
-          const Offset(0, 4)),],), child:
-        ExerciseCard(exercise:
-        exerciseData, userId:
-        widget.userId, onCompletionChanged:
-            (isCompleted) {
-          _updateExerciseCompletion(exerciseData.id, isCompleted);
-        }),),);},),);
+          return Container(
+            margin: EdgeInsets.only(bottom: AppTheme.paddingSmall),
+            decoration: AppTheme.decoration(
+              gradient: AppTheme.cardGradient,
+              borderRadius: AppTheme.getBorderRadius(all: AppTheme.borderRadiusMedium),
+            ),
+            child: ExerciseCard(
+              exercise: exerciseData,
+              userId: widget.userId,
+              onCompletionChanged: (isCompleted) {
+                _updateExerciseCompletion(exerciseData.id, isCompleted);
+              },
+            ),
+          );
+        },
+      ),
+    );
   }
 
-// Süs elementleri için yardımcı metod
   Widget _buildDecorativeElements() {
-    return Positioned(top :12 , right :12 , child :Container (
-      width :8 , height :8 , decoration :BoxDecoration (
-      color :AppTheme.primaryRed , shape :BoxShape.circle ,
-      boxShadow :[ BoxShadow (
-        color :AppTheme.primaryRed.withOpacity(0.5) ,
-        blurRadius :8 , spreadRadius :2 ,)],),),);
+    return Positioned(
+      top: AppTheme.paddingSmall,
+      right: AppTheme.paddingSmall,
+      child: Container(
+        width: 8,
+        height: 8,
+        decoration: BoxDecoration(
+          color: AppTheme.primaryRed,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.primaryRed.withOpacity(0.5),
+              blurRadius: 8,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _updateExerciseCompletion(int exerciseId, bool isCompleted) {
@@ -691,24 +855,27 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
     });
   }
 
-  IconData _getBodyPartIcon(String bodyPartName) {
+  String _getBodyPartAsset(String bodyPartName) {
     switch (bodyPartName.toLowerCase()) {
-      case 'göğüs':
-        return Icons.fitness_center;
-      case 'sırt':
-        return Icons.accessibility_new;
-      case 'bacak':
-        return Icons.directions_walk;
-      case 'omuz':
-        return Icons.sports_gymnastics;
-      case 'kol':
-        return Icons.sports_handball;
-      case 'karın':
-        return Icons.straighten;
+      case 'chest':
+        return 'assets/chests-modified.png';
+      case 'back':
+        return 'assets/back-modified.png';
+      case 'legs':
+        return 'assets/leg-modif.png';
+      case 'shoulders':
+        return 'assets/shoulder-modified.png';
+      case 'arms':
+        return 'assets/arm-modified.png';
+      case 'abs':
+      case 'core':
+        return 'assets/core-modified.png';
       default:
-        return Icons.fitness_center;
+        return 'assets/core-modified.png';
     }
   }
+
+
 
   Widget _buildStatItem(IconData icon, String label, String value, {Color? color}) {
     return Expanded(
@@ -763,20 +930,9 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
         horizontal: AppTheme.paddingMedium,
         vertical: AppTheme.paddingSmall,
       ),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceColor,
-        borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
-        border: Border.all(
-          color: AppTheme.primaryRed.withOpacity(0.2),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.shadowColor,
-            blurRadius: 4,
-            spreadRadius: 0,
-          ),
-        ],
+      decoration: AppTheme.decoration(
+        color: Colors.black26,
+        borderRadius: AppTheme.getBorderRadius(all: AppTheme.borderRadiusSmall),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -784,12 +940,13 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
           Icon(
             icon,
             size: 16,
-            color: AppTheme.primaryRed,
+            color: Colors.white70,
           ),
           SizedBox(width: AppTheme.paddingSmall),
           Text(
             text,
             style: AppTheme.bodySmall.copyWith(
+              color: Colors.white,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -799,11 +956,63 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
   }
 
   Color _getProgressColor(int progress) {
-    if (progress >= 80) return Colors.green;
-    if (progress >= 60) return Colors.lightGreen;
-    if (progress >= 40) return Colors.orange;
-    if (progress >= 20) return Colors.deepOrange;
-    return Colors.white70.withRed(15);
+    if (progress >= 80) return AppTheme.successGreen;
+    if (progress >= 60) return AppTheme.warningYellow;
+    if (progress >= 40) return AppTheme.warningOrange;
+    if (progress >= 20) return AppTheme.errorRed;
+    return AppTheme.primaryRed.withOpacity(0.5);
+  }
+
+  Widget _buildExerciseListTile(Map<String, dynamic> exercise) {
+    return Container(
+      margin: EdgeInsets.symmetric(
+        horizontal: AppTheme.paddingMedium,
+        vertical: AppTheme.paddingSmall / 2,
+      ),
+      decoration: AppTheme.decoration(
+        gradient: AppTheme.cardGradient,
+        borderRadius: AppTheme.getBorderRadius(all: AppTheme.borderRadiusMedium),
+      ),
+      child: ListTile(
+        contentPadding: EdgeInsets.all(AppTheme.paddingMedium),
+        title: Text(
+          exercise['name'],
+          style: AppTheme.bodyMedium.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        subtitle: Padding(
+          padding: EdgeInsets.only(top: AppTheme.paddingSmall),
+          child: Row(
+            children: [
+              _buildExerciseInfo(Icons.repeat, '${exercise['defaultSets']} Set'),
+              SizedBox(width: AppTheme.paddingSmall),
+              _buildExerciseInfo(Icons.fitness_center, '${exercise['defaultReps']} Tekrar'),
+              SizedBox(width: AppTheme.paddingSmall),
+              _buildExerciseInfo(Icons.monitor_weight_outlined, '${exercise['defaultWeight']}kg'),
+            ],
+          ),
+        ),
+        trailing: Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: AppTheme.paddingMedium,
+            vertical: AppTheme.paddingSmall,
+          ),
+          decoration: AppTheme.decoration(
+            color: AppTheme.primaryRed.withOpacity(0.1),
+            borderRadius: AppTheme.getBorderRadius(all: AppTheme.borderRadiusLarge),
+          ),
+          child: Text(
+            exercise['workoutType'],
+            style: AppTheme.bodySmall.copyWith(
+              color: AppTheme.primaryRed,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   int _getTotalExerciseCount(Map<String, List<Map<String, dynamic>>> exerciseListByBodyPart) {
@@ -811,15 +1020,5 @@ class _PartDetailBottomSheetState extends State<PartDetailBottomSheet> {
         .fold(0, (sum, exercises) => sum + exercises.length);
   }
 
-  Widget _buildExerciseListTile(Map<String, dynamic> exercise) {
-    return ListTile(
-      title: Text(exercise['name']),
-      subtitle: Text(
-        'Set: ${exercise['defaultSets']}, '
-            'Tekrar: ${exercise['defaultReps']}, '
-            'Ağırlık: ${exercise['defaultWeight']}',
-      ),
-      trailing: Text(exercise['workoutType']),
-    );
-  }
+
 }

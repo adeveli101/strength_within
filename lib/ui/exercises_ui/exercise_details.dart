@@ -7,7 +7,10 @@ import '../../data_exercise_bloc/ExerciseRepository.dart';
 import '../../data_exercise_bloc/exercise_bloc.dart';
 import '../../data_provider/firebase_provider.dart';
 import '../../data_provider/sql_provider.dart';
+import '../../models/ExerciseTargetedBodyParts.dart';
 import '../../models/exercises.dart';
+import '../../utils/video_player.dart';
+import '../../z.app_theme/app_theme.dart';
 
 class ExerciseDetails extends StatefulWidget {
   final int exerciseId;
@@ -24,7 +27,9 @@ class ExerciseDetails extends StatefulWidget {
 }
 
 class _ExerciseDetailsState extends State<ExerciseDetails> {
+
   bool isCompleted = false;
+
   final TextEditingController _notesController = TextEditingController();
   final TextEditingController _weightController = TextEditingController();
   final TextEditingController _setsController = TextEditingController();
@@ -138,42 +143,13 @@ class _ExerciseDetailsState extends State<ExerciseDetails> {
     );
   }
 
-
   Widget _buildGifCard(Exercises exercise) {
-    return Card(
-      margin: const EdgeInsets.all(8),
-      child: Column(
-        children: [
-          AspectRatio(
-            aspectRatio: 16 / 9,
-            child: Image.network(
-              exercise.gifUrl!,
-              fit: BoxFit.cover,
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) return child;
-                return const Center(child: CircularProgressIndicator());
-              },
-            ),
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.replay_10),
-                onPressed: () {/* GIF kontrolleri */},
-              ),
-              IconButton(
-                icon: const Icon(Icons.play_arrow),
-                onPressed: () {/* GIF kontrolleri */},
-              ),
-              IconButton(
-                icon: const Icon(Icons.forward_10),
-                onPressed: () {/* GIF kontrolleri */},
-              ),
-            ],
-          ),
-        ],
-      ),
+    // Video URL'i exercise nesnesinden alınmalı
+    final videoUrl = exercise.gifUrl ?? '';
+
+    // VideoPlayerCard widget'ını kullan
+    return VideoPlayerCard(
+      videoUrl: videoUrl,
     );
   }
 
@@ -216,7 +192,6 @@ class _ExerciseDetailsState extends State<ExerciseDetails> {
     );
   }
 
-
   Widget _buildDetailsCard(Exercises exercise) {
     return Card(
       elevation: 4,
@@ -239,7 +214,6 @@ class _ExerciseDetailsState extends State<ExerciseDetails> {
       ),
     );
   }
-
 
   Widget _buildDescriptionCard(Exercises exercise) {
     if (exercise.description == null || exercise.description.isEmpty) {
@@ -276,7 +250,6 @@ class _ExerciseDetailsState extends State<ExerciseDetails> {
       ),
     );
   }
-
 
   Widget _buildHistoryCard() {
     return Card(
@@ -614,8 +587,6 @@ class _ExerciseDetailsState extends State<ExerciseDetails> {
     );
   }
 
-
-
   Widget _buildFloatingActionButton() {
     return FloatingActionButton.extended(
       onPressed: _showLogDialog,
@@ -623,6 +594,83 @@ class _ExerciseDetailsState extends State<ExerciseDetails> {
       label: const Text('Antrenman Kaydet'),
     );
   }
+
+  Widget _buildTargetedBodyPartsSection(List<ExerciseTargetedBodyParts> targets) {
+    return Card(
+      margin: EdgeInsets.all(AppTheme.paddingSmall),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: AppTheme.cardGradient,
+          borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
+        ),
+        padding: EdgeInsets.all(AppTheme.paddingMedium),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Hedef Bölgeler',
+              style: AppTheme.headingSmall,
+            ),
+            SizedBox(height: AppTheme.paddingSmall),
+            ListView.builder(
+              shrinkWrap: true,
+              physics: NeverScrollableScrollPhysics(),
+              itemCount: targets.length,
+              itemBuilder: (context, index) {
+                final target = targets[index];
+                return Container(
+                  decoration: BoxDecoration(
+                    gradient: AppTheme.createGradient(
+                      colors: [
+                        target.isPrimary
+                            ? AppTheme.primaryRed.withOpacity(AppTheme.primaryOpacity)
+                            : AppTheme.secondaryRed.withOpacity(AppTheme.secondaryOpacity),
+                        AppTheme.cardBackground.withOpacity(AppTheme.cardOpacity),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
+                  ),
+                  margin: EdgeInsets.symmetric(vertical: AppTheme.paddingSmall / 2),
+                  padding: EdgeInsets.all(AppTheme.paddingSmall),
+                  child: Row(
+                    children: [
+                      Icon(
+                        target.isPrimary ? Icons.local_fire_department : Icons.fitness_center,
+                        color: AppTheme.textPrimary,
+                        size: 20,
+                      ),
+                      SizedBox(width: AppTheme.paddingSmall),
+                      Expanded(
+                        child: FutureBuilder<String>(
+                          future: context.read<ExerciseRepository>().getBodyPartName(target.bodyPartId),
+                          builder: (context, snapshot) {
+                            return Text(
+                              snapshot.data ?? 'Yükleniyor...',
+                              style: AppTheme.bodyMedium,
+                            );
+                          },
+                        ),
+                      ),
+                      Container(
+                        width: 50,
+                        alignment: Alignment.center,
+                        child: Text(
+                          '${target.targetPercentage}%',
+                          style: AppTheme.bodySmall,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+
   @override
   void dispose() {
     _notesController.dispose();

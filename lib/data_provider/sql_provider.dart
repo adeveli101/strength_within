@@ -402,7 +402,7 @@ class SQLProvider {
     try {
       final List<Map<String, dynamic>> maps = await db.query(
         'exercises',
-        columns: ['id', 'name', 'description', 'defaultWeight', 'defaultSets', 'defaultReps', 'workoutTypeId', 'mainTargetedBodyPartId', 'gifUrl'], // Tüm gerekli alanları belirtin
+        columns: ['id', 'name', 'description', 'defaultWeight', 'defaultSets', 'defaultReps', 'workoutTypeId', 'gifUrl'], // Tüm gerekli alanları belirtin
         where: 'id IN (${List.filled(ids.length, '?').join(',')})',
         whereArgs: ids,
       );

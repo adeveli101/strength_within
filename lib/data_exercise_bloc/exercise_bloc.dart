@@ -88,7 +88,10 @@ class ExerciseBloc extends Bloc<ExerciseEvent, ExerciseState> {
     on<FetchExercisesByWorkoutType>(_onFetchExercisesByWorkoutType);
     on<UpdateExerciseCompletion>(_onUpdateExerciseCompletion);
     on<UpdateExerciseOrder>(_onUpdateExerciseOrder);
+
   }
+
+
 
   Future<void> _onFetchExercises(
       FetchExercises event,
@@ -142,8 +145,6 @@ class ExerciseBloc extends Bloc<ExerciseEvent, ExerciseState> {
     }
   }
 
-
-
   Future<void> _onUpdateExerciseCompletion(
       UpdateExerciseCompletion event,
       Emitter<ExerciseState> emit,
@@ -178,4 +179,6 @@ class ExerciseBloc extends Bloc<ExerciseEvent, ExerciseState> {
       emit(ExerciseError("Egzersiz sıralaması güncellenirken hata: $e"));
     }
   }
+
+
 }
