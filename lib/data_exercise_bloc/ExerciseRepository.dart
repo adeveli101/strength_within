@@ -30,6 +30,7 @@ class ExerciseRepository {
 
 
   final _bodyPartNamesCache = <int, String>{};
+  // ignore: unused_field
   final AppCache _cache = AppCache();
 
   // Tüm egzersizleri getir
