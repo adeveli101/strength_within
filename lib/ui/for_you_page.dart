@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:workout/data_schedule_bloc/schedule_repository.dart';
-import 'package:workout/ui/part_ui/part_card.dart';
-import 'package:workout/ui/part_ui/part_detail.dart';
-import 'package:workout/ui/routine_ui/routine_card.dart';
-import 'package:workout/ui/routine_ui/routine_detail.dart';
+
+import '../data_schedule_bloc/schedule_repository.dart';
+import '../ui/part_ui/part_card.dart';
+import '../ui/part_ui/part_detail.dart';
+import '../ui/routine_ui/routine_card.dart';
+import '../ui/routine_ui/routine_detail.dart';
 import '../ai_services/ai_bloc/ai_bloc.dart';
 import '../ai_services/ai_bloc/ai_state.dart';
 import '../blocs/for_you_bloc.dart';

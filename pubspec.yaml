@@ -1,4 +1,4 @@
-name: workout
+name: strength_within
 description: "workout planner app."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -34,6 +34,8 @@ dependencies:
   android_intent_plus: ^5.2.0
   built_value: ^8.9.2
 
+  import_converter: ^1.0.0+2
+
   confetti: ^0.8.0
   connectivity_plus: ^6.1.0
   cupertino_icons: ^1.0.8
@@ -44,12 +46,12 @@ dependencies:
   clock: ^1.1.1
   dio: ^5.7.0
   date_time_plus: ^7.2.0
-  device_info_plus: ^11.1.1
+  device_info_plus: 11.2.0
   extension: ^0.6.0
   faker: ^2.2.0
   firebase_app_check: ^0.3.1+7
   firebase_auth: ^5.3.4
-  firebase_core: ^3.8.0
+  firebase_core: ^3.8.1
   firebase_database: ^11.2.0
   firebase_ui_database: ^1.5.0
   firebase_ui_firestore: ^1.7.0
@@ -75,7 +77,7 @@ dependencies:
   keyboard_actions: ^4.2.0
   intl: ^0.19.0
   lints: ^5.0.0
-  package_info_plus: ^8.1.1
+  package_info_plus: 8.1.2
   path: ^1.9.0
   path_provider: ^2.1.5
   percent_indicator: ^4.2.4
@@ -87,8 +89,8 @@ dependencies:
   sqflite: ^2.4.1
   sqlite3_flutter_libs: ^0.5.27
   sqlite3: ^2.5.0
-  syncfusion_flutter_charts: ^27.2.5
-  share_plus: ^10.1.2
+  syncfusion_flutter_charts: 28.1.33
+  share_plus: 10.1.3
   url_launcher: ^6.3.1
   uuid: ^4.5.1
   web: ^1.1.0
@@ -144,9 +146,8 @@ flutter_native_splash:
 
 flutter_launcher_icons:
   android: true
-  image_path: "assets/logo_rect.png"
+  image_path: "assets/logo_circle.png"
 
-dev_dependencies:
 
 
 
@@ -211,3 +212,4 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+dev_dependencies:

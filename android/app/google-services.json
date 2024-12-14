@@ -3,7 +3,7 @@
     "project_number": "1052673662871",
     "firebase_url": "https://workout-568b8-default-rtdb.europe-west1.firebasedatabase.app",
     "project_id": "workout-568b8",
-    "storage_bucket": "workout-568b8.appspot.com"
+    "storage_bucket": "workout-568b8.firebasestorage.app"
   },
   "client": [
     {

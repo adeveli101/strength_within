@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:workout/models/routines.dart';
-import 'package:workout/models/Parts.dart';
+import 'package:strength_within/models/routines.dart';
+import 'package:strength_within/models/Parts.dart';
 import '../../data_bloc_part/part_bloc.dart';
 import '../../data_bloc_routine/routines_bloc.dart';
 import '../ai_bloc/ai_bloc.dart';

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
-import 'package:workout/ui/routine_ui/routine_detail.dart';
+import 'package:strength_within/ui/routine_ui/routine_detail.dart';
 import 'package:logging/logging.dart';
-import 'package:workout/data_bloc_routine/routines_bloc.dart';
+import 'package:strength_within/data_bloc_routine/routines_bloc.dart';
 import '../../models/routines.dart';
 import '../../models/WorkoutType.dart';
 import '../routine_ui/routine_card.dart';

@@ -7,7 +7,7 @@ library;
 class LibRes {
   LibRes._();
 
-  static const String PLUGIN_NAME = 'workout';
+  static const String PLUGIN_NAME = 'strength_within';
   static const String PLUGIN_VERSION = '1.0.0+1';
   static const String ASSETS = 'lib/generated/assets.dart';
 }

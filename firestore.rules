@@ -1,9 +1,33 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAnonymous() {
+      return request.auth.token.firebase.sign_in_provider == 'anonymous';
+    }
+
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if isSignedIn();
+    }
+
+    match /users/{userId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    match /exercises/{exerciseId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /routines/{routineId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /parts/{partId} {
+      allow read, write: if isSignedIn();
     }
   }
 }

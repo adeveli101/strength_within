@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:weather_icons/weather_icons.dart';
-import 'package:workout/ui/part_ui/part_detail.dart';
+import 'package:strength_within/ui/part_ui/part_detail.dart';
 import '../../data_bloc_part/PartRepository.dart';
 import '../../data_bloc_part/part_bloc.dart';
 import '../../data_schedule_bloc/schedule_bloc.dart';

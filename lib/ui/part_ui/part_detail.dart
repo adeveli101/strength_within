@@ -4,9 +4,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:workout/data_bloc_part/part_bloc.dart';
-import 'package:workout/models/Parts.dart';
-import 'package:workout/ui/part_ui/part_card.dart';
+import 'package:strength_within/data_bloc_part/part_bloc.dart';
+import 'package:strength_within/models/Parts.dart';
+import 'package:strength_within/ui/part_ui/part_card.dart';
 import 'package:logging/logging.dart';
 
 import '../../data_schedule_bloc/schedule_bloc.dart';
