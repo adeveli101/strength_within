@@ -3,9 +3,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
-import 'package:workout/ui/part_ui/part_detail.dart';
+import 'package:strength_within/ui/part_ui/part_detail.dart';
 import 'package:logging/logging.dart';
-import 'package:workout/data_bloc_part/part_bloc.dart';
+import 'package:strength_within/data_bloc_part/part_bloc.dart';
 import '../../data_bloc_part/PartRepository.dart';
 import '../../models/BodyPart.dart';
 import '../../models/Parts.dart';

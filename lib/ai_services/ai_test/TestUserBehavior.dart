@@ -1,7 +1,7 @@
 import 'dart:math';
-import 'package:workout/models/routines.dart';
-import 'package:workout/models/Parts.dart';
-import 'package:workout/ai_services/ai_test/test_user.dart';
+import 'package:strength_within/models/routines.dart';
+import 'package:strength_within/models/Parts.dart';
+import 'package:strength_within/ai_services/ai_test/test_user.dart';
 
 class TestUserBehavior {
   final TestUser user;

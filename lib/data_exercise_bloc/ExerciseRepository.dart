@@ -1,6 +1,6 @@
 import 'package:logging/logging.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:workout/models/ExerciseTargetedBodyParts.dart';
+import 'package:strength_within/models/ExerciseTargetedBodyParts.dart';
 import '../data_provider/firebase_provider.dart';
 import '../data_provider/sql_provider.dart';
 import '../data_provider_cache/app_cache.dart';

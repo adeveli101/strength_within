@@ -2,7 +2,7 @@
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:logging/logging.dart';
-import 'package:workout/data_schedule_bloc/schedule_repository.dart';
+import 'package:strength_within/data_schedule_bloc/schedule_repository.dart';
 
 import '../firebase_class/user_schedule.dart';
 

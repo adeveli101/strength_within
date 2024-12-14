@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:workout/ui/list_pages/program_merger/program_details.dart';
+import 'package:strength_within/ui/list_pages/program_merger/program_details.dart';
 
 import '../../../data_bloc_part/PartRepository.dart';
 import '../../../data_bloc_part/part_bloc.dart';

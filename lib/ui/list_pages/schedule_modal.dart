@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:logging/logging.dart';
-import 'package:workout/ui/exercises_ui/exercise_details.dart';
+import 'package:strength_within/ui/exercises_ui/exercise_details.dart';
 import '../../data_schedule_bloc/schedule_bloc.dart';
 import '../../z.app_theme/app_theme.dart';
 

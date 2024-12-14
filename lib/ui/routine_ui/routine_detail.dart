@@ -5,9 +5,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get/get.dart';
 import 'package:get/get_navigation/src/root/root_controller.dart';
 import 'package:logging/logging.dart';
-import 'package:workout/data_bloc_routine/routines_bloc.dart';
-import 'package:workout/models/routines.dart';
-import 'package:workout/ui/routine_ui/routine_card.dart';
+import 'package:strength_within/data_bloc_routine/routines_bloc.dart';
+import 'package:strength_within/models/routines.dart';
+import 'package:strength_within/ui/routine_ui/routine_card.dart';
 
 import '../../data_schedule_bloc/schedule_bloc.dart';
 import '../../models/RoutinetargetedBodyParts.dart';

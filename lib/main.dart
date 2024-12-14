@@ -8,17 +8,17 @@ import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get/get.dart';
 import 'package:responsive_framework/responsive_framework.dart';
-import 'package:workout/generated/assets.dart';
-import 'package:workout/ui/home_page.dart';
-import 'package:workout/ui/for_you_page.dart';
-import 'package:workout/data_provider/firebase_provider.dart';
-import 'package:workout/data_provider/sql_provider.dart';
-import 'package:workout/ui/library.dart';
-import 'package:workout/ui/list_pages/program_merger/program_merger_page.dart';
-import 'package:workout/ui/setting_pages.dart';
-import 'package:workout/z.app_theme/app_theme.dart';
-import 'package:workout/z.app_theme/circular_logo.dart';
-import 'package:workout/z.app_theme/splash_screen.dart';
+import 'package:strength_within/generated/assets.dart';
+import 'package:strength_within/ui/home_page.dart';
+import 'package:strength_within/ui/for_you_page.dart';
+import 'package:strength_within/data_provider/firebase_provider.dart';
+import 'package:strength_within/data_provider/sql_provider.dart';
+import 'package:strength_within/ui/library.dart';
+import 'package:strength_within/ui/list_pages/program_merger/program_merger_page.dart';
+import 'package:strength_within/ui/setting_pages.dart';
+import 'package:strength_within/z.app_theme/app_theme.dart';
+import 'package:strength_within/z.app_theme/circular_logo.dart';
+import 'package:strength_within/z.app_theme/splash_screen.dart';
 import 'ai_services/ai_bloc/ai_bloc.dart';
 import 'blocs/for_you_bloc.dart';
 import 'data_bloc_part/PartRepository.dart';
@@ -33,16 +33,24 @@ import 'package:logging/logging.dart';
 
 final _logger = Logger('Main');
 
-Future<void> main() async {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Firebase initialization first
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-  await FirebaseAppCheck.instance.activate(
-    androidProvider: AndroidProvider.playIntegrity,
-  );
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    // Firebase zaten başlatılmışsa hata fırlatmayı engelle
+    if (e.toString().contains('duplicate-app')) {
+      debugPrint('Firebase already initialized');
+    } else {
+      rethrow;
+    }
+  }
+
+
+
 
 
   // Show splash screen immediately

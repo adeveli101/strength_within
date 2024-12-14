@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:workout/data_schedule_bloc/schedule_repository.dart';
+import 'package:strength_within/data_schedule_bloc/schedule_repository.dart';
 import '../data_bloc_part/PartRepository.dart';
 import '../data_bloc_part/part_bloc.dart';
 import '../data_bloc_routine/RoutineRepository.dart';

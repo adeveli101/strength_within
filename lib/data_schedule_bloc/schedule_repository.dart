@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:logging/logging.dart';
-import 'package:workout/models/RoutineExercises.dart';
+import 'package:strength_within/models/RoutineExercises.dart';
 
 import '../data_provider/firebase_provider.dart';
 import '../data_provider/sql_provider.dart';

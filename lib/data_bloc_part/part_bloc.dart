@@ -4,7 +4,7 @@ import 'package:collection/collection.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
-import 'package:workout/data_schedule_bloc/schedule_repository.dart';
+import 'package:strength_within/data_schedule_bloc/schedule_repository.dart';
 import '../models/PartTargetedBodyParts.dart';
 import '../models/Parts.dart';
 import '../models/part_frequency.dart';
