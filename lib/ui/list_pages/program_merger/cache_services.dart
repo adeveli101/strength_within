@@ -3,8 +3,10 @@
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 
-import '../../../models/Parts.dart';
-import '../../../models/exercises.dart';
+import '../../../models/sql_models/Parts.dart';
+import '../../../models/sql_models/exercises.dart';
+
+
 
 
 class CacheService {

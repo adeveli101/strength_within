@@ -11,23 +11,22 @@ import 'package:responsive_framework/responsive_framework.dart';
 import 'package:strength_within/generated/assets.dart';
 import 'package:strength_within/ui/home_page.dart';
 import 'package:strength_within/ui/for_you_page.dart';
-import 'package:strength_within/data_provider/firebase_provider.dart';
-import 'package:strength_within/data_provider/sql_provider.dart';
 import 'package:strength_within/ui/library.dart';
 import 'package:strength_within/ui/list_pages/program_merger/program_merger_page.dart';
 import 'package:strength_within/ui/setting_pages.dart';
 import 'package:strength_within/z.app_theme/app_theme.dart';
 import 'package:strength_within/z.app_theme/circular_logo.dart';
 import 'package:strength_within/z.app_theme/splash_screen.dart';
-import 'ai_services/ai_bloc/ai_bloc.dart';
+import 'blocs/data_bloc_part/PartRepository.dart';
+import 'blocs/data_bloc_part/part_bloc.dart';
+import 'blocs/data_bloc_routine/RoutineRepository.dart';
+import 'blocs/data_bloc_routine/routines_bloc.dart';
+import 'blocs/data_exercise_bloc/ExerciseRepository.dart';
+import 'blocs/data_provider/firebase_provider.dart';
+import 'blocs/data_provider/sql_provider.dart';
+import 'blocs/data_schedule_bloc/schedule_bloc.dart';
+import 'blocs/data_schedule_bloc/schedule_repository.dart';
 import 'blocs/for_you_bloc.dart';
-import 'data_bloc_part/PartRepository.dart';
-import 'data_bloc_part/part_bloc.dart';
-import 'data_bloc_routine/RoutineRepository.dart';
-import 'data_bloc_routine/routines_bloc.dart';
-import 'data_exercise_bloc/ExerciseRepository.dart';
-import 'data_schedule_bloc/schedule_bloc.dart';
-import 'data_schedule_bloc/schedule_repository.dart';
 import 'firebase_options.dart';
 import 'package:logging/logging.dart';
 
@@ -114,7 +113,6 @@ void main() async {
                         userId: userId,
                       ),
                     ),
-                    BlocProvider(create: (context) => AIBloc()),
                   ],
                   child: App(userId: userId),
                 ),

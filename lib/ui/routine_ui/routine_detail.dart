@@ -5,13 +5,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get/get.dart';
 import 'package:get/get_navigation/src/root/root_controller.dart';
 import 'package:logging/logging.dart';
-import 'package:strength_within/data_bloc_routine/routines_bloc.dart';
-import 'package:strength_within/models/routines.dart';
 import 'package:strength_within/ui/routine_ui/routine_card.dart';
-
-import '../../data_schedule_bloc/schedule_bloc.dart';
-import '../../models/RoutinetargetedBodyParts.dart';
-import '../../models/exercises.dart';
+import '../../blocs/data_bloc_routine/routines_bloc.dart';
+import '../../blocs/data_schedule_bloc/schedule_bloc.dart';
+import '../../models/sql_models/routines.dart';
 import '../../z.app_theme/app_theme.dart';
 import '../exercises_ui/exercise_card.dart';
 import '../exercises_ui/exercise_details.dart';

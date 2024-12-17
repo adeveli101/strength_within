@@ -22,6 +22,7 @@ analyzer:
       invalid_annotation_target: ignore
       non_constant_identifier_names: ignore
       prefer_const_constructors: ignore
+      dangling_library_doc_comments: ignore
 
 include: package:flutter_lints/flutter.yaml
 

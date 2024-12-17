@@ -2,9 +2,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../data_bloc_routine/routines_bloc.dart';
-import '../../data_schedule_bloc/schedule_bloc.dart';
-import '../../models/routines.dart';
+import '../../blocs/data_bloc_routine/routines_bloc.dart';
+import '../../blocs/data_schedule_bloc/schedule_bloc.dart';
+import '../../models/sql_models/routines.dart';
 
 class RoutineCard extends StatefulWidget {
   final Routines routine;

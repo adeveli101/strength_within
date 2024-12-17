@@ -3,16 +3,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:strength_within/ui/list_pages/program_merger/program_details.dart';
-
-import '../../../data_bloc_part/PartRepository.dart';
-import '../../../data_bloc_part/part_bloc.dart';
-import '../../../data_schedule_bloc/schedule_repository.dart';
-import '../../../models/BodyPart.dart';
-import '../../../models/PartExercises.dart';
-import '../../../models/PartTargetedBodyParts.dart';
-import '../../../models/Parts.dart';
-import '../../../models/exercises.dart';
-import '../../../models/part_frequency.dart';
+import '../../../blocs/data_bloc_part/PartRepository.dart';
+import '../../../blocs/data_bloc_part/part_bloc.dart';
+import '../../../blocs/data_schedule_bloc/schedule_repository.dart';
+import '../../../models/sql_models/PartExercises.dart';
+import '../../../models/sql_models/PartTargetedBodyParts.dart';
+import '../../../models/sql_models/Parts.dart';
+import '../../../models/sql_models/exercises.dart';
 import '../../components/program_merger.dart';
 import '../../part_ui/part_card.dart';
 

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import '../models/BodyPart.dart';
-import '../models/PartTargetedBodyParts.dart';
-import '../models/WorkoutType.dart';
-import '../models/Parts.dart';
+
+import '../models/sql_models/BodyPart.dart';
+import '../models/sql_models/PartTargetedBodyParts.dart';
+import '../models/sql_models/WorkoutType.dart';
+
 final Map<int, String> _cache = {};
 extension StringExtension on String {
   String capitalize() {
