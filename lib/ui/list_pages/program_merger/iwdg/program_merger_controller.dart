@@ -1,11 +1,11 @@
 // program_merger_controller.dart
-
 // ignore_for_file: unused_field
 
 import 'package:flutter/material.dart';
-import '../../../../data_bloc_part/PartRepository.dart';
-import '../../../../data_schedule_bloc/schedule_repository.dart';
-import '../../../../models/Parts.dart';
+import '../../../../blocs/data_bloc_part/PartRepository.dart';
+import '../../../../blocs/data_schedule_bloc/schedule_repository.dart';
+
+import '../../../../models/sql_models/Parts.dart';
 
 class ProgramMergerController extends ChangeNotifier {
   final PartRepository _partRepository;

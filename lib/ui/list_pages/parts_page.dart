@@ -5,10 +5,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:strength_within/ui/part_ui/part_detail.dart';
 import 'package:logging/logging.dart';
-import 'package:strength_within/data_bloc_part/part_bloc.dart';
-import '../../data_bloc_part/PartRepository.dart';
-import '../../models/BodyPart.dart';
-import '../../models/Parts.dart';
+
+import '../../blocs/data_bloc_part/PartRepository.dart';
+import '../../blocs/data_bloc_part/part_bloc.dart';
+import '../../models/sql_models/Parts.dart';
 import '../part_ui/part_card.dart';
 
 class PartsPage extends StatefulWidget {

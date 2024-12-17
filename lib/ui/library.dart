@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:strength_within/data_schedule_bloc/schedule_repository.dart';
-import '../data_bloc_part/PartRepository.dart';
-import '../data_bloc_part/part_bloc.dart';
-import '../data_bloc_routine/RoutineRepository.dart';
-import '../data_bloc_routine/routines_bloc.dart';
-import '../models/Parts.dart';
-import '../models/routines.dart';
-import '../models/BodyPart.dart';
+import 'package:strength_within/blocs/data_bloc_part/PartRepository.dart';
+import 'package:strength_within/blocs/data_bloc_routine/RoutineRepository.dart';
+
+import '../blocs/data_bloc_part/part_bloc.dart';
+import '../blocs/data_bloc_routine/routines_bloc.dart';
+import '../blocs/data_schedule_bloc/schedule_repository.dart';
+import '../models/sql_models/Parts.dart';
+import '../models/sql_models/routines.dart';
 import '../z.app_theme/app_theme.dart';
 
 class LibraryPage extends StatelessWidget {

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:animated_text_kit/animated_text_kit.dart';
-import '../data_provider/firebase_provider.dart';
-import '../data_provider/sql_provider.dart';
+import '../blocs/data_provider/firebase_provider.dart';
+import '../blocs/data_provider/sql_provider.dart';
 import 'app_theme.dart';
 
 class SplashScreen extends StatefulWidget {

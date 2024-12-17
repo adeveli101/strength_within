@@ -1,14 +1,13 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
-import 'package:strength_within/data_schedule_bloc/schedule_repository.dart';
-import '../ai_services/ai_service_provider.dart';
-import '../data_bloc_part/PartRepository.dart';
-import '../data_bloc_routine/RoutineRepository.dart';
-import '../models/Parts.dart';
-import '../models/routines.dart';
+import '../../utils/routine_helpers.dart';
 import 'package:logging/logging.dart';
 
-import '../utils/routine_helpers.dart';
+import '../models/sql_models/Parts.dart';
+import '../models/sql_models/routines.dart';
+import 'data_bloc_part/PartRepository.dart';
+import 'data_bloc_routine/RoutineRepository.dart';
+import 'data_schedule_bloc/schedule_repository.dart';
 
 // Events
 abstract class ForYouEvent extends Equatable {
@@ -94,93 +93,14 @@ class ForYouBloc extends Bloc<ForYouEvent, ForYouState> {
     required String userId,
     this.isTestMode = false, required ScheduleRepository scheduleRepository,
   }) : super(ForYouInitial(userId: userId)) {
-    on<FetchForYouData>(_onFetchForYouData);
     on<AcceptWeeklyChallenge>(_onAcceptWeeklyChallenge);
   }
 
-  Future<void> _onFetchForYouData(FetchForYouData event,
-      Emitter<ForYouState> emit) async {
-    emit(ForYouLoading(userId: event.userId));
-    try {
-      if (isTestMode) {
-        // Test verileri oluştur
-        emit(ForYouLoaded(
-          userId: event.userId,
-          recommendedRoutines: _generateTestRoutines(),
-          recommendedParts: _generateTestParts(),
-          weeklyChallenge: _selectWeeklyChallenge(_generateTestRoutines()),
-        ));
-      } else {
-        // Mevcut gerçek veri yükleme mantığı
-        final parts = await partRepository.getPartsWithUserData(event.userId);
-        final routines = await routineRepository.getRoutinesWithUserData(
-            event.userId);
-
-        emit(ForYouLoaded(
-          userId: event.userId,
-          recommendedRoutines: await _getRecommendedRoutines(routines),
-          recommendedParts: await _getRecommendedParts(parts),
-          weeklyChallenge: _selectWeeklyChallenge(routines),
-        ));
-      }
-    } catch (e, stackTrace) {
-      _logger.severe('Error fetching for you data', e, stackTrace);
-      emit(ForYouError(userId: event.userId,
-          message: 'Veri yükleme hatası: ${e.runtimeType} - ${e.toString()}'));
-    }
-  }
-
-  List<Routines> _generateTestRoutines() {
-    return List.generate(5, (index) =>
-        Routines(
-          id: index + 1,
-          name: 'Test Routine ${index + 1}',
-          description: 'This is a test routine',
-          workoutTypeId: (index % 2) + 1,
-          difficulty: (index % 5) + 1,
-          userProgress: (index * 20) % 100,
-        ));
-  }
-
-  List<Parts> _generateTestParts() {
-    return List.generate(5, (index) =>
-        Parts(
-          id: index + 1,
-          name: 'Test Part ${index + 1}',
-
-          setType: SetType.values[index % SetType.values.length],
-          exerciseIds: [1, 2, 3],
-          additionalNotes: 'Test notes',
-          difficulty: (index % 5) + 1,
-          userProgress: (index * 20) % 100, targetedBodyPartIds: [],
-        ));
-  }
 
 
 // Önerilen rutinleri almak için güncellenmiş metodlar
-  Future<List<Routines>> _getRecommendedRoutines(
-      List<Routines> routines) async {
-    if (routines.isEmpty) return [];
 
-    try {
-      return await AIServiceProvider.getOptimizedRoutineRecommendations(
-          routines);
-    } catch (e) {
-      _logger.warning('AI recommendation failed, using fallback method', e);
-      return _fallbackRecommendedRoutines(routines);
-    }
-  }
 
-  Future<List<Parts>> _getRecommendedParts(List<Parts> parts) async {
-    if (parts.isEmpty) return [];
-
-    try {
-      return await AIServiceProvider.getOptimizedPartRecommendations(parts);
-    } catch (e) {
-      _logger.warning('AI recommendation failed, using fallback method', e);
-      return _fallbackRecommendedParts(parts);
-    }
-  }
 
   List<Routines> _fallbackRecommendedRoutines(List<Routines> routines) {
     return routines.where((r) => r.userProgress != null && r.userProgress! > 0)

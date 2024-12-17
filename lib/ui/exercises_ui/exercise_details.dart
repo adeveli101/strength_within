@@ -3,12 +3,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../data_exercise_bloc/ExerciseRepository.dart';
-import '../../data_exercise_bloc/exercise_bloc.dart';
-import '../../data_provider/firebase_provider.dart';
-import '../../data_provider/sql_provider.dart';
-import '../../models/ExerciseTargetedBodyParts.dart';
-import '../../models/exercises.dart';
+import '../../blocs/data_exercise_bloc/ExerciseRepository.dart';
+import '../../blocs/data_exercise_bloc/exercise_bloc.dart';
+import '../../blocs/data_provider/firebase_provider.dart';
+import '../../blocs/data_provider/sql_provider.dart';
+import '../../models/sql_models/ExerciseTargetedBodyParts.dart';
+import '../../models/sql_models/exercises.dart';
 import '../../utils/video_player.dart';
 import '../../z.app_theme/app_theme.dart';
 

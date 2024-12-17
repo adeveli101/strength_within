@@ -3,9 +3,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:strength_within/ui/routine_ui/routine_detail.dart';
 import 'package:logging/logging.dart';
-import 'package:strength_within/data_bloc_routine/routines_bloc.dart';
-import '../../models/routines.dart';
-import '../../models/WorkoutType.dart';
+import '../../blocs/data_bloc_routine/routines_bloc.dart';
+import '../../models/sql_models/routines.dart';
 import '../routine_ui/routine_card.dart';
 
 class RoutinesPage extends StatefulWidget {

@@ -111,6 +111,8 @@ dependencies:
   equatable: ^2.0.7
   crypto: ^3.0.6
   mockito: ^5.4.4
+  csv: ^5.1.1
+
 
   icon: ^2.2.1
   animated_text_kit: ^4.2.2

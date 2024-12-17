@@ -1,24 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../data_schedule_bloc/schedule_repository.dart';
+
+import '../blocs/data_bloc_part/PartRepository.dart';
+import '../blocs/data_bloc_part/part_bloc.dart';
+import '../blocs/data_bloc_routine/RoutineRepository.dart';
+import '../blocs/data_provider/firebase_provider.dart';
+import '../blocs/data_provider/sql_provider.dart';
+import '../blocs/data_schedule_bloc/schedule_repository.dart';
+import '../models/sql_models/Parts.dart';
+import '../models/sql_models/routines.dart';
 import '../ui/part_ui/part_card.dart';
 import '../ui/part_ui/part_detail.dart';
 import '../ui/routine_ui/routine_card.dart';
 import '../ui/routine_ui/routine_detail.dart';
-import '../ai_services/ai_bloc/ai_bloc.dart';
-import '../ai_services/ai_bloc/ai_state.dart';
 import '../blocs/for_you_bloc.dart';
-import '../data_bloc_part/PartRepository.dart';
-import '../data_bloc_part/part_bloc.dart';
-import '../data_bloc_routine/RoutineRepository.dart';
-import '../data_provider/firebase_provider.dart';
-import '../data_provider/sql_provider.dart';
-import '../models/Parts.dart';
-import '../models/routines.dart';
 import '../z.app_theme/app_theme.dart';
 import 'list_pages/parts_page.dart';
 import 'list_pages/routines_page.dart';
+
 
 class ForYouPage extends StatefulWidget {
   final String userId;
@@ -46,9 +46,7 @@ class _ForYouPageState extends State<ForYouPage> {
             isTestMode: isTestMode, scheduleRepository: ScheduleRepository(firebaseProvider, sqlProvider),
           )..add(FetchForYouData(userId: widget.userId)),
         ),
-        BlocProvider(
-          create: (context) => AIBloc(),
-        ),
+
       ],
       child: Scaffold(
         appBar: AppBar(
@@ -80,54 +78,7 @@ class _ForYouPageState extends State<ForYouPage> {
                 padding: EdgeInsets.all(8),
                 child: Text('TEST MODU', style: TextStyle(fontWeight: FontWeight.bold)),
               ),
-            Expanded(
-              child: BlocListener<AIBloc, AIState>(
-                listener: (context, aiState) {
-                  if (aiState is AIError) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(aiState.message)),
-                    );
-                  }
-                },
-                child: BlocConsumer<ForYouBloc, ForYouState>(
-                  listener: (context, state) {
-                    if (state is ForYouError) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(state.message)),
-                      );
-                    }
-                  },
-                  builder: (context, state) {
-                    if (state is ForYouLoading) {
-                      return const Center(child: CircularProgressIndicator());
-                    } else if (state is ForYouLoaded) {
-                      return RefreshIndicator(
-                        onRefresh: () async {
-                          context.read<ForYouBloc>().add(
-                            FetchForYouData(userId: widget.userId),
-                          );
-                        },
-                        child: ListView(
-                          children: [
-                            if (state.weeklyChallenge != null)
-                              _buildWeeklyChallenge(
-                                state.weeklyChallenge!,
-                                state.hasAcceptedChallenge,
-                                context,
-                              ),
-                            _buildRecommendations(context, state),
-                          ],
-                        ),
-                      );
-                    } else {
-                      return const Center(
-                        child: Text('Veriler yüklenirken bir hata oluştu'),
-                      );
-                    }
-                  },
-                ),
-              ),
-            ),
+
           ],
         ),
       ),

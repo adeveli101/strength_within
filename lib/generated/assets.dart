@@ -20,9 +20,8 @@ class Assets {
   static const String assetsLogoRect = 'assets/logo_rect.png';
   static const String assetsLogoSixtangle = 'assets/logo_sixtangle.png';
   static const String assetsShoulderModified = 'assets/shoulder-modified.png';
-  static const String databaseDbWorkout = 'database/db_workout.db';
+  static const String databaseDataset1 = 'database/dataset_1.db';
   static const String databaseEsek = 'database/esek.db';
-  static const String databaseNewDB = 'database/newDB.db';
   static const String debugAndroidManifest = 'android/app/src/debug/AndroidManifest.xml';
   static const String drawableBackground = 'android/app/src/main/res/drawable/background.png';
   static const String drawableHdpiAndroid12splash = 'android/app/src/main/res/drawable-hdpi/android12splash.png';
@@ -83,6 +82,9 @@ class Assets {
   static const String resMipmapXxhdpiIcLauncher = 'android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png';
   static const String resMipmapXxxhdpiIcLauncher = 'android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png';
   static const String resValuesStyles = 'android/app/src/main/res/values/styles.xml';
+  static const String strengthWithinAndroidGradlew = 'android/gradlew.bat';
+  static const String strengthWithinDatabaseEsek = 'database/esek.sqbpro';
+  static const String strengthWithinPubspec = 'pubspec.yaml';
   static const String valuesColor = 'android/app/src/res/values/color.xml';
   static const String valuesColors = 'android/app/src/main/res/values/colors.xml';
   static const String valuesNightColors = 'android/app/src/main/res/values-night/colors.xml';
@@ -94,10 +96,7 @@ class Assets {
   static const String valuesV27Styles = 'android/app/src/main/res/values-v27/styles.xml';
   static const String valuesV29Styles = 'android/app/src/main/res/values-v29/styles.xml';
   static const String valuesV31Styles = 'android/app/src/main/res/values-v31/styles.xml';
-  static const String workoutAndroidGradlew = 'android/gradlew.bat';
-  static const String workoutDatabaseEsek = 'database/esek.sqbpro';
   static const String workoutMainActivity = 'android/app/src/main/kotlin/com/example/workout/MainActivity.kt';
-  static const String workoutPubspec = 'pubspec.yaml';
   static const String wrapperGradleWrapper = 'android/gradle/wrapper/gradle-wrapper.jar';
 
 }

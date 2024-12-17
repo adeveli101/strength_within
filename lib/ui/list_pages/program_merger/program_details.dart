@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-
-import '../../../data_exercise_bloc/exercise_bloc.dart';
-import '../../../data_schedule_bloc/schedule_bloc.dart';
-import '../../../models/PartExercises.dart';
+import '../../../blocs/data_exercise_bloc/exercise_bloc.dart';
+import '../../../blocs/data_schedule_bloc/schedule_bloc.dart';
+import '../../../models/sql_models/PartExercises.dart';
 import '../../components/program_merger.dart';
 
 class ProgramDetailPage extends StatelessWidget {

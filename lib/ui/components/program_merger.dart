@@ -1,17 +1,16 @@
 // program_merger_service.dart
 import 'dart:math';
-
 import 'package:logging/logging.dart';
-import '../../data_bloc_part/PartRepository.dart';
-import '../../data_schedule_bloc/schedule_repository.dart';
-import '../../firebase_class/user_schedule.dart';
-import '../../models/PartExercises.dart';
-import '../../models/PartTargetedBodyParts.dart';
-import '../../models/Parts.dart';
-import '../../models/exercises.dart';
+import '../../blocs/data_bloc_part/PartRepository.dart';
+import '../../blocs/data_schedule_bloc/schedule_repository.dart';
 import 'dart:math' as math;
 
-import '../../models/part_frequency.dart';
+import '../../models/firebase_models/user_schedule.dart';
+import '../../models/sql_models/PartExercises.dart';
+import '../../models/sql_models/PartTargetedBodyParts.dart';
+import '../../models/sql_models/Parts.dart';
+import '../../models/sql_models/part_frequency.dart';
+
 
 enum MergeType {
   sequential,  // Sıralı program

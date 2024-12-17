@@ -2,7 +2,7 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import '../../models/exercises.dart';
+import '../../models/sql_models/exercises.dart';
 import '../../z.app_theme/app_theme.dart';
 import 'exercise_details.dart';
 

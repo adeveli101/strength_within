@@ -4,15 +4,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:strength_within/data_bloc_part/part_bloc.dart';
-import 'package:strength_within/models/Parts.dart';
 import 'package:strength_within/ui/part_ui/part_card.dart';
 import 'package:logging/logging.dart';
-
-import '../../data_schedule_bloc/schedule_bloc.dart';
-import '../../data_schedule_bloc/schedule_repository.dart';
-import '../../firebase_class/user_schedule.dart';
-import '../../models/exercises.dart';
+import '../../blocs/data_bloc_part/part_bloc.dart';
+import '../../blocs/data_schedule_bloc/schedule_bloc.dart';
+import '../../blocs/data_schedule_bloc/schedule_repository.dart';
+import '../../models/sql_models/Parts.dart';
+import '../../models/sql_models/exercises.dart';
 import '../../z.app_theme/app_theme.dart';
 import '../exercises_ui/exercise_card.dart';
 import '../exercises_ui/exercise_details.dart';
