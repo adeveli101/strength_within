@@ -40,7 +40,7 @@ void main() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
   } catch (e) {
-    // Firebase zaten başlatılmışsa hata fırlatmayı engelle
+    // Firebase zaten başlatılmışsa
     if (e.toString().contains('duplicate-app')) {
       debugPrint('Firebase already initialized');
     } else {

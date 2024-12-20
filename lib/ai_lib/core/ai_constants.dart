@@ -23,6 +23,20 @@ class AIConstants {
   static const int MIN_AGE = 16;
   static const int MAX_AGE = 80;
 
+
+
+  // Öneri sistemi sabitleri
+  static const int KNN_NEIGHBORS_COUNT = 5;
+  static const int COLLAB_RECOMMENDATIONS_COUNT = 5;
+
+  // Minimum metrik değerleri
+  static const double MIN_ACCURACY = 0.85;
+  static const double MIN_PRECISION = 0.80;
+  static const double MIN_RECALL = 0.80;
+  static const double MIN_F1_SCORE = 0.82;
+
+
+
   /// Model değerlendirme metrikleri için minimum kabul edilebilir değerler
   static const Map<String, double> MINIMUM_METRICS = {
     'accuracy': 0.85,
