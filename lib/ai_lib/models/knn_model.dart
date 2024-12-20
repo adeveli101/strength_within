@@ -1,5 +1,6 @@
 import 'dart:math' show max, sqrt, pow;
 import 'package:logging/logging.dart';
+import '../ai_data_bloc/ai_repository.dart';
 import '../core/ai_constants.dart';
 import '../core/ai_exceptions.dart';
 import '../core/ai_data_processor.dart';
@@ -74,6 +75,352 @@ class KNNModel extends BaseModel {
     'recall': [],
     'f1_score': [],
   };
+
+
+  // _performanceHistory'de eksik olabilecek metrikleri ekleyelim
+  final Map<String, List<double>> _performanceHistory = {
+    'inference_time': [],
+    'similarity_calculation_time': [],
+    'recommendation_generation_time': [],
+    'fit_analysis_time': [],      // Eklendi
+    'progress_analysis_time': [],  // Eklendi
+  };
+
+  @override
+  Future<Map<String, dynamic>> analyzeFit(
+      int programId,
+      UserProfile profile
+      ) async {
+
+
+    try {
+
+      if (_modelState != KNNModelState.trained) {
+        throw AIModelException('Model is not trained for analysis');
+      }
+      final startTime = DateTime.now();
+      // Performans izleme için
+
+      // Program ve kullanıcı özelliklerini birleştir
+      final inputData = {
+        ...profile.toMap(),
+        'program_id': programId,
+        'task_type': KNNTaskType.exerciseRecommendation.toString(),
+      };
+
+      // En yakın komşuları bul
+      final neighbors = _findNearestNeighbors(
+        inputData,
+        KNNTaskType.exerciseRecommendation,
+      );
+
+      // Success probability hesapla
+      final successProb = _calculateSuccessProbability(neighbors, programId);
+
+      // Kalori tahmini yap
+      final expectedCalories = _estimateCaloriesBurn(neighbors, profile);
+
+      // Önerilen frekansı belirle
+      final frequency = _determineWorkoutFrequency(neighbors);
+
+      // Yoğunluk ayarlamalarını hesapla
+      final intensityAdj = _calculateIntensityAdjustments(neighbors, profile);
+
+      return {
+        'success_probability': successProb,
+        'expected_calories': expectedCalories,
+        'recommended_frequency': frequency,
+        'intensity_adjustment': intensityAdj,
+      };
+    } catch (e) {
+      _logger.severe('KNN fit analysis failed: $e');
+      throw AIModelException('Fit analysis failed: $e');
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> analyzeProgress(
+      List<Map<String, dynamic>> userData
+      ) async {
+    try {
+      if (_modelState != KNNModelState.trained) {
+        throw AIModelException('Model is not trained for analysis');
+      }
+
+      setTaskType(KNNTaskType.fitnessLevelClassification);
+
+      // Son verileri analiz et
+      final recentData = userData.take(10).toList();
+
+      // Benzer ilerleme gösteren kullanıcıları bul
+      final similarProgressUsers = _findProgressPatterns(recentData);
+
+      // Performans metriklerini hesapla
+      final performanceScore = _calculatePerformanceScore(recentData, similarProgressUsers);
+
+      // Yoğunluk seviyesini belirle
+      final intensityLevel = _determineIntensityLevel(recentData);
+
+      // Önerileri oluştur
+      final recommendations = _generateProgressRecommendations(
+          recentData,
+          similarProgressUsers,
+          performanceScore
+      );
+
+      return {
+        'intensity_level': intensityLevel,
+        'performance_score': performanceScore,
+        'recommendations': recommendations,
+      };
+    } catch (e) {
+      _logger.severe('KNN progress analysis failed: $e');
+      throw AIModelException('Progress analysis failed: $e');
+    }
+  }
+
+  // Yardımcı metodlar
+  double _calculateSuccessProbability(
+      List<Map<String, dynamic>> neighbors,
+      int programId
+      ) {
+    var successfulNeighbors = neighbors.where((n) =>
+    n['program_id'] == programId &&
+        (n['success_rate'] ?? 0.0) > 0.7
+    ).length;
+
+    return successfulNeighbors / neighbors.length;
+  }
+
+  double _estimateCaloriesBurn(
+      List<Map<String, dynamic>> neighbors,
+      UserProfile profile
+      ) {
+    var totalCalories = 0.0;
+    var totalWeight = 0.0;
+
+    for (var neighbor in neighbors) {
+      final distance = _calculateDistance(
+          neighbor,
+          profile.toMap(),
+          defaultFeatures[KNNTaskType.userSimilarity]!
+      );
+      final weight = 1.0 / (distance + 1e-6); // Avoid division by zero
+
+      totalCalories += (neighbor['calories_burned'] ?? 300.0) * weight;
+      totalWeight += weight;
+    }
+
+    return totalCalories / totalWeight;
+  }
+
+  int _determineWorkoutFrequency(List<Map<String, dynamic>> neighbors) {
+    var frequencies = neighbors
+        .map((n) => n['workout_frequency'] as int? ?? 3)
+        .toList()
+      ..sort();
+
+    // Medyan frekansı döndür
+    return frequencies[frequencies.length ~/ 2];
+  }
+
+  Map<String, double> _calculateIntensityAdjustments(
+      List<Map<String, dynamic>> neighbors,
+      UserProfile profile
+      ) {
+    var adjustments = {
+      'cardio': 0.0,
+      'strength': 0.0,
+      'flexibility': 0.0
+    };
+
+    var totalWeights = 0.0;
+
+    for (var neighbor in neighbors) {
+      final distance = _calculateDistance(
+          neighbor,
+          profile.toMap(),
+          defaultFeatures[KNNTaskType.userSimilarity]!
+      );
+      final weight = 1.0 / (distance + 1e-6);
+
+      adjustments.forEach((key, value) {
+        adjustments[key] = value +
+            (neighbor['${key}_intensity'] ?? 1.0) * weight;
+      });
+
+      totalWeights += weight;
+    }
+
+    // Normalize adjustments
+    adjustments.forEach((key, value) {
+      adjustments[key] = value / totalWeights;
+    });
+
+    return adjustments;
+  }
+
+  List<Map<String, dynamic>> _findProgressPatterns(
+      List<Map<String, dynamic>> recentData
+      ) {
+    return _trainingData
+        .where((data) => _isProgressPatternSimilar(data, recentData))
+        .take(_k)
+        .toList();
+  }
+
+  bool _isProgressPatternSimilar(
+      Map<String, dynamic> data,
+      List<Map<String, dynamic>> recentData
+      ) {
+    // Progress pattern similarity logic
+    final patternFeatures = [
+      'exercise_frequency',
+      'workout_intensity',
+      'endurance_score',
+      'strength_score'
+    ];
+
+    var similarityScore = 0.0;
+    for (var feature in patternFeatures) {
+      final dataValue = data[feature] as double? ?? 0.0;
+      final recentAvg = recentData
+          .map((d) => d[feature] as double? ?? 0.0)
+          .reduce((a, b) => a + b) / recentData.length;
+
+      similarityScore += pow(dataValue - recentAvg, 2);
+    }
+
+    return sqrt(similarityScore) < AIConstants.SIMILARITY_THRESHOLD;
+  }
+
+  double _calculatePerformanceScore(
+      List<Map<String, dynamic>> recentData,
+      List<Map<String, dynamic>> similarUsers
+      ) {
+    // Performance metrics calculation
+    final currentMetrics = _calculateCurrentMetrics(recentData);
+    final expectedMetrics = _calculateExpectedMetrics(similarUsers);
+
+    return _compareMetrics(currentMetrics, expectedMetrics);
+  }
+
+  String _determineIntensityLevel(List<Map<String, dynamic>> recentData) {
+    final avgIntensity = recentData
+        .map((d) => d['workout_intensity'] as double? ?? 0.0)
+        .reduce((a, b) => a + b) / recentData.length;
+
+    if (avgIntensity > 0.8) return 'high';
+    if (avgIntensity > 0.5) return 'medium';
+    return 'low';
+  }
+
+  List<String> _generateProgressRecommendations(
+      List<Map<String, dynamic>> recentData,
+      List<Map<String, dynamic>> similarUsers,
+      double performanceScore
+      ) {
+    final recommendations = <String>[];
+
+    if (performanceScore < 0.3) {
+      recommendations.addAll([
+        'Consider reducing workout intensity',
+        'Focus on proper form and technique',
+        'Increase rest periods between exercises'
+      ]);
+    } else if (performanceScore < 0.7) {
+      recommendations.addAll([
+        'Maintain current progress',
+        'Gradually increase weights or repetitions',
+        'Add variety to your routine'
+      ]);
+    } else {
+      recommendations.addAll([
+        'Consider increasing workout intensity',
+        'Try more advanced exercise variations',
+        'Add complex movement patterns'
+      ]);
+    }
+
+    return recommendations;
+  }
+
+  Map<String, double> _calculateCurrentMetrics(
+      List<Map<String, dynamic>> recentData
+      ) {
+    return {
+      'avg_intensity': recentData
+          .map((d) => d['workout_intensity'] as double? ?? 0.0)
+          .reduce((a, b) => a + b) / recentData.length,
+      // _calculateConsistency yerine _calculateF1Score kullan
+      'consistency': _calculateF1Score(
+          recentData,
+          recentData.map((d) => {'label': d['target']}).toList()
+      ),
+      // _calculateProgressRate yerine performans metriklerinin ortalamasını kullan
+      'progress_rate': _calculatePerformanceRate(recentData)
+    };
+  }
+
+  // Yeni eklenen metod
+  double _calculatePerformanceRate(List<Map<String, dynamic>> data) {
+    if (data.length < 2) return 0.0;
+
+    var improvements = 0.0;
+    for (var i = 1; i < data.length; i++) {
+      final current = data[i]['performance_score'] as double? ?? 0.0;
+      final previous = data[i-1]['performance_score'] as double? ?? 0.0;
+      improvements += (current - previous);
+    }
+
+    return improvements / (data.length - 1);
+  }
+
+  // Mevcut precision ve recall metodlarını kullanarak tutarlılığı hesapla
+  double _calculateOverallConsistency(List<Map<String, dynamic>> data) {
+    final predictions = data.map((d) => {
+      'prediction': d['actual_performance'],
+      'label': d['target_performance']
+    }).toList();
+
+    final precision = _calculatePrecision(predictions, data);
+    final recall = _calculateRecall(predictions, data);
+
+    // F1 skoru tutarlılık ölçüsü olarak kullan
+    return (2 * precision * recall) / (precision + recall);
+  }
+
+
+
+  Map<String, double> _calculateExpectedMetrics(
+      List<Map<String, dynamic>> similarUsers
+      ) {
+    return {
+      'avg_intensity': similarUsers
+          .map((u) => u['workout_intensity'] as double? ?? 0.0)
+          .reduce((a, b) => a + b) / similarUsers.length,
+      'consistency': similarUsers
+          .map((u) => u['consistency'] as double? ?? 0.0)
+          .reduce((a, b) => a + b) / similarUsers.length,
+      'progress_rate': similarUsers
+          .map((u) => u['progress_rate'] as double? ?? 0.0)
+          .reduce((a, b) => a + b) / similarUsers.length
+    };
+  }
+
+  double _compareMetrics(
+      Map<String, double> current,
+      Map<String, double> expected
+      ) {
+    var totalScore = 0.0;
+    current.forEach((key, value) {
+      totalScore += value / (expected[key] ?? 1.0);
+    });
+    return totalScore / current.length;
+  }
+
+
+
 
   // Metrik güncelleme metodu
   void _updateMetricsWithLimit(Map<String, double> metrics) {

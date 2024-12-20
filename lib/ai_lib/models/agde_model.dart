@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:logging/logging.dart';
+import '../ai_data_bloc/ai_repository.dart';
 import '../core/ai_constants.dart';
 import '../core/ai_exceptions.dart';
 import '../core/ai_data_processor.dart';
@@ -80,6 +81,7 @@ class AGDEModel extends BaseModel {
       'f1_score': _calculateF1Score(predictions, testData)
     };
   }
+
   double _calculateAccuracy(List<Map<String, dynamic>> predictions, List<Map<String, dynamic>> actual) {
     int correct = 0;
     for (var i = 0; i < predictions.length; i++) {
@@ -276,6 +278,121 @@ class AGDEModel extends BaseModel {
       _modelState = AGDEModelState.error;
       throw AIModelException('AGDE training failed: $e');
     }
+  }
+
+
+
+  @override
+  Future<Map<String, dynamic>> analyzeFit(
+      int programId,
+      UserProfile profile
+      ) async {
+    try {
+      if (_modelState != AGDEModelState.trained) {
+        throw AIModelException('Model is not trained for analysis');
+      }
+
+      final features = _extractFeatures({
+        'program_id': programId,
+        ...profile.toMap(),
+      });
+
+      final prediction = await _modelInference(features, 0);
+      final confidence = _calculateConfidence(prediction['output'] as List<double>);
+
+      return {
+        'success_probability': confidence,
+        'expected_calories': _calculateExpectedCalories(prediction, profile),
+        'recommended_frequency': _determineRecommendedFrequency(confidence),
+        'intensity_adjustment': _calculateIntensityAdjustment(prediction, profile),
+      };
+    } catch (e) {
+      _logger.severe('Program fit analysis failed: $e');
+      throw AIModelException('Fit analysis failed: $e');
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> analyzeProgress(
+      List<Map<String, dynamic>> userData
+      ) async {
+    try {
+      if (_modelState != AGDEModelState.trained) {
+        throw AIModelException('Model is not trained for analysis');
+      }
+
+      final metrics = await calculateMetrics(userData);
+
+      return {
+        'intensity_level': _determineIntensityLevel(metrics),
+        'performance_score': _calculatePerformanceScore(metrics),
+        'recommendations': _generateProgressRecommendations(metrics),
+      };
+    } catch (e) {
+      _logger.severe('Progress analysis failed: $e');
+      throw AIModelException('Progress analysis failed: $e');
+    }
+  }
+
+  // Yardımcı metodlar
+  double _calculateExpectedCalories(Map<String, dynamic> prediction, UserProfile profile) {
+    final baseCalories = 300.0; // Temel kalori yakımı
+    final intensityFactor = prediction['output'][0] as double;
+    return baseCalories * intensityFactor * (1 + (profile.bmi - 25) / 50);
+  }
+
+  int _determineRecommendedFrequency(double confidence) {
+    if (confidence > 0.8) return 5;
+    if (confidence > 0.6) return 4;
+    if (confidence > 0.4) return 3;
+    return 2;
+  }
+
+  Map<String, double> _calculateIntensityAdjustment(
+      Map<String, dynamic> prediction,
+      UserProfile profile
+      ) {
+    return {
+      'cardio': _adjustIntensity(prediction['output'][1] as double, profile.bmi),
+      'strength': _adjustIntensity(prediction['output'][2] as double, profile.bmi),
+      'flexibility': _adjustIntensity(prediction['output'][3] as double, profile.bmi),
+    };
+  }
+
+  double _adjustIntensity(double baseIntensity, double bmi) {
+    if (bmi > 30) return baseIntensity * 0.8;
+    if (bmi < 18.5) return baseIntensity * 0.9;
+    return baseIntensity;
+  }
+
+  String _determineIntensityLevel(Map<String, double> metrics) {
+    final performanceScore = metrics['performance_score'] ?? 0.0;
+    if (performanceScore > 0.8) return 'high';
+    if (performanceScore > 0.5) return 'medium';
+    return 'low';
+  }
+
+  double _calculatePerformanceScore(Map<String, double> metrics) {
+    return (metrics['accuracy'] ?? 0.0) * 0.4 +
+        (metrics['f1_score'] ?? 0.0) * 0.6;
+  }
+
+  List<String> _generateProgressRecommendations(Map<String, double> metrics) {
+    final recommendations = <String>[];
+    final performance = metrics['performance_score'] ?? 0.0;
+
+    if (performance < 0.3) {
+      recommendations.add('Consider reducing workout intensity');
+      recommendations.add('Focus on proper form and technique');
+    } else if (performance < 0.7) {
+      recommendations.add('Maintain current progress');
+      recommendations.add('Gradually increase workout intensity');
+    } else {
+      recommendations.add('Consider increasing workout challenge');
+      recommendations.add('Add variety to your routine');
+    }
+
+    return recommendations;
   }
 
   @override

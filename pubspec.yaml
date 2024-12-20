@@ -188,6 +188,7 @@ flutter:
     - lib/generated/assets.dart
     - assets/
     - database/
+    - lib/z.app_theme/
 
 
 

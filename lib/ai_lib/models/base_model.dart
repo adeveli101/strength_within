@@ -1,4 +1,5 @@
 import 'package:logging/logging.dart';
+import '../ai_data_bloc/ai_repository.dart';
 import '../core/ai_exceptions.dart';
 
 abstract class BaseModel {
@@ -12,6 +13,8 @@ abstract class BaseModel {
   Future<void> validateData(List<Map<String, dynamic>> data);
 
   // Metriklerle ilgili metodlar
+  Future<Map<String, dynamic>> analyzeFit(int programId, UserProfile profile);
+  Future<Map<String, dynamic>> analyzeProgress(List<Map<String, dynamic>> userData);
   Future<Map<String, double>> calculateMetrics(List<Map<String, dynamic>> testData);
   Future<double> calculateConfidence(Map<String, dynamic> input, dynamic prediction);
 
