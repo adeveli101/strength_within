@@ -10,6 +10,7 @@ class AIConstants {
   static const int DEFAULT_TIMEOUT = 300000; // 5 minutes in milliseconds
 
   /// Model Eğitim Parametreleri
+  static const double EPSILON = 1e-6;
   static const double LEARNING_RATE = 0.001;
   static const int BATCH_SIZE = 32;
   static const int EPOCHS = 100;
