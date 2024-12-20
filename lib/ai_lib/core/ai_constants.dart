@@ -3,18 +3,68 @@ class AIConstants {
   // Private constructor to prevent instantiation
   AIConstants._();
 
-  /// Model eğitim parametreleri
+  /// Model Eğitim Parametreleri
   static const double LEARNING_RATE = 0.001;
   static const int BATCH_SIZE = 32;
   static const int EPOCHS = 100;
   static const int EARLY_STOPPING_PATIENCE = 10;
   static const double VALIDATION_SPLIT = 0.15;
+  static const double EARLY_STOPPING_THRESHOLD = 1e-4;
+  static const double MIN_LEARNING_RATE = 0.0001;
+  static const double MAX_LEARNING_RATE = 0.1;
+  static const double ADAPTIVE_RATE = 0.01;
 
-  /// Model boyutları
-  static const int INPUT_FEATURES = 7; // weight, height, bmi, bfp, gender, age, experience
+  /// Model Boyutları ve Yapılandırma
+  static const int INPUT_FEATURES = 7;
   static const int HIDDEN_LAYER_UNITS = 64;
-  static const int OUTPUT_CLASSES = 7; // Exercise plan levels (1-7)
-  static const int CHECKPOINT_INTERVAL = 10; // Her 10 epoch'ta bir checkpoint
+  static const int OUTPUT_CLASSES = 7;
+  static const int CHECKPOINT_INTERVAL = 10;
+  static const int ENSEMBLE_SIZE = 5;
+
+  /// KNN Parametreleri
+  static const int KNN_EXERCISE_K = 5;
+  static const int KNN_USER_K = 10;
+  static const int KNN_FITNESS_K = 3;
+
+  /// Güven Skorları
+  static const double MIN_CONFIDENCE_EXERCISE = 0.6;
+  static const double MIN_CONFIDENCE_USER = 0.7;
+  static const double MIN_CONFIDENCE_FITNESS = 0.8;
+
+  /// Minimum Metrikler
+  static const Map<String, double> MINIMUM_METRICS = {
+    'accuracy': 0.85,
+    'precision': 0.80,
+    'recall': 0.80,
+    'f1_score': 0.82,
+  };
+
+  /// Feature Normalizasyon Aralıkları
+  static const Map<String, Map<String, double>> FEATURE_RANGES = {
+    'weight': {'min': 40.0, 'max': 150.0},
+    'height': {'min': 1.4, 'max': 2.2},
+    'bmi': {'min': 16.0, 'max': 40.0},
+    'bfp': {'min': 5.0, 'max': 50.0},
+    'age': {'min': 16.0, 'max': 80.0},
+    'experience': {'min': 0.0, 'max': 10.0},
+  };
+
+  /// Hata Kodları
+  static const String ERROR_INSUFFICIENT_DATA = 'E001';
+  static const String ERROR_LOW_ACCURACY = 'E002';
+  static const String ERROR_TRAINING_FAILED = 'E003';
+  static const String ERROR_PREDICTION_FAILED = 'E004';
+  static const String ERROR_INVALID_INPUT = 'E005';
+  static const String ERROR_BATCH_PROCESSING_FAILED = 'E006';
+
+  /// Sistem Limitleri
+  static const int MAX_CACHE_SIZE = 1000000;
+  static const int MAX_BATCH_SIZE = 1000;
+  static const int MAX_PROCESSING_HISTORY = 1000;
+  static const double MIN_VALID_DATA_RATIO = 0.8;
+  static const int MAX_RETRIES = 3;
+  static const int RETRY_DELAY_SECONDS = 1;
+
 
 
   /// Veri normalizasyon sabitleri
@@ -25,18 +75,7 @@ class AIConstants {
   static const int MIN_AGE = 16;
   static const int MAX_AGE = 80;
 
-  static const int KNN_EXERCISE_K = 5;  // Egzersiz önerileri için k değeri
-  static const int KNN_USER_K = 10;     // Kullanıcı benzerliği için k değeri
-  static const int KNN_FITNESS_K = 3;    // Fitness seviyesi sınıflandırması için k değeri
 
-  // Minimum güven skorları
-  static const double MIN_CONFIDENCE_EXERCISE = 0.6;  // Egzersiz önerileri için minimum güven skoru
-  static const double MIN_CONFIDENCE_USER = 0.7;      // Kullanıcı benzerliği için minimum güven skoru
-  static const double MIN_CONFIDENCE_FITNESS = 0.8;   // Fitness sınıflandırması için minimum güven skoru
-
-  // Hata kodları
-  static const String ERROR_INVALID_INPUT = 'INVALID_INPUT';
-  static const String ERROR_INSUFFICIENT_DATA = 'INSUFFICIENT_DATA';
   static const String ERROR_INVALID_STATE = 'INVALID_STATE';
   static const String ERROR_LOW_CONFIDENCE = 'LOW_CONFIDENCE';
 
@@ -64,11 +103,6 @@ class AIConstants {
   };
 
 
-  static const double EARLY_STOPPING_THRESHOLD = 1e-4;
-
-  // Feature ranges için normalizasyon değerleri
-
-
 
   // Performans metrikleri
   static const int MAX_INFERENCE_TIME_MS = 1000;     // Maksimum çıkarım süresi (ms)
@@ -85,36 +119,8 @@ class AIConstants {
   static const double MIN_RECALL = 0.80;
   static const double MIN_F1_SCORE = 0.82;
 
-  static const int MAX_RETRIES = 3;
-  static const int RETRY_DELAY_SECONDS = 1;
-
-  // Bellek yönetimi için
-  static const int MAX_CACHE_SIZE = 1000000; // 1M kayıt
-  static const int MAX_BATCH_SIZE = 1000;
-
-  // Veri doğrulama için
-  static const double MIN_VALID_DATA_RATIO = 0.8; // %80
-
-  // Performans metrikleri için
-  static const int MAX_PROCESSING_HISTORY = 1000;
 
 
-
-
-  /// Model hata kodları
-  static const String ERROR_LOW_ACCURACY = 'E002';
-  static const String ERROR_TRAINING_FAILED = 'E003';
-  static const String ERROR_PREDICTION_FAILED = 'E004';
-
-
-
-  /// Model değerlendirme metrikleri için minimum kabul edilebilir değerler
-  static const Map<String, double> MINIMUM_METRICS = {
-    'accuracy': 0.85,
-    'precision': 0.80,
-    'recall': 0.80,
-    'f1_score': 0.82,
-  };
 
   /// Egzersiz planı seviyeleri ve açıklamaları
   static const Map<int, String> EXERCISE_PLAN_DESCRIPTIONS = {
@@ -127,14 +133,7 @@ class AIConstants {
     7: 'Severely Obese Program',
   };
 
-  static const Map<String, Map<String, double>> FEATURE_RANGES = {
-    'weight': {'min': 40.0, 'max': 150.0},
-    'height': {'min': 1.4, 'max': 2.2},
-    'bmi': {'min': 16.0, 'max': 40.0},
-    'bfp': {'min': 5.0, 'max': 50.0},
-    'age': {'min': 16.0, 'max': 80.0},
-    'experience': {'min': 0.0, 'max': 10.0},
-  };
-
-
 }
+
+
+

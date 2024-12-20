@@ -212,8 +212,6 @@ class AGDEModel extends BaseModel {
     return hiddenOutput;
   }
 
-
-
   @override
   Future<void> setup(List<Map<String, dynamic>> trainingData) async {
     try {
@@ -420,7 +418,8 @@ class AGDEModel extends BaseModel {
       throw AIModelException('Forward pass failed: $e');
     }
   }
-// BMI case'ini belirlemek için yardımcı metod
+
+
   String _getBMICase(Map<String, dynamic> categorical) {
     if (categorical['bmi_underweight'] == 1.0) return 'underweight';
     if (categorical['bmi_normal'] == 1.0) return 'normal';
@@ -562,6 +561,20 @@ class AGDEModel extends BaseModel {
     return -log(probability);
   }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   @override
   Future<void> dispose() async {
     try {
@@ -580,4 +593,8 @@ class AGDEModel extends BaseModel {
       rethrow;
     }
   }
+
+
+
+
 }
