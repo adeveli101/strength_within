@@ -22,7 +22,19 @@ class AIModelException extends AIException {
   AIModelException(super.message, {super.code});
 }
 
-// Eklenebilecek yeni exception sınıfı
+// lib/ai_lib/testing/exceptions/ai_testing_exception.dart
+
+class AITestingException implements Exception {
+  final String message;
+  final String? code;
+  final dynamic details;
+
+  AITestingException(this.message, {this.code, this.details});
+
+  @override
+  String toString() => 'AITestingException: $message ${code != null ? '(Code: $code)' : ''}';
+}
+
 class CollaborativeFilteringException extends AIModelException {
   CollaborativeFilteringException(super.message, {String? code})
       : super(code: code ?? AIConstants.ERROR_PREDICTION_FAILED);

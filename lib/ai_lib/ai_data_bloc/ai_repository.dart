@@ -13,6 +13,46 @@ import '../models/collab_model.dart';
 import '../models/knn_model.dart';
 import 'dataset_provider.dart';
 
+class UserProfile {
+  final String id;
+  final double weight;
+  final double height;
+  final int age;
+  final String gender;
+  final double? fatPercentage;
+  final int experienceLevel;
+  final Map<String, dynamic>? preferences;
+
+  late final double bmi;
+
+  UserProfile({
+    required this.id,
+    required this.weight,
+    required this.height,
+    required this.age,
+    required this.gender,
+    this.fatPercentage,
+    required this.experienceLevel,
+    this.preferences,
+  }) {
+    bmi = weight / (height * height);
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'weight': weight,
+      'height': height,
+      'age': age,
+      'gender': gender,
+      'bmi': bmi,
+      'fat_percentage': fatPercentage,
+      'experience_level': experienceLevel,
+      'preferences': preferences,
+    };
+  }
+}
+
 
 enum AIRepositoryState {
   uninitialized,
@@ -33,7 +73,7 @@ class AIRepository {
   // Core components
   final _datasetProvider = DatasetDBProvider();
   final _dataProcessor = AIDataProcessor();
-
+  Stream<Map<String, Map<String, double>>> get metricsStream => _metricsController.stream;
   // Models
   late final AGDEModel _agdeModel;
   late final KNNModel _knnModel;
@@ -44,14 +84,13 @@ class AIRepository {
   AIRepositoryState get state => _state;
 
   // Stream controllers for metrics and state
-  final _metricsController = StreamController<Map<String, dynamic>>.broadcast();
+  final _metricsController = StreamController<Map<String, Map<String, double>>>.broadcast();
   final _stateController = StreamController<AIRepositoryState>.broadcast();
 
   // Model states and metrics
   final Map<String, Map<String, double>> _currentMetrics = {};
 
   // Public streams
-  Stream<Map<String, dynamic>> get metricsStream => _metricsController.stream;
   Stream<AIRepositoryState> get stateStream => _stateController.stream;
 
   // Model weights for ensemble
@@ -138,11 +177,17 @@ class AIRepository {
       }
 
       // Model eğitimleri
-      await Future.wait([
-        _trainAGDEModel(processedData, config),
-        _trainKNNModel(processedData, config),
-        _trainCollabModel(processedData, config)
-      ]);
+      try {
+        await Future.wait([
+          _trainAGDEModel(processedData, config),
+          _trainKNNModel(processedData, config),
+          _trainCollabModel(processedData, config)
+        ]).timeout(Duration(minutes: 30)); // Timeout
+      } catch (e) {
+        _logger.severe('Model training failed: $e');
+        throw AITrainingException('Training failed: $e');
+      }
+
 
       _updateState(AIRepositoryState.ready);
 
@@ -244,15 +289,50 @@ class AIRepository {
   }
 
 
-  /// Tahmin birleştirme
+
+
+  Future<ProgramRecommendation> getProgramRecommendation({
+    required UserProfile userProfile,
+  }) async {
+    if (_state != AIRepositoryState.ready) {
+      throw AIException('Repository is not ready');
+    }
+
+    try {
+      // Her modelden tahmin al - Map olarak
+      final Map<String, Map<String, dynamic>> modelPredictions = {
+        'agde': await _agdeModel.inference(userProfile.toMap()),
+        'knn': await _knnModel.inference(userProfile.toMap()),
+        'collaborative': await _collabModel.inference(userProfile.toMap()),
+      };
+
+      // Tahminleri birleştir
+      final combinedPrediction = _combineModelPredictions(modelPredictions);
+
+      // Map'ten ProgramRecommendation nesnesine dönüştür
+      return ProgramRecommendation(
+        planId: combinedPrediction['plan_id'] as int,
+        bmiCase: combinedPrediction['bmi_case'] as String,
+        bfpCase: userProfile.fatPercentage != null
+            ? combinedPrediction['bfp_case'] as String?
+            : null,
+        confidenceScore: combinedPrediction['confidence'] as double,
+      );
+    } catch (e) {
+      _logger.severe('Program recommendation failed: $e');
+      throw AIException('Failed to get program recommendation: $e');
+    }
+  }
+
+  // Model tahminlerini birleştirme metodu güncellendi
   Map<String, dynamic> _combineModelPredictions(
-      Map<String, Map<String, dynamic>> predictions
+      Map<String, Map<String, dynamic>> predictions,
       ) {
-    final combinedPrediction = <String, dynamic>{};
+    var combinedPrediction = <String, dynamic>{};
     double totalConfidence = 0.0;
 
     predictions.forEach((modelName, prediction) {
-      final weight = _modelWeights[modelName]!;
+      final weight = _modelWeights[modelName] ?? 0.0;
       final confidence = prediction['confidence'] as double;
 
       totalConfidence += confidence * weight;
@@ -260,14 +340,31 @@ class AIRepository {
       // Her modelin tahminini ağırlığına göre birleştir
       prediction.forEach((key, value) {
         if (key != 'confidence') {
-          combinedPrediction[key] = value;
+          if (combinedPrediction.containsKey(key)) {
+            if (value is num) {
+              combinedPrediction[key] = (combinedPrediction[key] as num) +
+                  (value * weight);
+            }
+          } else {
+            combinedPrediction[key] = value;
+          }
         }
       });
     });
 
+    // Son tahminleri normalize et
+    for (var key in predictions.keys) {
+      if (combinedPrediction[key] is num) {
+        combinedPrediction[key] = (combinedPrediction[key] as num) /
+            predictions.length;
+      }
+    }
+
     combinedPrediction['confidence'] = totalConfidence;
     return combinedPrediction;
   }
+
+
 
   /// Resource cleanup
   Future<void> dispose() async {
@@ -286,4 +383,43 @@ class AIRepository {
       rethrow;
     }
   }
+}
+class ProgramRecommendation {
+  final int planId;
+  final String bmiCase;
+  final String? bfpCase;
+  final double confidenceScore;
+
+  ProgramRecommendation({
+    required this.planId,
+    required this.bmiCase,
+    this.bfpCase,
+    required this.confidenceScore,
+  });
+}
+
+class WorkoutAnalysis {
+  final String intensityLevel;
+  final double performanceScore;
+  final List<String> recommendations;
+
+  WorkoutAnalysis({
+    required this.intensityLevel,
+    required this.performanceScore,
+    required this.recommendations,
+  });
+}
+
+class ProgramFitAnalysis {
+  final double successProbability;
+  final double expectedCaloriesBurn;
+  final int recommendedFrequency;
+  final Map<String, double> intensityAdjustment;
+
+  ProgramFitAnalysis({
+    required this.successProbability,
+    required this.expectedCaloriesBurn,
+    required this.recommendedFrequency,
+    required this.intensityAdjustment,
+  });
 }

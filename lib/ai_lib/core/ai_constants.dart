@@ -3,6 +3,12 @@ class AIConstants {
   // Private constructor to prevent instantiation
   AIConstants._();
 
+
+
+
+  // Thresholds
+  static const int DEFAULT_TIMEOUT = 300000; // 5 minutes in milliseconds
+
   /// Model Eğitim Parametreleri
   static const double LEARNING_RATE = 0.001;
   static const int BATCH_SIZE = 32;
@@ -50,7 +56,17 @@ class AIConstants {
   };
 
   /// Hata Kodları
-  static const String ERROR_INSUFFICIENT_DATA = 'E001';
+
+  static const String ERROR_SCENARIO_IN_PROGRESS = 'scenario_in_progress';
+  static const String ERROR_EXECUTION_FAILED = 'execution_failed';
+  static const String ERROR_NO_RESULTS = 'no_results';
+  static const String ERROR_INVALID_SCENARIO = 'invalid_scenario';
+  static const double METRIC_TOLERANCE = 0.001;
+  static const String ERROR_TIMEOUT = 'TIMEOUT_ERROR';
+  static const String ERROR_VALIDATION_FAILED = 'VALIDATION_FAILED';
+  static const String ERROR_PRECONDITION_FAILED = 'PRECONDITION_FAILED';
+  static const String ERROR_CRITICAL_STEP_FAILED = 'CRITICAL_STEP_FAILED';
+  static const String ERROR_INSUFFICIENT_DATA = 'INSUFFICIENT_DATA';
   static const String ERROR_LOW_ACCURACY = 'E002';
   static const String ERROR_TRAINING_FAILED = 'E003';
   static const String ERROR_PREDICTION_FAILED = 'E004';

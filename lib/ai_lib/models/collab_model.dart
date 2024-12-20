@@ -1,5 +1,6 @@
 import 'dart:math' show pow, sqrt;
 import 'package:logging/logging.dart';
+import '../ai_data_bloc/ai_repository.dart';
 import '../core/ai_constants.dart';
 import '../core/ai_exceptions.dart';
 import '../core/ai_data_processor.dart';
@@ -20,7 +21,249 @@ class CollaborativeFilteringModel extends BaseModel {
   final _dataProcessor = AIDataProcessor();
 
 
+  @override
+  Future<Map<String, dynamic>> analyzeFit(
+      int programId,
+      UserProfile profile
+      ) async {
+    try {
+      if (_modelState != CollabModelState.trained) {
+        throw AIModelException('Model is not ready for analysis');
+      }
 
+      // Benzer kullanıcıları bul
+      final similarUsers = await _findSimilarUsers(
+          profile.id,
+          _userItemRatings,
+          AIConstants.KNN_NEIGHBORS_COUNT
+      );
+
+      // Program başarı olasılığını hesapla
+      final successProb = await _calculateProgramSuccessRate(
+          programId,
+          similarUsers,
+          _userItemRatings
+      );
+
+      // Kalori yakımını tahmin et
+      final calories = await _estimateCaloriesBurn(
+          programId,
+          similarUsers,
+          profile
+      );
+
+      // Önerilen frekansı belirle
+      final frequency = _determineRecommendedFrequency(
+          similarUsers,
+          programId
+      );
+
+      // Yoğunluk ayarlamalarını hesapla
+      final intensityAdj = await _calculateIntensityAdjustments(
+          programId,
+          similarUsers,
+          profile
+      );
+
+      return {
+        'success_probability': successProb,
+        'expected_calories': calories,
+        'recommended_frequency': frequency,
+        'intensity_adjustment': intensityAdj,
+      };
+
+    } catch (e) {
+      _logger.severe('Collaborative fit analysis failed: $e');
+      throw AIModelException('Fit analysis failed: $e');
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> analyzeProgress(
+      List<Map<String, dynamic>> userData
+      ) async {
+    try {
+      if (_modelState != CollabModelState.trained) {
+        throw AIModelException('Model is not ready for analysis');
+      }
+
+      // Kullanıcının son verilerini analiz et
+      final recentData = userData.take(10).toList();
+
+      // Mevcut metrik hesaplama metodlarını kullan
+      final metrics = await calculateMetrics(recentData);
+
+      // Yoğunluk seviyesini belirle
+      final intensityLevel = _determineIntensityFromMetrics(metrics);
+
+      // Performans skorunu hesapla
+      final performanceScore = _calculatePerformanceFromMetrics(metrics);
+
+      // Önerileri oluştur
+      final recommendations = _generateRecommendationsFromMetrics(metrics);
+
+      return {
+        'intensity_level': intensityLevel,
+        'performance_score': performanceScore,
+        'recommendations': recommendations,
+      };
+
+    } catch (e) {
+      _logger.severe('Progress analysis failed: $e');
+      throw AIModelException('Progress analysis failed: $e');
+    }
+  }
+
+  // Yardımcı metodlar
+  Future<double> _calculateProgramSuccessRate(
+      int programId,
+      List<Map<String, dynamic>> similarUsers,
+      Map<String, Map<String, double>> userRatings
+      ) async {
+    double totalSuccessRate = 0.0;
+    double totalWeight = 0.0;
+
+    for (var user in similarUsers) {
+      final userId = user['userId'] as String;
+      final similarity = user['similarity'] as double;
+
+      if (userRatings[userId]?.containsKey(programId.toString()) ?? false) {
+        final rating = userRatings[userId]![programId.toString()]!;
+        totalSuccessRate += rating * similarity;
+        totalWeight += similarity;
+      }
+    }
+
+    return totalWeight > 0 ? totalSuccessRate / totalWeight : 0.0;
+  }
+
+  Future<double> _estimateCaloriesBurn(
+      int programId,
+      List<Map<String, dynamic>> similarUsers,
+      UserProfile profile
+      ) async {
+    double totalCalories = 0.0;
+    double totalWeight = 0.0;
+
+    for (var user in similarUsers) {
+      final userId = user['userId'] as String;
+      final similarity = user['similarity'] as double;
+
+      // Benzer kullanıcıların kalori yakım verilerini kullan
+      if (_userItemRatings[userId]?.containsKey('calories_$programId') ?? false) {
+        final calories = _userItemRatings[userId]!['calories_$programId']!;
+        totalCalories += calories * similarity;
+        totalWeight += similarity;
+      }
+    }
+
+    final baseCalories = totalWeight > 0 ? totalCalories / totalWeight : 300.0;
+
+    // Profil bazlı ayarlama
+    return baseCalories * (1 + (profile.bmi - 25) / 50);
+  }
+
+  int _determineRecommendedFrequency(
+      List<Map<String, dynamic>> similarUsers,
+      int programId
+      ) {
+    var frequencies = <int>[];
+
+    for (var user in similarUsers) {
+      final userId = user['userId'] as String;
+      if (_userItemRatings[userId]?.containsKey('frequency_$programId') ?? false) {
+        frequencies.add(_userItemRatings[userId]!['frequency_$programId']!.round());
+      }
+    }
+
+    if (frequencies.isEmpty) return 3; // Varsayılan değer
+
+    frequencies.sort();
+    return frequencies[frequencies.length ~/ 2]; // Medyan değeri
+  }
+
+  Future<Map<String, double>> _calculateIntensityAdjustments(
+      int programId,
+      List<Map<String, dynamic>> similarUsers,
+      UserProfile profile
+      ) async {
+    var adjustments = {
+      'cardio': 0.0,
+      'strength': 0.0,
+      'flexibility': 0.0
+    };
+
+    double totalWeight = 0.0;
+
+    for (var user in similarUsers) {
+      final userId = user['userId'] as String;
+      final similarity = user['similarity'] as double;
+
+      // Her egzersiz tipi için yoğunluk değerlerini topla
+      adjustments.forEach((key, value) {
+        final intensityKey = '${key}_intensity_$programId';
+        if (_userItemRatings[userId]?.containsKey(intensityKey) ?? false) {
+          adjustments[key] = value +
+              _userItemRatings[userId]![intensityKey]! * similarity;
+        }
+      });
+
+      totalWeight += similarity;
+    }
+
+    // Normalize et
+    if (totalWeight > 0) {
+      adjustments.forEach((key, value) {
+        adjustments[key] = value / totalWeight;
+      });
+    }
+
+    return adjustments;
+  }
+
+  String _determineIntensityFromMetrics(Map<String, double> metrics) {
+    final rmse = metrics['rmse'] ?? 0.0;
+    final predictionRate = metrics['prediction_rate'] ?? 0.0;
+
+    final overallScore = (1 - rmse) * predictionRate;
+
+    if (overallScore > 0.8) return 'high';
+    if (overallScore > 0.5) return 'medium';
+    return 'low';
+  }
+
+  double _calculatePerformanceFromMetrics(Map<String, double> metrics) {
+    return (1 - (metrics['rmse'] ?? 1.0)) *
+        (metrics['coverage'] ?? 0.0) *
+        (metrics['prediction_rate'] ?? 0.0);
+  }
+
+  List<String> _generateRecommendationsFromMetrics(Map<String, double> metrics) {
+    final recommendations = <String>[];
+    final performance = _calculatePerformanceFromMetrics(metrics);
+
+    if (performance < 0.3) {
+      recommendations.addAll([
+        'Consider more consistent workout patterns',
+        'Try exercises with lower intensity',
+        'Focus on form and technique'
+      ]);
+    } else if (performance < 0.7) {
+      recommendations.addAll([
+        'Maintain current progress',
+        'Gradually increase workout intensity',
+        'Add variety to your routine'
+      ]);
+    } else {
+      recommendations.addAll([
+        'Challenge yourself with advanced variations',
+        'Consider increasing workout frequency',
+        'Help others with their fitness journey'
+      ]);
+    }
+
+    return recommendations;
+  }
 
   // Model durumu için değişken
   CollabModelState _modelState = CollabModelState.uninitialized;
