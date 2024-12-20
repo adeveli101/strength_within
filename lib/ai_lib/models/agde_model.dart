@@ -1,351 +1,583 @@
-import 'dart:async';
 import 'dart:math';
-import 'dart:math' as math;
-import 'package:strength_within/ai_lib/core/ai_constants.dart';
-import '../ai_data_bloc/dataset_provider.dart';
-import '../core/ai_data_processor.dart';
+import 'package:logging/logging.dart';
+import '../core/ai_constants.dart';
 import '../core/ai_exceptions.dart';
+import '../core/ai_data_processor.dart';
+import 'base_model.dart';
 
-/// Adaptive Gradient Descent Ensemble Model
-class AGDEModel {
+enum AGDEModelState {
+  uninitialized,
+  initializing,
+  initialized,
+  training,
+  trained,
+  predicting,
+  error
+}
 
-  final StreamController<Map<String, double>> _metricsController =
-  StreamController<Map<String, double>>.broadcast();
-  Stream<Map<String, double>> get metricsStream => _metricsController.stream;
+class AGDEModel extends BaseModel {
+  final _logger = Logger('AGDEModel');
+  final _dataProcessor = AIDataProcessor();
 
-// Singleton pattern
-  static final AGDEModel _instance = AGDEModel._internal();
-  factory AGDEModel() => _instance;
-  AGDEModel._internal();
-
-
-  final AIDataProcessor _dataProcessor = AIDataProcessor();
-  final DatasetDBProvider _datasetProvider = DatasetDBProvider();
+  // Model state
+  AGDEModelState _modelState = AGDEModelState.uninitialized;
+  AGDEModelState get modelState => _modelState;
 
   // Model parametreleri
-  late List<List<double>> _weights; // Input -> Hidden weights
-  late List<List<double>> _hiddenWeights; // Hidden -> Output weights
-  late List<double> _biases; // Output layer biases
-  late double _learningRate;
+  late List<List<double>> _weights;
+  late List<double> _biases;
+  final double _learningRate = AIConstants.LEARNING_RATE;
 
-  // Model durumu
-  bool _isInitialized = false;
-  bool _isTrained = false;
+  // Ensemble parametreleri
+  final int _numEnsemble = 3;
+  final List<List<List<double>>> _ensembleWeights = [];
+  final List<List<double>> _ensembleBiases = [];
 
-  // Model metrikleri
-  final Map<String, double> _metrics = {
-    'accuracy': 0.0,
-    'precision': 0.0,
-    'recall': 0.0,
-    'f1_score': 0.0,
+  // Katman boyutları
+  late final int _inputSize;
+  late final int _hiddenSize;
+  late final int _outputSize;
+
+  // Momentum ve adaptif öğrenme parametreleri
+  final double _beta1 = 0.9;
+  final double _beta2 = 0.999;
+  final double _epsilon = 1e-8;
+
+  // Adam optimizer için momentum ve velocity
+  late List<List<double>> _mWeights;
+  late List<List<double>> _vWeights;
+
+  // Training history with size limit
+  final Map<String, List<double>> _trainingHistory = {
+    'loss': [],
+    'accuracy': [],
+    'precision': [],
+    'recall': [],
+    'f1_score': [],
   };
+  static const int MAX_HISTORY_SIZE = 1000;
 
-  /// Modeli initialize eder
-  Future<void> initialize() async {
-    try {
-      // Veri boyutlarını al
-      final trainingData = await _datasetProvider.getCombinedTrainingData();
 
-      if (trainingData.isEmpty) {
-        throw Exception("Training data is empty.");
+
+
+  @override
+  Future<double> calculateConfidence(Map<String, dynamic> input, dynamic prediction) async {
+    final probabilities = prediction['probabilities'] as List<double>;
+    if (probabilities.isEmpty) return 0.0;
+    return probabilities.reduce(max) / probabilities.fold(0.0, (a, b) => a + b);
+  }
+
+  @override
+  Future<Map<String, double>> calculateMetrics(List<Map<String, dynamic>> testData) async {
+    final predictions = await Future.wait(
+        testData.map((sample) => inference(sample))
+    );
+
+    return {
+      'accuracy': _calculateAccuracy(predictions, testData),
+      'precision': _calculatePrecision(predictions, testData),
+      'recall': _calculateRecall(predictions, testData),
+      'f1_score': _calculateF1Score(predictions, testData)
+    };
+  }
+  double _calculateAccuracy(List<Map<String, dynamic>> predictions, List<Map<String, dynamic>> actual) {
+    int correct = 0;
+    for (var i = 0; i < predictions.length; i++) {
+      if (predictions[i]['prediction_index'] == actual[i]['label']) {
+        correct++;
       }
+    }
+    return correct / predictions.length;
+  }
 
-      final processedData = await _dataProcessor.processTrainingData(trainingData);
+  double _calculatePrecision(List<Map<String, dynamic>> predictions, List<Map<String, dynamic>> actual) {
+    Map<int, Map<String, int>> metrics = {};
 
-      if (processedData.isEmpty) {
-        throw Exception("Processed data is empty.");
+    for (var i = 0; i < predictions.length; i++) {
+      final predicted = predictions[i]['prediction_index'] as int;
+      final actualLabel = actual[i]['label'] as int;
+
+      metrics.putIfAbsent(predicted, () => {'tp': 0, 'fp': 0});
+      if (predicted == actualLabel) {
+        metrics[predicted]!['tp'] = metrics[predicted]!['tp']! + 1;
+      } else {
+        metrics[predicted]!['fp'] = metrics[predicted]!['fp']! + 1;
       }
-
-      final featureCount = processedData.first['features'].length;
-
-      // Ağırlıkları ve biasları oluşturma
-      _weights = List.generate(
-        AIConstants.HIDDEN_LAYER_UNITS,
-            (_) => List.generate(
-          featureCount,
-              (_) => Random().nextDouble() * 2 - 1,
-        ),
-      );
-
-      // Input -> Hidden layer weights
-      _weights = List.generate(
-        AIConstants.HIDDEN_LAYER_UNITS,
-            (_) => List.generate(
-          featureCount,
-              (_) => Random().nextDouble() * 2 - 1,
-        ),
-      );
-
-      // Hidden -> Output layer weights
-      _hiddenWeights = List.generate(
-        AIConstants.OUTPUT_CLASSES,
-            (_) => List.generate(
-          AIConstants.HIDDEN_LAYER_UNITS,
-              (_) => Random().nextDouble() * 2 - 1,
-        ),
-      );
-
-      // Output layer biases
-      _biases = List.generate(
-        AIConstants.OUTPUT_CLASSES,
-            (_) => Random().nextDouble(),
-      );
-
-      _learningRate = AIConstants.LEARNING_RATE;
-      _isInitialized = true;
-
-    } catch (e) {
-      throw AITrainingException(
-        'Model initialization failed: $e',
-        code: AIConstants.ERROR_TRAINING_FAILED,
-      );
     }
-  }
 
-
-  /// Modeli eğitir
-  Future<void> train(List<Map<String, dynamic>> trainingData) async {
-    if (!_isInitialized) await initialize();
-
-    try {
-      final processedData = await _dataProcessor.processTrainingData(trainingData);
-      final splits = await _dataProcessor.splitDataset(processedData);
-
-      int epoch = 0;
-      double bestLoss = double.infinity;
-      int patienceCounter = 0;
-
-      while (epoch < AIConstants.EPOCHS) {
-        double epochLoss = 0.0;
-
-        // Batch processing
-        for (int i = 0; i < splits['train']!.length; i += AIConstants.BATCH_SIZE) {
-          final batch = await _dataProcessor.createBatch(
-              splits['train']!,
-              AIConstants.BATCH_SIZE
-          );
-          final batchLoss = await _processBatch(batch);
-          epochLoss += batchLoss;
-        }
-
-        // Validation ve metrik hesaplama
-        final metrics = await calculateMetrics(splits['validation']!);
-        metrics['loss'] = epochLoss / splits['train']!.length;
-        _metricsController.add(metrics);
-
-        // Early stopping kontrolü
-        if (epochLoss < bestLoss) {
-          bestLoss = epochLoss;
-          patienceCounter = 0;
-        } else {
-          patienceCounter++;
-          if (patienceCounter >= AIConstants.EARLY_STOPPING_PATIENCE) break;
-        }
-
-        epoch++;
+    double totalPrecision = 0.0;
+    int classCount = 0;
+    metrics.forEach((key, value) {
+      final tp = value['tp']!;
+      final fp = value['fp']!;
+      if (tp + fp > 0) {
+        totalPrecision += tp / (tp + fp);
+        classCount++;
       }
-
-      _isTrained = true;
-    } catch (e) {
-      throw AITrainingException(
-        'Model training failed: $e',
-        code: AIConstants.ERROR_TRAINING_FAILED,
-      );
-    }
-  }
-  void dispose() {
-    _metricsController.close(); // Stream'i kapat
-  }
-
-  /// Tahmin yapar
-  Future<int> predict(Map<String, dynamic> input) async {
-    if (!_isTrained) {
-      throw AIPredictionException(
-        'Model is not trained',
-        code: AIConstants.ERROR_PREDICTION_FAILED,
-      );
-    }
-
-    try {
-      final processedInput = await _dataProcessor.processRawData(input); // Giriş verilerini işle
-      final features = processedInput['features'] as Map<String, dynamic>;
-
-      // İleri besleme (forward pass)
-      final output = _forwardPass(features);
-
-      // Softmax aktivasyonu ile olasılıkları hesapla
-      final probabilities = _softmax(output);
-
-      // En yüksek olasılığa sahip sınıfı döndür
-      return probabilities.indexOf(probabilities.reduce(max)) + 1;
-
-    } catch (e) {
-      throw AIPredictionException(
-        'Prediction failed: $e',
-        code: AIConstants.ERROR_PREDICTION_FAILED,
-      );
-    }
-  }
-
-  /// Batch işleme fonksiyonu
-  Future<double> _processBatch(List<Map<String, dynamic>> batch) async {
-    double batchLoss = 0.0;
-
-    for (final sample in batch) {
-      final processed = await _dataProcessor.processRawData(sample); // Giriş verilerini işle
-      final features = processed['features'] as Map<String, dynamic>;
-      final label = processed['label'] as int;
-
-      // Tahmin yap ve kaybı hesapla
-      final prediction = await predict(sample);
-      batchLoss += _calculateLoss(prediction, label);
-
-      // Ağırlıkları ve biasları güncelle
-      _updateParameters(features, label, prediction);
-    }
-
-    return batchLoss / batch.length; // Batch kaybını döndür
-  }
-
-
-  /// Kayıp hesaplama fonksiyonu
-  double _calculateLoss(int prediction, int actual) {
-    final oneHot =
-    List.generate(AIConstants.OUTPUT_CLASSES, (i) => i == actual - 1 ? 1.0 : 0.0);
-
-    final predicted =
-    List.generate(AIConstants.OUTPUT_CLASSES, (i) => i == prediction - 1 ? math.exp(1.0) : math.exp(0.01));
-
-    double loss = oneHot.asMap().entries.fold(0.0, (sum, entry) {
-      if (entry.value != 0) sum -= entry.value * log(predicted[entry.key]);
-      return sum;
     });
 
-    return loss; // Kayıp değerini döndür
+    return classCount > 0 ? totalPrecision / classCount : 0.0;
+  }
+
+  double _calculateRecall(List<Map<String, dynamic>> predictions, List<Map<String, dynamic>> actual) {
+    Map<int, Map<String, int>> metrics = {};
+
+    for (var i = 0; i < predictions.length; i++) {
+      final predicted = predictions[i]['prediction_index'] as int;
+      final actualLabel = actual[i]['label'] as int;
+
+      metrics.putIfAbsent(actualLabel, () => {'tp': 0, 'fn': 0});
+      if (predicted == actualLabel) {
+        metrics[actualLabel]!['tp'] = metrics[actualLabel]!['tp']! + 1;
+      } else {
+        metrics[actualLabel]!['fn'] = metrics[actualLabel]!['fn']! + 1;
+      }
+    }
+
+    double totalRecall = 0.0;
+    int classCount = 0;
+    metrics.forEach((key, value) {
+      final tp = value['tp']!;
+      final fn = value['fn']!;
+      if (tp + fn > 0) {
+        totalRecall += tp / (tp + fn);
+        classCount++;
+      }
+    });
+
+    return classCount > 0 ? totalRecall / classCount : 0.0;
+  }
+
+  double _calculateF1Score(List<Map<String, dynamic>> predictions, List<Map<String, dynamic>> actual) {
+    final precision = _calculatePrecision(predictions, actual);
+    final recall = _calculateRecall(predictions, actual);
+
+    return (precision + recall) > 0
+        ? 2 * (precision * recall) / (precision + recall)
+        : 0.0;
+  }
+
+  Future<List<double>> _calculateGradients(List<Map<String, dynamic>> batch) async {
+    final gradients = List<double>.filled(_inputSize * _hiddenSize, 0.0);
+
+    for (var sample in batch) {
+      final features = _extractFeatures(sample);
+      final target = sample['label'] as int;
+
+      final hiddenOutput = _computeHiddenLayer(features);
+      final prediction = _softmax(hiddenOutput);
+
+      // Output layer gradients
+      final outputGradients = List<double>.filled(_outputSize, 0.0);
+      for (var i = 0; i < _outputSize; i++) {
+        outputGradients[i] = prediction[i] - (i == target ? 1.0 : 0.0);
+      }
+
+      // Hidden layer gradients
+      for (var i = 0; i < _hiddenSize; i++) {
+        for (var j = 0; j < _inputSize; j++) {
+          gradients[i * _inputSize + j] += outputGradients[i] * features[j];
+        }
+      }
+    }
+
+    // Batch normalization
+    return gradients.map((g) => g / batch.length).toList();
+  }
+
+  Future<Map<String, dynamic>> _modelInference(List<double> features, int modelIndex) async {
+    final weights = _ensembleWeights[modelIndex];
+    final biases = _ensembleBiases[modelIndex];
+
+    final hiddenOutput = _computeHiddenLayer(features);
+    final output = _softmax(hiddenOutput);
+
+    return {
+      'output': output,
+      'hidden': hiddenOutput,
+    };
+  }
+
+  List<double> _computeHiddenLayer(List<double> features) {
+    final hiddenOutput = List<double>.filled(_hiddenSize, 0.0);
+
+    for (var i = 0; i < _hiddenSize; i++) {
+      double sum = _biases[i];
+      for (var j = 0; j < _inputSize; j++) {
+        sum += features[j] * _weights[i][j];
+      }
+      hiddenOutput[i] = _relu(sum);
+    }
+
+    return hiddenOutput;
   }
 
 
-  /// Model parametrelerini günceller
-  void _updateParameters(Map<String, dynamic> features, int label, int prediction) {
-    final learningRate = _learningRate;
-    final error = prediction - label;
-    final inputValues = features.values.toList();
 
-    // Input -> Hidden weights güncelleme
-    for (int i = 0; i < AIConstants.HIDDEN_LAYER_UNITS; i++) {
-      for (int j = 0; j < AIConstants.INPUT_FEATURES; j++) {
-        _weights[i][j] -= learningRate * error * inputValues[j];
+  @override
+  Future<void> setup(List<Map<String, dynamic>> trainingData) async {
+    try {
+      _modelState = AGDEModelState.initializing;
+      await validateData(trainingData);
+
+      _inputSize = _calculateInputSize(trainingData.first);
+      _hiddenSize = AIConstants.HIDDEN_LAYER_UNITS;
+      _outputSize = AIConstants.OUTPUT_CLASSES;
+
+      for (var i = 0; i < _numEnsemble; i++) {
+        _initializeModel();
       }
-    }
 
-    // Hidden -> Output weights güncelleme
-    for (int i = 0; i < AIConstants.OUTPUT_CLASSES; i++) {
-      for (int j = 0; j < AIConstants.HIDDEN_LAYER_UNITS; j++) {
-        _hiddenWeights[i][j] -= learningRate * error * inputValues[j];
-      }
-    }
-
-    // Biasları güncelleme
-    for (int i = 0; i < _biases.length; i++) {
-      _biases[i] -= learningRate * error;
+      _modelState = AGDEModelState.initialized;
+      _logger.info('AGDE model setup completed');
+    } catch (e) {
+      _modelState = AGDEModelState.error;
+      throw AIModelException('AGDE model setup failed: $e');
     }
   }
 
-  /// İleri besleme hesaplama fonksiyonu
-  List<double> _forwardPass(Map<String, dynamic> features) {
-    final List<double> hidden =
-    List.filled(AIConstants.HIDDEN_LAYER_UNITS, 0.0);
-    final inputValues = features.values.toList();
-
-    for (int i = 0; i < AIConstants.HIDDEN_LAYER_UNITS; i++) {
-      for (int j = 0; j < inputValues.length; j++) {
-        hidden[i] += inputValues[j] * _weights[i][j];
+  @override
+  Future<void> fit(List<Map<String, dynamic>> trainingData) async {
+    try {
+      if (_modelState != AGDEModelState.initialized) {
+        throw AIModelException('Model must be initialized before training');
       }
-      hidden[i] = _relu(hidden[i] + _biases[i]); // ReLU aktivasyonu uygula
-    }
 
-    // Hidden layer'dan Output layer'a geçiş yapma
-    final output =
-    List.filled(AIConstants.OUTPUT_CLASSES, 0.0);
+      _modelState = AGDEModelState.training;
+      int currentStep = 0;
 
-    for (int i = 0; i < AIConstants.OUTPUT_CLASSES; i++) {
-      for (int j = 0; j < AIConstants.HIDDEN_LAYER_UNITS; j++) {
-        output[i] += hidden[j] * _hiddenWeights[i][j];
+      for (var epoch = 0; epoch < AIConstants.EPOCHS; epoch++) {
+        double epochLoss = 0.0;
+
+        for (var i = 0; i < trainingData.length; i += AIConstants.BATCH_SIZE) {
+          final end = min(i + AIConstants.BATCH_SIZE, trainingData.length);
+          final batch = trainingData.sublist(i, end);
+
+          final batchLoss = await _forwardPass(batch);
+          epochLoss += batchLoss;
+
+          await _updateWeightsWithOptimization(
+              await _calculateGradients(batch),
+              ++currentStep
+          );
+
+          _cleanupBatchMemory();
+        }
+
+        final metrics = await calculateMetrics(trainingData);
+        _updateMetricsWithLimit(metrics);
+
+        if (_shouldEarlyStop()) {
+          _logger.info('Early stopping at epoch $epoch');
+          break;
+        }
       }
-    }
 
-    return output;
+      _modelState = AGDEModelState.trained;
+    } catch (e) {
+      _modelState = AGDEModelState.error;
+      throw AIModelException('AGDE training failed: $e');
+    }
   }
 
-  /// ReLU aktivasyon fonksiyonu
-  double _relu(double x) => max(0, x);
+  @override
+  Future<Map<String, dynamic>> inference(Map<String, dynamic> input) async {
+    try {
+      if (_modelState != AGDEModelState.trained) {
+        throw AIModelException('Model is not trained for inference');
+      }
 
-  /// Softmax aktivasyon fonksiyonu
+      _modelState = AGDEModelState.predicting;
+      final features = _extractFeatures(input);
+      List<double> predictions = List.filled(_outputSize, 0.0);
+
+      for (var i = 0; i < _numEnsemble; i++) {
+        final modelPrediction = await _modelInference(features, i);
+        final output = modelPrediction['output'] as List<double>;
+        for (var j = 0; j < _outputSize; j++) {
+          predictions[j] += output[j] / _numEnsemble;
+        }
+      }
+
+      final predictionIndex = _argmax(predictions);
+      final predictionString = AIConstants.EXERCISE_PLAN_DESCRIPTIONS[predictionIndex] ??
+          'Unknown Plan Level $predictionIndex';
+
+      _modelState = AGDEModelState.trained;
+      return {
+        'prediction': predictionString,
+        'prediction_index': predictionIndex,
+        'probabilities': predictions,
+        'confidence': _calculateConfidence(predictions)
+      };
+    } catch (e) {
+      _modelState = AGDEModelState.error;
+      throw AIModelException('AGDE inference failed: $e');
+    }
+  }
+
+  @override
+  Future<void> validateData(List<Map<String, dynamic>> data) async {
+    if (data.isEmpty) {
+      throw AIModelException('Empty dataset provided');
+    }
+
+    final requiredKeys = ['features', 'categorical', 'label'];
+    for (var sample in data) {
+      if (!requiredKeys.every(sample.containsKey)) {
+        throw AIModelException('Invalid data format');
+      }
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> getPredictionMetadata(Map<String, dynamic> input) async {
+    return {
+      'model_type': 'agde',
+      'timestamp': DateTime.now().toIso8601String(),
+      'ensemble_size': _numEnsemble,
+      'input_features': input['features'],
+      'model_version': '1.0.0',
+    };
+  }
+
+  // Private helper methods
+  void _initializeModel() {
+    final random = Random();
+    final double scale = sqrt(2.0 / (_inputSize + _hiddenSize));
+
+    // Weights ve biases initialize
+    _weights = List.generate(
+      _hiddenSize,
+          (_) => List.generate(
+        _inputSize,
+            (_) => (random.nextDouble() * 2 - 1) * scale,
+      ),
+    );
+
+    _biases = List.generate(_hiddenSize, (_) => 0.0);
+
+    // Adam optimizer için momentum ve velocity matrislerini initialize et
+    _mWeights = List.generate(
+      _hiddenSize,
+          (_) => List.generate(_inputSize, (_) => 0.0),
+    );
+
+    _vWeights = List.generate(
+      _hiddenSize,
+          (_) => List.generate(_inputSize, (_) => 0.0),
+    );
+
+    // Ensemble için kopyala
+    _ensembleWeights.add(List.from(_weights));
+    _ensembleBiases.add(List.from(_biases));
+  }
+  int _calculateInputSize(Map<String, dynamic> sample) {
+    final features = sample['features'] as Map<String, dynamic>;
+    final categorical = sample['categorical'] as Map<String, dynamic>;
+    return features.length + categorical.length;
+  }
+
+  Future<double> _forwardPass(List<Map<String, dynamic>> batch) async {
+    double totalLoss = 0.0;
+
+    try {
+      for (var sample in batch) {
+        // Numeric özellikleri normalize et
+        final normalizedFeatures = await _dataProcessor.normalizeFeatures(sample['features']);
+
+        // Categorical özellikleri double'a dönüştür
+        final categoricalFeatures = (sample['categorical'] as Map<String, dynamic>).map(
+                (key, value) => MapEntry(key, value is num ? value.toDouble() : 0.0)
+        );
+
+        // Tüm özellikleri birleştir ve double listesine dönüştür
+        final allFeatures = [
+          ...normalizedFeatures.values,
+          ...categoricalFeatures.values,
+        ].map((value) => value.toDouble()).toList();
+
+        // Model tahminini yap
+        final hiddenOutput = _computeHiddenLayer(allFeatures);
+        final prediction = _softmax(hiddenOutput);
+
+        // Loss hesapla
+        final target = sample['label'] as int;
+        final loss = _crossEntropyLoss(prediction, target);
+
+        // Batch loss'u güncelle
+        totalLoss += loss;
+
+        // Memory optimization
+        _cleanupBatchMemory();
+      }
+
+      // Ortalama loss değerini döndür
+      return totalLoss / batch.length;
+
+    } catch (e) {
+      _logger.severe('Forward pass error: $e');
+      throw AIModelException('Forward pass failed: $e');
+    }
+  }
+// BMI case'ini belirlemek için yardımcı metod
+  String _getBMICase(Map<String, dynamic> categorical) {
+    if (categorical['bmi_underweight'] == 1.0) return 'underweight';
+    if (categorical['bmi_normal'] == 1.0) return 'normal';
+    if (categorical['bmi_overweight'] == 1.0) return 'overweight';
+    if (categorical['bmi_obese'] == 1.0) return 'obese';
+    return 'normal';
+  }
+
+// BFP case'ini belirlemek için yardımcı metod
+  String _getBFPCase(Map<String, dynamic> categorical) {
+    if (categorical['bfp_low'] == 1.0) return 'low';
+    if (categorical['bfp_normal'] == 1.0) return 'normal';
+    if (categorical['bfp_high'] == 1.0) return 'high';
+    if (categorical['bfp_very_high'] == 1.0) return 'very_high';
+    return 'normal';
+  }
+
+
+
+  List<double> _extractFeatures(Map<String, dynamic> sample) {
+    final features = <double>[];
+
+    final numericFeatures = sample['features'] as Map<String, double>;
+    final categoricalFeatures = sample['categorical'] as Map<String, double>;
+
+    // DataProcessor kullanarak normalizasyon ekle
+    features.addAll(
+        numericFeatures.entries.map((e) =>
+            _dataProcessor.normalize(
+                e.value,
+                AIConstants.FEATURE_RANGES[e.key]!['min']!,
+                AIConstants.FEATURE_RANGES[e.key]!['max']!
+            )
+        )
+    );
+
+    features.addAll(categoricalFeatures.values);
+    return features;
+  }
+
+
+  Future<void> _updateWeightsWithOptimization(List<double> gradients, int timeStep) async {
+    final batchSize = gradients.length ~/ (_inputSize * _hiddenSize);
+
+    for (var i = 0; i < _hiddenSize; i++) {
+      for (var j = 0; j < _inputSize; j++) {
+        final gradientIndex = i * _inputSize + j;
+        final gradientValue = gradients[gradientIndex] / batchSize;
+
+        final mWeight = _beta1 * _mWeights[i][j] + (1 - _beta1) * gradientValue;
+        final vWeight = _beta2 * _vWeights[i][j] + (1 - _beta2) * pow(gradientValue, 2);
+
+        _mWeights[i][j] = mWeight;
+        _vWeights[i][j] = vWeight;
+
+        final mHat = mWeight / (1 - pow(_beta1, timeStep));
+        final vHat = vWeight / (1 - pow(_beta2, timeStep));
+
+        _weights[i][j] -= _learningRate * mHat / (sqrt(vHat) + _epsilon);
+      }
+    }
+  }
+
+  void _cleanupBatchMemory() {
+    _tempGradients?.clear();
+    _tempOutputs?.clear();
+
+    // Garbage collection hint
+    _tempGradients = null;
+    _tempOutputs = null;
+  }
+
+
+  List<double>? _tempGradients;
+  List<double>? _tempOutputs;
+
+  void _updateMetricsWithLimit(Map<String, double> metrics) {
+    metrics.forEach((key, value) {
+      _trainingHistory[key]?.add(value);
+      if ((_trainingHistory[key]?.length ?? 0) > MAX_HISTORY_SIZE) {
+        _trainingHistory[key]?.removeAt(0);
+      }
+    });
+  }
+
+  bool _shouldEarlyStop() {
+    if (_trainingHistory['loss']!.length < AIConstants.EARLY_STOPPING_PATIENCE) {
+      return false;
+    }
+
+    final recentLosses = _trainingHistory['loss']!
+        .sublist(_trainingHistory['loss']!.length - AIConstants.EARLY_STOPPING_PATIENCE);
+
+    // Trend analizi ekle
+    double sumDiff = 0.0;
+    for (var i = 1; i < recentLosses.length; i++) {
+      sumDiff += recentLosses[i] - recentLosses[i-1];
+    }
+
+    return sumDiff.abs() < AIConstants.EARLY_STOPPING_THRESHOLD;
+  }
+
+
+  bool _checkConvergence(List<double> recentLosses) {
+    if (recentLosses.length < 2) return false;
+
+    final threshold = 1e-4;
+    final currentLoss = recentLosses.last;
+    final previousLoss = recentLosses[recentLosses.length - 2];
+
+    return (previousLoss - currentLoss).abs() < threshold;
+  }
+
   List<double> _softmax(List<double> x) {
-    final maxVal = x.reduce(math.max);
-    final exp =
-    x.map((e) => math.exp(e - maxVal)).toList();
-
-    final sum =
-    exp.reduce((a, b) => a + b);
-
+    final exp = x.map((e) => pow(e, 2.71828)).toList();
+    final sum = exp.reduce((a, b) => a + b);
     return exp.map((e) => e / sum).toList();
   }
 
-  Future<Map<String, double>> calculateMetrics(List<Map<String, dynamic>> validationData) async {
-    int correctPredictions = 0;
+  double _relu(double x) => max(0, x);
 
-    List<int> truePositives = List.filled(AIConstants.OUTPUT_CLASSES, 0);
-    List<int> falsePositives = List.filled(AIConstants.OUTPUT_CLASSES, 0);
-    List<int> falseNegatives = List.filled(AIConstants.OUTPUT_CLASSES, 0);
+  int _argmax(List<double> x) => x.indexOf(x.reduce(max));
 
-    for (final sample in validationData) {
-      final prediction = await predict(sample);
-      final actual = sample['Exercise Recommendation Plan'] as int;
-
-      if (prediction == actual) {
-        correctPredictions++;
-        truePositives[actual - 1]++;
-      } else {
-        falsePositives[prediction - 1]++;
-        falseNegatives[actual - 1]++;
-      }
-    }
-
-    // Metrikleri hesapla
-    _metrics['accuracy'] = correctPredictions / validationData.length;
-
-    double totalPrecision = 0.0;
-    double totalRecall = 0.0;
-
-    for (int i = 0; i < AIConstants.OUTPUT_CLASSES; i++) {
-      final precision = truePositives[i] / (truePositives[i] + falsePositives[i]);
-      final recall = truePositives[i] / (truePositives[i] + falseNegatives[i]);
-
-      totalPrecision += precision.isNaN ? 0 : precision; // NaN kontrolü
-      totalRecall += recall.isNaN ? 0 : recall; // NaN kontrolü
-    }
-
-    _metrics['precision'] = totalPrecision / AIConstants.OUTPUT_CLASSES;
-    _metrics['recall'] = totalRecall / AIConstants.OUTPUT_CLASSES;
-
-    // F1 Score hesaplama
-    if (_metrics['precision']! + _metrics['recall']! > 0) {
-      _metrics['f1_score'] =
-          2 * (_metrics['precision']! * _metrics['recall']!) /
-              (_metrics['precision']! + _metrics['recall']!);
-    } else {
-      _metrics['f1_score'] = 0; // F1 Score için NaN kontrolü
-    }
-
-    return _metrics;
+  double _calculateConfidence(List<double> probabilities) {
+    if (probabilities.isEmpty) return 0.0;
+    return probabilities.reduce(max);
   }
 
+  double _crossEntropyLoss(List<double> predictions, int target) {
+    if (target < 0 || target >= predictions.length) {
+      return double.infinity;
+    }
+
+    final probability = predictions[target];
+    if (probability <= 0) {
+      return double.infinity;
+    }
+
+    return -log(probability);
+  }
+
+  @override
+  Future<void> dispose() async {
+    try {
+      await super.dispose();
+      _trainingHistory.clear();
+      _weights.clear();
+      _ensembleWeights.clear();
+      _biases.clear();
+      _ensembleBiases.clear();
+      _mWeights.clear();
+      _vWeights.clear();
+      _modelState = AGDEModelState.uninitialized;
+      _logger.info('AGDE model resources released');
+    } catch (e) {
+      _logger.severe('Error during AGDE model disposal: $e');
+      rethrow;
+    }
+  }
 }
-
-
-
-
-
-
-

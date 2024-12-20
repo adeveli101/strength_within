@@ -1,13 +1,47 @@
+
 import 'dart:async';
-import 'package:collection/collection.dart';
+import 'package:logging/logging.dart';
 
 import '../core/ai_constants.dart';
 import '../core/ai_data_processor.dart';
 import '../core/ai_exceptions.dart';
-import '../models/agde_model.dart';
-import '../models/collab_model.dart';
-import '../models/knn_model.dart';
 import 'dataset_provider.dart';
+
+
+/*
+TODO: Sonraki Adımlar (Sırasıyla):
+
+1. Model Implementasyonları:
+   - AGDE (Adaptive Gradient Descent Ensemble) Model:
+     * lib/ai_lib/models/agde_model.dart oluşturulacak
+     * _processBatch metoduna AGDE training logic eklenecek
+     * _generatePredictions metoduna AGDE prediction logic eklenecek
+
+   - KNN Model:
+     * lib/ai_lib/models/knn_model.dart oluşturulacak
+     * _processBatch metoduna KNN training logic eklenecek
+     * _generatePredictions metoduna KNN prediction logic eklenecek
+
+   - Collaborative Filtering Model:
+     * lib/ai_lib/models/collaborative_model.dart oluşturulacak
+     * _processBatch metoduna Collaborative training logic eklenecek
+     * _generatePredictions metoduna Collaborative prediction logic eklenecek
+
+2. Metrik Sistemi Geliştirmeleri:
+   - Model spesifik metriklerin eklenmesi
+   - Early stopping logic implementasyonu
+   - Checkpoint saving sistemi
+
+3. Ensemble Logic:
+   - Model tahminlerini birleştirme stratejisi
+   - Ağırlık optimizasyonu
+   - Confidence score hesaplama
+
+4. Test ve Validasyon:
+   - Unit testlerin yazılması
+   - Integration testlerin yazılması
+   - Performance testleri
+*/
 
 
 class AIRepository {
@@ -16,238 +50,190 @@ class AIRepository {
   factory AIRepository() => _instance;
   AIRepository._internal();
 
-  // Model instances
-  final AGDEModel _agdeModel = AGDEModel();
-  final KNNModel _knnModel = KNNModel();
-  final CollaborativeModel _collabModel = CollaborativeModel();
+  final _logger = Logger('AIRepository');
 
-  // Data handlers
-  final AIDataProcessor _dataProcessor = AIDataProcessor();
-  final DatasetDBProvider _datasetProvider = DatasetDBProvider();
+  // Core components
+  final _datasetProvider = DatasetDBProvider();
+  final _dataProcessor = AIDataProcessor();
 
-  // Stream controllers
-  final StreamController<Map<String, double>> _metricsController =
-  StreamController<Map<String, double>>.broadcast();
-  Stream<Map<String, double>> get metricsStream => _metricsController.stream;
+  // Stream controllers for metrics and state
+  final _metricsController = StreamController<Map<String, dynamic>>.broadcast();
+  final _stateController = StreamController<AIModelState>.broadcast();
 
-  // Model states
-  final Map<String, bool> _modelStates = {
-    'agde_initialized': false,
-    'agde_trained': false,
-    'knn_initialized': false,
-    'collab_initialized': false,
-  };
+  // Repository state
+  bool _isInitialized = false;
+  bool _isTraining = false;
 
-  // Training metrics
-  final Map<String, Map<String, double>> _modelMetrics = {
-    'agde': {
-      'accuracy': 0.0,
-      'precision': 0.0,
-      'recall': 0.0,
-      'f1_score': 0.0,
-    },
-    'knn': {
-      'accuracy': 0.0,
-      'precision': 0.0,
-      'recall': 0.0,
-      'f1_score': 0.0,
-    },
-    'collaborative': {
-      'accuracy': 0.0,
-      'precision': 0.0,
-      'recall': 0.0,
-      'f1_score': 0.0,
-    },
-  };
-
-  // Cache management
-  final Map<int, List<int>> _recommendationCache = {};
-  static const Duration _cacheDuration = Duration(hours: 1);
-  DateTime _lastCacheCleanup = DateTime.now();
-
-  // Recommendation weights
-  final Map<String, double> _recommendationWeights = {
-    'agde': 0.5,
-    'knn': 0.3,
-    'collaborative': 0.2,
-  };
+  // Public streams
+  Stream<Map<String, dynamic>> get metricsStream => _metricsController.stream;
+  Stream<AIModelState> get stateStream => _stateController.stream;
 
   /// Repository'yi initialize eder
   Future<void> initialize() async {
-
-      await _datasetProvider.initDatabase();
-
-      // Veri kontrolü
-      await _datasetProvider.testDatabaseContent(); // Her tablodan en az bir veri alıp almadığınızı kontrol edin
-
-
+    if (_isInitialized) return;
 
     try {
-      // Dataset yükleme
-      final trainingData = await _datasetProvider.getCombinedTrainingData();
-      final processedData = await _dataProcessor.processTrainingData(trainingData);
+      _updateState(AIModelState.initializing);
+      await _datasetProvider.database;
+      await _dataProcessor.processTrainingData();
 
-      // Model initialization
-      await _agdeModel.initialize();
-      await _knnModel.initialize(processedData);
-      await _collabModel.initialize(
-          await _getUserCount(),
-          await _getProgramCount()
-      );
-
-      // Model durumlarını güncelle
-      _modelStates['agde_initialized'] = true;
-      _modelStates['knn_initialized'] = true;
-      _modelStates['collab_initialized'] = true;
-
-      // AGDE model metriklerini dinle
-      _agdeModel.metricsStream.listen((metrics) {
-        _updateMetrics('agde', metrics);
-        _metricsController.add(metrics);
-      });
+      _isInitialized = true;
+      _updateState(AIModelState.ready);
+      _logger.info('AI Repository başarıyla initialize edildi');
 
     } catch (e) {
-      print("Model başlatma hatası: $e");
-      throw AIException('Repository initialization failed: $e');
+      _updateState(AIModelState.error);
+      _logger.severe('Repository initialization hatası: $e');
+      throw AIInitializationException('Repository initialization failed: $e');
     }
   }
 
   /// Modelleri eğitir
-  Future<void> trainModels() async {
-    try {
-      final trainingData = await _datasetProvider.getCombinedTrainingData();
-      final processedData = await _dataProcessor.processTrainingData(trainingData);
-
-      // Dataset split
-      final splits = await _dataProcessor.splitDataset(processedData);
-
-      // AGDE model eğitimi
-      await _agdeModel.train(splits['train']!);
-      _modelStates['agde_trained'] = true;
-
-      // Diğer modeller için güncelleme
-      await _knnModel.calculateSimilarities();
-      await _collabModel.calculateSimilarityMatrix();
-
-      // Validation
-      await _updateAllMetrics(splits['validation']!);
-
-    } catch (e) {
-      throw AIException('Model training failed: $e');
-    }
-  }
-
-  /// Program önerisi yapar
-  Future<Map<String, dynamic>> recommendProgram(Map<String, dynamic> userData) async {
-    _checkInitialization();
-    _cleanupCache();
+  Future<void> trainModels({
+    required TrainingConfig config,
+    bool useBatchProcessing = true,
+  }) async {
+    if (!_isInitialized) throw AITrainingException('Repository is not initialized');
+    if (_isTraining) throw AITrainingException('Training is already in progress');
 
     try {
-      final userId = userData['userId'] as int;
+      _isTraining = true;
+      _updateState(AIModelState.training);
 
-      // Cache kontrol
-      if (_recommendationCache.containsKey(userId)) {
-        return {'recommendations': _recommendationCache[userId]};
+      final processedData = await _dataProcessor.processTrainingData();
+
+      final dataSplits = await _dataProcessor.splitDataset(
+        processedData,
+        validationSplit: config.splitRatios['validation'] ?? AIConstants.VALIDATION_SPLIT,
+        testSplit: config.splitRatios['test'] ?? 0.15,
+      );
+
+      if (useBatchProcessing) {
+        await _processInBatches(dataSplits['train']!, config.batchSize);
       }
 
-      final processedData = await _dataProcessor.processRawData(userData);
-
-      // Model önerileri
-      final agdeRecommendation = await _agdeModel.predict(processedData);
-      final knnRecommendations = await _knnModel.recommend(
-          userId,
-          AIConstants.KNN_NEIGHBORS_COUNT
-      );
-      final collabRecommendations = await _collabModel.recommendPrograms(
-          userId,
-          AIConstants.COLLAB_RECOMMENDATIONS_COUNT
-      );
-
-      // Önerileri birleştir
-      final combinedRecommendations = await _combineRecommendations(
-          agdeRecommendation,
-          knnRecommendations,
-          collabRecommendations
-      );
-
-      // Cache'e kaydet
-      _recommendationCache[userId] = combinedRecommendations;
-
-      return {
-        'recommendations': combinedRecommendations,
-        'metrics': _modelMetrics
-      };
+      _updateState(AIModelState.trained);
+      _emitTrainingMetrics(dataSplits['validation']!);
 
     } catch (e) {
-      throw AIException('Recommendation failed: $e');
+      _updateState(AIModelState.error);
+      throw AITrainingException('Training failed: $e');
+    } finally {
+      _isTraining = false;
     }
   }
 
-  /// Private helper methods
-  Future<int> _getUserCount() async {
-    final data = await _datasetProvider.getBMIDataset();
-    return data.length;
-  }
+  /// Tahmin yapar
+  Future<PredictionResult> predict(Map<String, dynamic> input) async {
+    if (!_isInitialized) throw AIPredictionException('Repository is not initialized');
 
-  Future<int> _getProgramCount() async {
-    final data = await _datasetProvider.getExerciseTrackingData();
-    return data.where((e) => e['Workout_Type'] != null).toSet().length;
-  }
+    try {
+      _updateState(AIModelState.predicting);
+      final processedInput = await _dataProcessor.processTrainingData();
 
-  void _checkInitialization() {
-    if (!_modelStates.values.every((state) => state)) {
-      throw AIException('Not all models are initialized');
+      // Bu kısım model implementasyonlarından sonra güncellenecek
+      final predictions = await _generatePredictions(processedInput);
+
+      _updateState(AIModelState.ready);
+      return predictions;
+
+    } catch (e) {
+      _updateState(AIModelState.error);
+      throw AIPredictionException('Prediction failed: $e');
     }
   }
 
-  Future<List<int>> _combineRecommendations(
-      int agdeRec,
-      List<int> knnRecs,
-      List<int> collabRecs
+  // Private helper methods
+  Future<void> _processInBatches(
+      List<Map<String, dynamic>> data,
+      int batchSize,
       ) async {
-    final weightedRecommendations = <int, double>{};
-
-    weightedRecommendations[agdeRec] = _recommendationWeights['agde']!;
-
-    for (var rec in knnRecs) {
-      weightedRecommendations[rec] =
-          (weightedRecommendations[rec] ?? 0) +
-              _recommendationWeights['knn']! / knnRecs.length;
-    }
-
-    for (var rec in collabRecs) {
-      weightedRecommendations[rec] =
-          (weightedRecommendations[rec] ?? 0) +
-              _recommendationWeights['collaborative']! / collabRecs.length;
-    }
-
-    return weightedRecommendations.entries
-        .toList()
-        .sorted((a, b) => b.value.compareTo(a.value))
-        .map((e) => e.key)
-        .toList();
-  }
-
-  void _cleanupCache() {
-    final now = DateTime.now();
-    if (now.difference(_lastCacheCleanup) > _cacheDuration) {
-      _recommendationCache.clear();
-      _lastCacheCleanup = now;
+    final batches = await _dataProcessor.createBatch(data, batchSize);
+    for (var batch in batches) {
+      await _processBatch(data);
+      _emitBatchMetrics();
     }
   }
 
-  Future<void> _updateAllMetrics(List<Map<String, dynamic>> validationData) async {
-    final agdeMetrics = await _agdeModel.calculateMetrics(validationData);
-    _updateMetrics('agde', agdeMetrics);
+  Future<void> _processBatch(List<Map<String, dynamic>> batch) async {
+    _logger.info('Processing batch of size: ${batch.length}');
+    // Model training logic eklenecek
   }
 
-  void _updateMetrics(String modelName, Map<String, double> metrics) {
-    _modelMetrics[modelName]?.addAll(metrics);
-    _metricsController.add(_modelMetrics[modelName]!);
+  Future<PredictionResult> _generatePredictions(
+      List<Map<String, dynamic>> processedInput,
+      ) async {
+    return PredictionResult(
+      individualPredictions: {},
+      ensemblePrediction: {},
+      metrics: {},
+    );
   }
 
-  /// Dispose
+
+
+  void _emitTrainingMetrics(List<Map<String, dynamic>> validationData) {
+    _metricsController.add({
+      'timestamp': DateTime.now().toIso8601String(),
+      'state': 'training_completed',
+      'validation_size': validationData.length,
+    });
+  }
+
+  void _emitBatchMetrics() {
+    _metricsController.add({
+      'timestamp': DateTime.now().toIso8601String(),
+      'state': 'batch_completed',
+    });
+  }
+
+  void _updateState(AIModelState newState) {
+    _stateController.add(newState);
+    _logger.info('State updated to: $newState');
+  }
+
   void dispose() {
     _metricsController.close();
+    _stateController.close();
   }
+}
+
+enum AIModelState {
+  initializing,
+  ready,
+  training,
+  predicting,
+  trained,
+  error,
+}
+
+class TrainingConfig {
+  final int epochs;
+  final int batchSize;
+  final Map<String, double> splitRatios;
+  final bool useEarlyStopping;
+  final bool saveCheckpoints;
+
+  TrainingConfig({
+    this.epochs = AIConstants.EPOCHS,
+    this.batchSize = AIConstants.BATCH_SIZE,
+    this.splitRatios = const {
+      'validation': 0.15,
+      'test': 0.15,
+    },
+    this.useEarlyStopping = true,
+    this.saveCheckpoints = true,
+  });
+}
+
+class PredictionResult {
+  final Map<String, dynamic> individualPredictions;
+  final Map<String, dynamic> ensemblePrediction;
+  final Map<String, double> metrics;
+
+  PredictionResult({
+    required this.individualPredictions,
+    required this.ensemblePrediction,
+    required this.metrics,
+  });
 }
