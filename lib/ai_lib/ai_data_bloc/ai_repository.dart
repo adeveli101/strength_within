@@ -33,23 +33,46 @@ class UserProfile {
     required this.gender,
     this.fatPercentage,
     required this.experienceLevel,
-    this.preferences,
+    this.preferences, required double bmi,
   }) {
     bmi = weight / (height * height);
   }
 
-  Map<String, dynamic> toMap() {
+  Map<String, dynamic> toMap({
+    String Function(String key)? keyMapper,
+  }) {
+    keyMapper ??= (key) => key;
+
     return {
-      'id': id,
-      'weight': weight,
-      'height': height,
-      'age': age,
-      'gender': gender,
-      'bmi': bmi,
-      'fat_percentage': fatPercentage,
-      'experience_level': experienceLevel,
-      'preferences': preferences,
+      keyMapper('id'): id,
+      keyMapper('weight'): weight,
+      keyMapper('height'): height,
+      keyMapper('age'): age,
+      keyMapper('gender'): gender,
+      keyMapper('fatPercentage'): fatPercentage,
+      keyMapper('experienceLevel'): experienceLevel,
+      keyMapper('preferences'): preferences,
+      keyMapper('bmi'): bmi,
     };
+  }
+
+  factory UserProfile.fromMap(
+    Map<String, dynamic> map, {
+    String Function(String key)? keyMapper,
+  }) {
+    keyMapper ??= (key) => key;
+
+    return UserProfile(
+      id: map[keyMapper('id')] as String,
+      weight: map[keyMapper('weight')] as double,
+      height: map[keyMapper('height')] as double,
+      age: map[keyMapper('age')] as int,
+      gender: map[keyMapper('gender')] as String,
+      fatPercentage: map[keyMapper('fatPercentage')] as double,
+      experienceLevel: map[keyMapper('experienceLevel')] as int,
+      preferences: map[keyMapper('preferences')] as Map<String, dynamic>,
+      bmi: map[keyMapper('bmi')] as double,
+    );
   }
 }
 
