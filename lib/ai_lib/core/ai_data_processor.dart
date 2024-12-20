@@ -119,7 +119,7 @@ class AIDataProcessor {
         await _validateDatasets(bmiData, bfpData, exerciseData);
 
         // Verileri batch'ler halinde işle
-        final processedData = await _processInBatches(
+        final processedData = await processInBatches(
             bmiData: bmiData,
             bfpData: bfpData,
             exerciseData: exerciseData,
@@ -130,7 +130,7 @@ class AIDataProcessor {
         if (!await _validateDataConsistency(processedData)) {
           throw AIDataProcessingException(
               'Data consistency check failed',
-              code: AIConstants.ERROR_INVALID_STATE
+              code: AIConstants.ERROR_INVALID_INPUT
           );
         }
 
@@ -163,7 +163,7 @@ class AIDataProcessor {
     throw AIDataProcessingException('Unexpected error in data processing');
   }
 
-  Future<List<Map<String, dynamic>>> _processInBatches({
+  Future<List<Map<String, dynamic>>> processInBatches({
     required List<Map<String, dynamic>> bmiData,
     required List<Map<String, dynamic>> bfpData,
     required List<Map<String, dynamic>> exerciseData,
@@ -180,7 +180,7 @@ class AIDataProcessor {
         final matchingBfp = _findMatchingBfpRecord(bmiRecord, bfpData);
         if (matchingBfp != null && matchingBfp.isNotEmpty) {
           try {
-            final processedRecord = await _processRecord(bmiRecord, matchingBfp);
+            final processedRecord = await processRecord(bmiRecord, matchingBfp);
             allProcessedData.add(processedRecord);
           } catch (e) {
             _logger.warning('Error processing record: $e');
@@ -311,7 +311,7 @@ class AIDataProcessor {
   }
 
   // Tekil kayıt işleme
-  Future<Map<String, dynamic>> _processRecord(
+  Future<Map<String, dynamic>> processRecord(
       Map<String, dynamic> bmiRecord,
       Map<String, dynamic> bfpRecord,
       ) async {
@@ -435,7 +435,7 @@ class AIDataProcessor {
     for (var bmiRecord in bmiData) {
       final matchingBfp = _findMatchingBfpRecord(bmiRecord, bfpData);
       if (matchingBfp != null) {
-        processedData.add(await _processRecord(bmiRecord, matchingBfp));
+        processedData.add(await processRecord(bmiRecord, matchingBfp));
       }
     }
 

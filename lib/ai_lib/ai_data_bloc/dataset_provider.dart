@@ -24,12 +24,12 @@ class DatasetDBProvider {
 
   /// Veritabanı instance'ını döndürür, yoksa oluşturur
   Future<Database> get database async {
-    _database ??= await _initDatabase();
+    _database ??= await initDatabase();
     return _database!;
   }
 
   /// Veritabanını initialize eder
-  Future<Database> _initDatabase() async {
+  Future<Database> initDatabase() async {
     final dbPath = join(await getDatabasesPath(), DB_NAME);
 
     try {
@@ -245,7 +245,7 @@ class DatasetDBProvider {
       await _database!.close();
       _database = null;
     }
-    await _initDatabase();
+    await initDatabase();
     _logger.info('Veritabanı yeniden yüklendi');
   }
 }
