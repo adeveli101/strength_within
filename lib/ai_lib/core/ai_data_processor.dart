@@ -1,9 +1,10 @@
+// ignore_for_file: unused_field
+
 import 'dart:math' as math;
 import 'dart:math';
 import 'ai_constants.dart';
 import 'ai_exceptions.dart';
 
-/// Veri işleme ve hazırlama işlemlerini yöneten sınıf
 class AIDataProcessor {
   // Singleton pattern
   static final AIDataProcessor _instance = AIDataProcessor._internal();
@@ -11,20 +12,27 @@ class AIDataProcessor {
   AIDataProcessor._internal();
 
   /// Feature extraction için kullanılacak özellikler
-  // ignore: unused_field
   static const List<String> _numericFeatures = [
     'Weight',
     'Height',
     'BMI',
     'Body Fat Percentage',
-    'Age'
+    'Age',
+    'Max_BPM',
+    'Avg_BPM',
+    'Resting_BPM',
+    'Session_Duration (hours)',
+    'Calories_Burned',
+    'Water_Intake (liters)',
+    'Workout_Frequency (days/week)'
   ];
 
-  // ignore: unused_field
   static const List<String> _categoricalFeatures = [
     'Gender',
     'BMIcase',
-    'BFPcase'
+    'BFPcase',
+    'Workout_Type',
+    'Experience_Level'
   ];
 
   /// Ham veriyi modelin anlayacağı formata dönüştürür
@@ -42,52 +50,94 @@ class AIDataProcessor {
     }
   }
 
-  /// Sayısal özellikleri çıkarır ve normalize eder
+  /// Toplu veri işleme
+  Future<List<Map<String, dynamic>>> processTrainingData(List<Map<String, dynamic>> data) async {
+    try {
+      final processedData = <Map<String, dynamic>>[];
+
+      for (var item in data) {
+        final processed = await processRawData(item);
+        if (processed != null && processed.isNotEmpty) { // Eğer null veya boş dönerse kontrol et
+          processedData.add(processed);
+        }
+      }
+
+      if (processedData.isEmpty) {
+        throw Exception("No valid processed data.");
+      }
+
+      return processedData;
+    } catch (e) {
+      throw AIDataProcessingException(
+          'Training data processing failed: $e',
+          code: AIConstants.ERROR_INSUFFICIENT_DATA
+      );
+    }
+  }
+
+
+  /// Sayısal özellikleri normalize eder
   Future<Map<String, double>> _extractNumericFeatures(Map<String, dynamic> data) async {
     final features = <String, double>{};
 
     // Weight normalization
-    if (data.containsKey('Weight')) {
-      features['weight_normalized'] = _normalize(
-          data['Weight'].toDouble(),
-          0.0,  // Min weight from dataset
-          200.0 // Max weight from dataset
-      );
-    }
+    features['weight_normalized'] = _normalize(
+        data['Weight']?.toDouble() ?? data['Weight (kg)']?.toDouble() ?? 0.0,
+        40.0,
+        150.0
+    );
 
     // Height normalization
-    if (data.containsKey('Height')) {
-      features['height_normalized'] = _normalize(
-          data['Height'].toDouble(),
-          0.0,  // Min height from dataset
-          2.5   // Max height from dataset
-      );
-    }
+    features['height_normalized'] = _normalize(
+        data['Height']?.toDouble() ?? data['Height (m)']?.toDouble() ?? 0.0,
+        1.4,
+        2.2
+    );
 
     // BMI normalization
-    if (data.containsKey('BMI')) {
-      features['bmi_normalized'] = _normalize(
-          data['BMI'].toDouble(),
-          AIConstants.MIN_BMI,
-          AIConstants.MAX_BMI
-      );
-    }
+    features['bmi_normalized'] = _normalize(
+        data['BMI']?.toDouble() ?? 0.0,
+        AIConstants.MIN_BMI,
+        AIConstants.MAX_BMI
+    );
 
-    // BFP normalization (if exists)
-    if (data.containsKey('Body Fat Percentage')) {
-      features['bfp_normalized'] = _normalize(
-          data['Body Fat Percentage'].toDouble(),
-          AIConstants.MIN_BFP,
-          AIConstants.MAX_BFP
-      );
-    }
+    // BFP normalization
+    features['bfp_normalized'] = _normalize(
+        data['Body Fat Percentage']?.toDouble() ??
+            data['Fat_Percentage']?.toDouble() ?? 0.0,
+        AIConstants.MIN_BFP,
+        AIConstants.MAX_BFP
+    );
 
     // Age normalization
-    if (data.containsKey('Age')) {
-      features['age_normalized'] = _normalize(
-          data['Age'].toDouble(),
-          AIConstants.MIN_AGE.toDouble(),
-          AIConstants.MAX_AGE.toDouble()
+    features['age_normalized'] = _normalize(
+        data['Age']?.toDouble() ?? 0.0,
+        AIConstants.MIN_AGE.toDouble(),
+        AIConstants.MAX_AGE.toDouble()
+    );
+
+    // Exercise metrics normalization
+    if (data.containsKey('Max_BPM')) {
+      features['max_bpm_normalized'] = _normalize(
+          data['Max_BPM'].toDouble(),
+          160.0,
+          200.0
+      );
+    }
+
+    if (data.containsKey('Session_Duration (hours)')) {
+      features['duration_normalized'] = _normalize(
+          data['Session_Duration (hours)'].toDouble(),
+          0.5,
+          2.0
+      );
+    }
+
+    if (data.containsKey('Workout_Frequency (days/week)')) {
+      features['frequency_normalized'] = _normalize(
+          data['Workout_Frequency (days/week)'].toDouble(),
+          1.0,
+          7.0
       );
     }
 
@@ -104,24 +154,21 @@ class AIDataProcessor {
       features['gender_female'] = data['Gender'].toString().toLowerCase() == 'female' ? 1.0 : 0.0;
     }
 
-    // BMIcase encoding
-    if (data.containsKey('BMIcase')) {
-      final bmiCase = data['BMIcase'].toString().toLowerCase();
-      features['bmi_severely_underweight'] = bmiCase.contains('severe') && bmiCase.contains('under') ? 1.0 : 0.0;
-      features['bmi_underweight'] = bmiCase == 'underweight' ? 1.0 : 0.0;
-      features['bmi_normal'] = bmiCase == 'normal' ? 1.0 : 0.0;
-      features['bmi_overweight'] = bmiCase == 'overweight' ? 1.0 : 0.0;
-      features['bmi_obese'] = bmiCase == 'obese' ? 1.0 : 0.0;
-      features['bmi_severely_obese'] = bmiCase.contains('severe') && bmiCase.contains('obese') ? 1.0 : 0.0;
+    // Workout type encoding
+    if (data.containsKey('Workout_Type')) {
+      final workoutType = data['Workout_Type'].toString().toLowerCase();
+      features['workout_cardio'] = workoutType == 'cardio' ? 1.0 : 0.0;
+      features['workout_strength'] = workoutType == 'strength' ? 1.0 : 0.0;
+      features['workout_hiit'] = workoutType == 'hiit' ? 1.0 : 0.0;
+      features['workout_yoga'] = workoutType == 'yoga' ? 1.0 : 0.0;
     }
 
-    // BFPcase encoding (if exists)
-    if (data.containsKey('BFPcase')) {
-      final bfpCase = data['BFPcase'].toString().toLowerCase();
-      features['bfp_athletes'] = bfpCase == 'athletes' ? 1.0 : 0.0;
-      features['bfp_fitness'] = bfpCase == 'fitness' ? 1.0 : 0.0;
-      features['bfp_acceptable'] = bfpCase == 'acceptable' ? 1.0 : 0.0;
-      features['bfp_obese'] = bfpCase == 'obese' ? 1.0 : 0.0;
+    // Experience level encoding
+    if (data.containsKey('Experience_Level')) {
+      final level = data['Experience_Level'] as int;
+      features['experience_beginner'] = level == 1 ? 1.0 : 0.0;
+      features['experience_intermediate'] = level == 2 ? 1.0 : 0.0;
+      features['experience_advanced'] = level == 3 ? 1.0 : 0.0;
     }
 
     return features;
@@ -129,19 +176,16 @@ class AIDataProcessor {
 
   /// Min-max normalization uygular
   double _normalize(double value, double min, double max) {
+    if (value.isNaN || min.isNaN || max.isNaN) return 0.0;
+    if (max == min) return 0.0;
     return (value - min) / (max - min);
   }
 
-  /// Z-score normalization uygular
-  double _standardize(double value, double mean, double stdDev) {
-    return (value - mean) / stdDev;
-  }
-
-  /// Veri setini train/validation/test olarak böler
+  /// Dataset split işlemi
   Future<Map<String, List<Map<String, dynamic>>>> splitDataset(
       List<Map<String, dynamic>> dataset
       ) async {
-    dataset.shuffle(Random(42)); // Sabit seed ile karıştırma
+    dataset.shuffle(Random(42));
 
     final trainSize = (dataset.length * (1 - AIConstants.VALIDATION_SPLIT * 2)).toInt();
     final validationSize = (dataset.length * AIConstants.VALIDATION_SPLIT).toInt();
@@ -153,7 +197,7 @@ class AIDataProcessor {
     };
   }
 
-  /// Batch oluşturur
+  /// Batch oluşturma
   Future<List<Map<String, dynamic>>> createBatch(
       List<Map<String, dynamic>> dataset,
       int batchSize
@@ -169,4 +213,10 @@ class AIDataProcessor {
     final indices = List.generate(batchSize, (_) => random.nextInt(dataset.length));
     return indices.map((i) => dataset[i]).toList();
   }
+
+
+
+
+
+
 }

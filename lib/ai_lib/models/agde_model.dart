@@ -2,31 +2,31 @@ import 'dart:async';
 import 'dart:math';
 import 'dart:math' as math;
 import 'package:strength_within/ai_lib/core/ai_constants.dart';
+import '../ai_data_bloc/dataset_provider.dart';
 import '../core/ai_data_processor.dart';
 import '../core/ai_exceptions.dart';
 
 /// Adaptive Gradient Descent Ensemble Model
 class AGDEModel {
 
-
-
-  final StreamController<Map<String, double>> _metricsController = StreamController.broadcast();
+  final StreamController<Map<String, double>> _metricsController =
+  StreamController<Map<String, double>>.broadcast();
   Stream<Map<String, double>> get metricsStream => _metricsController.stream;
 
-
-  // Singleton pattern
+// Singleton pattern
   static final AGDEModel _instance = AGDEModel._internal();
   factory AGDEModel() => _instance;
-
   AGDEModel._internal();
 
+
   final AIDataProcessor _dataProcessor = AIDataProcessor();
+  final DatasetDBProvider _datasetProvider = DatasetDBProvider();
 
   // Model parametreleri
   late List<List<double>> _weights; // Input -> Hidden weights
   late List<List<double>> _hiddenWeights; // Hidden -> Output weights
   late List<double> _biases; // Output layer biases
-  late double _learningRate; // Öğrenme oranı
+  late double _learningRate;
 
   // Model durumu
   bool _isInitialized = false;
@@ -43,11 +43,35 @@ class AGDEModel {
   /// Modeli initialize eder
   Future<void> initialize() async {
     try {
+      // Veri boyutlarını al
+      final trainingData = await _datasetProvider.getCombinedTrainingData();
+
+      if (trainingData.isEmpty) {
+        throw Exception("Training data is empty.");
+      }
+
+      final processedData = await _dataProcessor.processTrainingData(trainingData);
+
+      if (processedData.isEmpty) {
+        throw Exception("Processed data is empty.");
+      }
+
+      final featureCount = processedData.first['features'].length;
+
+      // Ağırlıkları ve biasları oluşturma
+      _weights = List.generate(
+        AIConstants.HIDDEN_LAYER_UNITS,
+            (_) => List.generate(
+          featureCount,
+              (_) => Random().nextDouble() * 2 - 1,
+        ),
+      );
+
       // Input -> Hidden layer weights
       _weights = List.generate(
         AIConstants.HIDDEN_LAYER_UNITS,
             (_) => List.generate(
-          AIConstants.INPUT_FEATURES,
+          featureCount,
               (_) => Random().nextDouble() * 2 - 1,
         ),
       );
@@ -67,8 +91,8 @@ class AGDEModel {
             (_) => Random().nextDouble(),
       );
 
-      _learningRate = AIConstants.LEARNING_RATE; // Öğrenme oranını ayarla
-      _isInitialized = true; // Modelin başlatıldığını belirt
+      _learningRate = AIConstants.LEARNING_RATE;
+      _isInitialized = true;
 
     } catch (e) {
       throw AITrainingException(
@@ -79,12 +103,14 @@ class AGDEModel {
   }
 
 
-
   /// Modeli eğitir
   Future<void> train(List<Map<String, dynamic>> trainingData) async {
-    if (!_isInitialized) await initialize(); // Modeli başlat
+    if (!_isInitialized) await initialize();
 
     try {
+      final processedData = await _dataProcessor.processTrainingData(trainingData);
+      final splits = await _dataProcessor.splitDataset(processedData);
+
       int epoch = 0;
       double bestLoss = double.infinity;
       int patienceCounter = 0;
@@ -92,21 +118,20 @@ class AGDEModel {
       while (epoch < AIConstants.EPOCHS) {
         double epochLoss = 0.0;
 
-        // Batch işleme
-        for (int i = 0; i < trainingData.length; i += AIConstants.BATCH_SIZE) {
-          final batch = trainingData.sublist(
-            i,
-            min(i + AIConstants.BATCH_SIZE, trainingData.length),
+        // Batch processing
+        for (int i = 0; i < splits['train']!.length; i += AIConstants.BATCH_SIZE) {
+          final batch = await _dataProcessor.createBatch(
+              splits['train']!,
+              AIConstants.BATCH_SIZE
           );
           final batchLoss = await _processBatch(batch);
           epochLoss += batchLoss;
         }
 
-        // Performans metriklerini hesapla ve yayınla
-        final metrics = await calculateMetrics(trainingData);
-        metrics['loss'] = epochLoss / trainingData.length; // Epoch kaybını ekle
-
-        _metricsController.add(metrics); // Metrikleri yayınla
+        // Validation ve metrik hesaplama
+        final metrics = await calculateMetrics(splits['validation']!);
+        metrics['loss'] = epochLoss / splits['train']!.length;
+        _metricsController.add(metrics);
 
         // Early stopping kontrolü
         if (epochLoss < bestLoss) {
@@ -117,11 +142,10 @@ class AGDEModel {
           if (patienceCounter >= AIConstants.EARLY_STOPPING_PATIENCE) break;
         }
 
-        epoch++; // Epoch sayısını artır
+        epoch++;
       }
 
-      _isTrained = true; // Eğitim tamamlandı
-
+      _isTrained = true;
     } catch (e) {
       throw AITrainingException(
         'Model training failed: $e',
@@ -129,7 +153,6 @@ class AGDEModel {
       );
     }
   }
-
   void dispose() {
     _metricsController.close(); // Stream'i kapat
   }
