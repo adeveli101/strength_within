@@ -1,34 +1,38 @@
 import 'package:logging/logging.dart';
-import '../ai_data_bloc/ai_repository.dart';
+import '../ai_data_bloc/datasets_models.dart';
 import '../core/ai_exceptions.dart';
 
 abstract class BaseModel {
   final _logger = Logger('BaseModel');
-  Map<String, double> _metrics = {};
+  Map<String, Map<String, double>> _metrics = {};
 
   // Ana metodlar
-  Future<void> setup(List<Map<String, dynamic>> trainingData);
-  Future<void> fit(List<Map<String, dynamic>> trainingData);
-  Future<Map<String, dynamic>> inference(Map<String, dynamic> input);
-  Future<void> validateData(List<Map<String, dynamic>> data);
+
+
+
+  Future<void> setup(List<dynamic> trainingData);
+  Future<void> fit(List<dynamic> trainingData);
+  Future<FinalDataset> predict(GymMembersTracking input);
+  Future<bool> validateData(List<dynamic> data);
 
   // Metriklerle ilgili metodlar
-  Future<Map<String, dynamic>> analyzeFit(int programId, UserProfile profile);
-  Future<Map<String, dynamic>> analyzeProgress(List<Map<String, dynamic>> userData);
-  Future<Map<String, double>> calculateMetrics(List<Map<String, dynamic>> testData);
-  Future<double> calculateConfidence(Map<String, dynamic> input, dynamic prediction);
+  Future<Map<String, double>> analyzeFit(int programId, GymMembersTracking profile);
+  Future<Map<String, double>> analyzeProgress(List<GymMembersTracking> userData);
+  Future<Map<String, double>> calculateMetrics(List<dynamic> testData);
+  Future<double> calculateConfidence(GymMembersTracking input, FinalDataset prediction);
+
 
   // Metadata ve durum metodları
-  Future<Map<String, dynamic>> getPredictionMetadata(Map<String, dynamic> input);
+  Future<Map<String, dynamic>> getPredictionMetadata(GymMembersTracking input);
 
   // Yardımcı metodlar
-  void updateMetrics(Map<String, double> newMetrics) {
-    _metrics = Map<String, double>.from(newMetrics);
+  void updateMetrics(Map<String, Map<String, double>> newMetrics) {
+    _metrics = Map.from(newMetrics);
     _logger.info('Metrics updated: $_metrics');
   }
 
-  Map<String, double> getMetrics() {
-    return Map<String, double>.from(_metrics);
+  Map<String, Map<String, double>> getMetrics() {
+    return Map.from(_metrics);
   }
 
   // Kaynak temizleme
@@ -43,38 +47,33 @@ abstract class BaseModel {
   }
 
   // Model validation
-  Future<void> validate() async {
+  Future<bool> validate() async {
     if (_metrics.isEmpty) {
       _logger.warning('Model has no metrics calculated');
+      return false;
     }
+    return true;
   }
 
   // Batch işleme kapasitesi
-  Future<List<Map<String, dynamic>>> batchProcess(
-      List<Map<String, dynamic>> inputs) async {
-    final results = <Map<String, dynamic>>[];
-
+  Future<List<FinalDataset>> batchProcess(List<GymMembersTracking> inputs) async {
+    final results = <FinalDataset>[];
     for (var input in inputs) {
       try {
-        final result = await inference(input);
+        final result = await predict(input);
         results.add(result);
       } catch (e) {
         _logger.severe('Batch processing error for input: $input');
-        results.add({
-          'error': e.toString(),
-          'input': input,
-        });
+        throw AIModelException('Batch processing failed: $e');
       }
     }
-
     return results;
   }
 
   // Model durumu kontrolü
   Future<bool> isReady() async {
     try {
-      await validate();
-      return true;
+      return await validate();
     } catch (e) {
       _logger.warning('Model validation failed: $e');
       return false;
@@ -82,11 +81,10 @@ abstract class BaseModel {
   }
 
   // Model performans metrikleri
-  Future<Map<String, double>> evaluatePerformance(
-      List<Map<String, dynamic>> testData) async {
+  Future<Map<String, double>> evaluatePerformance(List<dynamic> testData) async {
     try {
       final metrics = await calculateMetrics(testData);
-      updateMetrics(metrics);
+      updateMetrics({'performance': metrics});
       return metrics;
     } catch (e) {
       _logger.severe('Performance evaluation failed: $e');
@@ -95,25 +93,24 @@ abstract class BaseModel {
   }
 
   // Early stopping için yardımcı metod
-  bool shouldStopTraining(Map<String, double> currentMetrics,
-      Map<String, double> previousMetrics,
-      {double threshold = 0.001}) {
-
+  bool shouldStopTraining(
+      Map<String, double> currentMetrics,
+      Map<String, double> previousMetrics, {
+        double threshold = 0.001
+      }) {
     if (previousMetrics.isEmpty) return false;
 
     for (var metric in currentMetrics.keys) {
       final current = currentMetrics[metric] ?? 0.0;
       final previous = previousMetrics[metric] ?? 0.0;
-
       if ((current - previous).abs() > threshold) {
         return false;
       }
     }
-
     return true;
   }
 
-  // Model serialization için yardımcı metodlar
+  // Model serialization
   Map<String, dynamic> toJson() {
     return {
       'metrics': _metrics,
@@ -124,7 +121,7 @@ abstract class BaseModel {
   Future<void> fromJson(Map<String, dynamic> json) async {
     try {
       if (json.containsKey('metrics')) {
-        _metrics = Map<String, double>.from(json['metrics']);
+        _metrics = Map<String, Map<String, double>>.from(json['metrics']);
       }
       _logger.info('Model loaded from JSON');
     } catch (e) {

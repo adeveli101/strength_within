@@ -1,260 +1,328 @@
-import 'dart:async';
-import 'dart:io';
-import 'package:flutter/services.dart';
-import 'package:logging/logging.dart';
-import 'package:path/path.dart';
-import 'package:sqflite/sqflite.dart';
 
-/// DatasetDBProvider, fitness veritabanı işlemlerini yöneten sınıf
+// TODO: Eklenecek Metodlar:
+// - updateExerciseTracking(GymMembersTracking data)
+// - updateBFPData(FinalDatasetBFP data)
+// - updateBMIData(FinalDataset data)
+// - getRecommendationsByBMI(double bmi)
+// - getRecommendationsByExperience(int level)
+
+import 'dart:async';
+import 'package:logging/logging.dart';
+import 'package:sqflite/sqflite.dart' as sqflite;
+import 'package:idb_shim/idb_client.dart' as idb;
+import 'package:idb_shim/idb_browser.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+
+import 'datasets_models.dart';
+
 class DatasetDBProvider {
-  // Singleton pattern implementation
   static final DatasetDBProvider _instance = DatasetDBProvider._internal();
   factory DatasetDBProvider() => _instance;
   DatasetDBProvider._internal();
 
-  // Logger instance
   final _logger = Logger('DatasetDBProvider');
 
-  // Database constants
-  static const String DB_NAME = 'dataset_1.db';
+  static const String DB_NAME = 'fitness_dataset.db';
   static const int DB_VERSION = 1;
 
-  // Database instance
-  static Database? _database;
+  static sqflite.Database? _sqliteDb;
+  static idb.Database? _indexedDb;
 
-  /// Veritabanı instance'ını döndürür, yoksa oluşturur
-  Future<Database> get database async {
-    _database ??= await initDatabase();
-    return _database!;
-  }
-
-  /// Veritabanını initialize eder
-  Future<Database> initDatabase() async {
-    final dbPath = join(await getDatabasesPath(), DB_NAME);
-
-    try {
-      // Veritabanı var mı kontrol et
-      if (await databaseExists(dbPath)) {
-        _logger.info('Veritabanı mevcut: $dbPath');
-        return await openDatabase(dbPath, version: DB_VERSION);
-      }
-
-      // Veritabanı yoksa asset'ten kopyala
-      _logger.info('Veritabanı oluşturuluyor...');
-      await _copyDatabaseFromAsset(dbPath);
-
-      // Veritabanını aç ve şemayı oluştur
-      return await openDatabase(
-        dbPath,
-        version: DB_VERSION,
-        onCreate: (db, version) async {
-          await _createDatabaseSchema(db);
-          await _validateDatabase(db);
-        },
-      );
-    } catch (e) {
-      final error = 'Veritabanı başlatma hatası: $e';
-      _logger.severe(error);
-      throw DatabaseException(error);
+  Future<dynamic> get database async {
+    if (kIsWeb) {
+      _indexedDb ??= await initWebDatabase();
+      return _indexedDb;
+    } else {
+      _sqliteDb ??= await initNativeDatabase();
+      return _sqliteDb;
     }
   }
 
-  /// Asset'ten veritabanını kopyalar
-  Future<void> _copyDatabaseFromAsset(String dbPath) async {
-    try {
-      // Asset'ten veritabanı dosyasını oku
-      final data = await rootBundle.load(join('database', DB_NAME));
-      final bytes = data.buffer.asUint8List();
-
-      // Dosyayı belirtilen konuma yaz
-      await File(dbPath).writeAsBytes(bytes, flush: true);
-      _logger.info('Veritabanı asset\'ten başarıyla kopyalandı');
-    } catch (e) {
-      throw DatabaseException('Veritabanı kopyalama hatası: $e');
-    }
-  }
-
-  /// Veritabanı şemasını oluşturur
-  Future<void> _createDatabaseSchema(Database db) async {
-    await db.transaction((txn) async {
-      // BMI Dataset tablosu
-      await txn.execute('''
-        CREATE TABLE IF NOT EXISTS final_dataset (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          Weight REAL NOT NULL,
-          Height REAL NOT NULL,
-          BMI REAL NOT NULL,
-          Gender TEXT NOT NULL,
-          Age INTEGER NOT NULL,
-          BMIcase TEXT NOT NULL,
-          "Exercise Recommendation Plan" INTEGER NOT NULL
-        )
-      ''');
-
-      // BFP Dataset tablosu
-      await txn.execute('''
-        CREATE TABLE IF NOT EXISTS final_dataset_BFP (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          Weight REAL NOT NULL,
-          Height REAL NOT NULL,
-          BMI REAL NOT NULL,
-          "Body Fat Percentage" REAL NOT NULL,
-          BFPcase TEXT NOT NULL,
-          Gender TEXT NOT NULL,
-          Age INTEGER NOT NULL,
-          BMIcase TEXT NOT NULL,
-          "Exercise Recommendation Plan" INTEGER NOT NULL
-        )
-      ''');
-
-      // Exercise Tracking tablosu
-      await txn.execute('''
-        CREATE TABLE IF NOT EXISTS gym_members_exercise_tracking (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          Age INTEGER NOT NULL,
-          Gender TEXT NOT NULL,
-          "Weight (kg)" REAL NOT NULL,
-          "Height (m)" REAL NOT NULL,
-          Max_BPM INTEGER,
-          Avg_BPM INTEGER,
-          Resting_BPM INTEGER,
-          "Session_Duration (hours)" REAL,
-          Calories_Burned REAL,
-          Workout_Type TEXT,
-          Fat_Percentage REAL,
-          "Water_Intake (liters)" REAL,
-          "Workout_Frequency (days/week)" INTEGER,
-          Experience_Level INTEGER NOT NULL,
-          BMI REAL NOT NULL
-        )
-      ''');
-
-      // Performans indeksleri
-      await txn.execute('CREATE INDEX IF NOT EXISTS idx_bmi_matching ON final_dataset(Weight, Height, BMI, Gender, Age)');
-      await txn.execute('CREATE INDEX IF NOT EXISTS idx_bfp_matching ON final_dataset_BFP(Weight, Height, BMI, Gender, Age)');
-      await txn.execute('CREATE INDEX IF NOT EXISTS idx_exercise_tracking ON gym_members_exercise_tracking(Experience_Level, BMI)');
-    });
-
-    _logger.info('Veritabanı şeması başarıyla oluşturuldu');
-  }
-
-  /// Veritabanı bütünlüğünü kontrol eder
-  Future<void> _validateDatabase(Database db) async {
-    try {
-      // Her tablodan örnek veri kontrolü
-      final bmiData = await db.query('final_dataset', limit: 1);
-      final bfpData = await db.query('final_dataset_BFP', limit: 1);
-      final exerciseData = await db.query('gym_members_exercise_tracking', limit: 1);
-
-      // Veri kontrolü
-      if (bmiData.isEmpty || bfpData.isEmpty || exerciseData.isEmpty) {
-        throw DatabaseException('Veritabanı boş veya eksik veri içeriyor');
-      }
-
-      _logger.info('Veritabanı doğrulama başarılı');
-    } catch (e) {
-      throw DatabaseException('Veritabanı doğrulama hatası: $e');
-    }
-  }
-
-  /// BMI verilerini getirir
   Future<List<Map<String, dynamic>>> getBMIDataset() async {
     final db = await database;
     try {
-      final result = await db.query('final_dataset');
-      _logger.info('BMI veri sayısı: ${result.length}');
-      return result;
+      if (kIsWeb) {
+        final transaction = db.transaction('final_dataset', 'readonly');
+        final store = transaction.objectStore('final_dataset');
+        final List rawResult = await store.getAll();
+        return rawResult.map((item) => Map<String, dynamic>.from(item)).toList();
+      } else {
+        return await db.query('final_dataset');
+      }
     } catch (e) {
+      _logger.severe('BMI veri çekme hatası: $e');
       throw DatabaseException('BMI veri çekme hatası: $e');
     }
   }
 
-  /// BFP verilerini getirir
   Future<List<Map<String, dynamic>>> getBFPDataset() async {
     final db = await database;
     try {
-      final result = await db.query('final_dataset_BFP');
-      _logger.info('BFP veri sayısı: ${result.length}');
-      return result;
+      if (kIsWeb) {
+        final transaction = db.transaction('final_dataset_BFP', 'readonly');
+        final store = transaction.objectStore('final_dataset_BFP');
+        final List rawResult = await store.getAll();
+        return rawResult.map((item) => Map<String, dynamic>.from(item)).toList();
+      } else {
+        return await db.query('final_dataset_BFP');
+      }
     } catch (e) {
+      _logger.severe('BFP veri çekme hatası: $e');
       throw DatabaseException('BFP veri çekme hatası: $e');
     }
   }
 
-  /// Exercise tracking verilerini getirir
   Future<List<Map<String, dynamic>>> getExerciseTrackingData() async {
     final db = await database;
     try {
-      final result = await db.query('gym_members_exercise_tracking');
-      _logger.info('Exercise tracking veri sayısı: ${result.length}');
-      return result;
+      if (kIsWeb) {
+        final transaction = db.transaction('gym_members_tracking', 'readonly');
+        final store = transaction.objectStore('gym_members_tracking');
+        final List rawResult = await store.getAll();
+        return rawResult.map((item) => Map<String, dynamic>.from(item)).toList();
+      } else {
+        return await db.query('gym_members_tracking');
+      }
     } catch (e) {
+      _logger.severe('Exercise tracking veri çekme hatası: $e');
       throw DatabaseException('Exercise tracking veri çekme hatası: $e');
     }
   }
 
-  /// Tüm veri setlerini birleştirir
-  Future<List<Map<String, dynamic>>> getCombinedTrainingData() async {
+  Future<idb.Database> initWebDatabase() async {
     try {
-      // Tüm veri setlerini al
-      final bmiData = await getBMIDataset();
-      final bfpData = await getBFPDataset();
-      final exerciseData = await getExerciseTrackingData();
-
-      // Birleştirilmiş veri seti
-      final combinedData = <Map<String, dynamic>>[];
-
-      // BMI ve BFP verilerini eşleştir
-      for (final bmi in bmiData) {
-        final matchingBfp = bfpData.firstWhere(
-              (bfp) => _matchRecords(bmi, bfp),
-          orElse: () => <String, dynamic>{},
-        );
-
-        if (matchingBfp.isNotEmpty) {
-          combinedData.add({
-            ...bmi,
-            'Body Fat Percentage': matchingBfp['Body Fat Percentage'],
-            'BFPcase': matchingBfp['BFPcase'],
-          });
-        }
+      final factory = getIdbFactory();
+      if (factory == null) {
+        throw DatabaseException('IndexedDB factory oluşturulamadı');
       }
 
-      // Exercise tracking verilerini ekle
-      combinedData.addAll(exerciseData);
+      final db = await factory.open(DB_NAME, version: DB_VERSION,
+          onUpgradeNeeded: (idb.VersionChangeEvent event) {
+            final db = event.database;
+            _createWebStores(db);
+          }
+      );
 
-      _logger.info('Toplam birleştirilmiş veri sayısı: ${combinedData.length}');
-      return combinedData;
+      return db;
     } catch (e) {
-      throw DatabaseException('Veri birleştirme hatası: $e');
+      throw DatabaseException('Web veritabanı başlatma hatası: $e');
     }
   }
 
-  /// İki kaydın eşleşip eşleşmediğini kontrol eder
-  bool _matchRecords(Map<String, dynamic> bmi, Map<String, dynamic> bfp) {
-    return bmi['Weight'] == bfp['Weight'] &&
-        bmi['Height'] == bfp['Height'] &&
-        bmi['BMI'] == bfp['BMI'] &&
-        bmi['Gender'] == bfp['Gender'] &&
-        bmi['Age'] == bfp['Age'];
+  Future<sqflite.Database> initNativeDatabase() async {
+    try {
+      return await sqflite.openDatabase(
+        DB_NAME,
+        version: DB_VERSION,
+        onCreate: (db, version) async {
+          await _createNativeTables(db);
+        },
+      );
+    } catch (e) {
+      throw DatabaseException('Native veritabanı başlatma hatası: $e');
+    }
   }
 
-  /// Veritabanını yeniden yükler
-  Future<void> reloadDatabase() async {
-    if (_database != null) {
-      await _database!.close();
-      _database = null;
+  void _createWebStores(idb.Database db) {
+    if (!db.objectStoreNames.contains('final_dataset')) {
+      db.createObjectStore('final_dataset', autoIncrement: true);
     }
-    await initDatabase();
-    _logger.info('Veritabanı yeniden yüklendi');
+    if (!db.objectStoreNames.contains('final_dataset_BFP')) {
+      db.createObjectStore('final_dataset_BFP', autoIncrement: true);
+    }
+    if (!db.objectStoreNames.contains('gym_members_tracking')) {
+      db.createObjectStore('gym_members_tracking', autoIncrement: true);
+    }
   }
+
+  Future<void> _createNativeTables(sqflite.Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS final_dataset (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        weight REAL NOT NULL,
+        height REAL NOT NULL,
+        bmi REAL NOT NULL,
+        gender TEXT NOT NULL,
+        age INTEGER NOT NULL,
+        bmi_case TEXT NOT NULL,
+        exercise_plan INTEGER NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS final_dataset_BFP (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        weight REAL NOT NULL,
+        height REAL NOT NULL,
+        bmi REAL NOT NULL,
+        body_fat_percentage REAL NOT NULL,
+        bfp_case TEXT NOT NULL,
+        gender TEXT NOT NULL,
+        age INTEGER NOT NULL,
+        bmi_case TEXT NOT NULL,
+        exercise_plan INTEGER NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS gym_members_tracking (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        age INTEGER NOT NULL,
+        gender TEXT NOT NULL,
+        weight_kg REAL NOT NULL,
+        height_m REAL NOT NULL,
+        max_bpm INTEGER,
+        avg_bpm INTEGER,
+        resting_bpm INTEGER,
+        session_duration REAL,
+        calories_burned REAL,
+        workout_type TEXT,
+        fat_percentage REAL,
+        water_intake REAL,
+        workout_frequency INTEGER,
+        experience_level INTEGER NOT NULL,
+        bmi REAL NOT NULL
+      )
+    ''');
+  }
+
+
+  // lib/ai_lib/dataset_provider.dart içine eklenecek metodlar
+
+  Future<void> updateExerciseTracking(GymMembersTracking data) async {
+    final db = await database;
+    try {
+      if (kIsWeb) {
+        final transaction = db.transaction('gym_members_exercise_tracking', 'readwrite');
+        final store = transaction.objectStore('gym_members_exercise_tracking');
+        await store.put(data.toMap());
+      } else {
+        await db.update(
+          'gym_members_exercise_tracking',
+          data.toMap(),
+          where: 'age = ? AND gender = ?',
+          whereArgs: [data.age, data.gender],
+        );
+      }
+      _logger.info('Exercise tracking verisi güncellendi');
+    } catch (e) {
+      throw DatabaseException('Exercise tracking güncelleme hatası: $e');
+    }
+  }
+
+  Future<void> updateBFPData(FinalDatasetBFP data) async {
+    final db = await database;
+    try {
+      if (kIsWeb) {
+        final transaction = db.transaction('final_dataset_BFP', 'readwrite');
+        final store = transaction.objectStore('final_dataset_BFP');
+        await store.put(data.toMap());
+      } else {
+        await db.update(
+          'final_dataset_BFP',
+          data.toMap(),
+          where: 'weight = ? AND height = ? AND gender = ? AND age = ?',
+          whereArgs: [data.weight, data.height, data.gender, data.age],
+        );
+      }
+      _logger.info('BFP verisi güncellendi');
+    } catch (e) {
+      throw DatabaseException('BFP veri güncelleme hatası: $e');
+    }
+  }
+
+  Future<void> updateBMIData(FinalDataset data) async {
+    final db = await database;
+    try {
+      if (kIsWeb) {
+        final transaction = db.transaction('final_dataset', 'readwrite');
+        final store = transaction.objectStore('final_dataset');
+        await store.put(data.toMap());
+      } else {
+        await db.update(
+          'final_dataset',
+          data.toMap(),
+          where: 'weight = ? AND height = ? AND gender = ? AND age = ?',
+          whereArgs: [data.weight, data.height, data.gender, data.age],
+        );
+      }
+      _logger.info('BMI verisi güncellendi');
+    } catch (e) {
+      throw DatabaseException('BMI veri güncelleme hatası: $e');
+    }
+  }
+
+  Future<List<FinalDataset>> getRecommendationsByBMI(double bmi) async {
+    final db = await database;
+    try {
+      final double bmiRange = 1.0; // BMI için kabul edilebilir sapma
+
+      if (kIsWeb) {
+        final transaction = db.transaction('final_dataset', 'readonly');
+        final store = transaction.objectStore('final_dataset');
+        final List rawResult = await store.getAll();
+
+        return rawResult
+            .map((item) => FinalDataset.fromMap(Map<String, dynamic>.from(item)))
+            .where((data) => (data.bmi - bmi).abs() <= bmiRange)
+            .toList();
+      } else {
+        final result = await db.query(
+          'final_dataset',
+          where: 'bmi BETWEEN ? AND ?',
+          whereArgs: [bmi - bmiRange, bmi + bmiRange],
+        );
+
+        return result.map((item) => FinalDataset.fromMap(item)).toList();
+      }
+    } catch (e) {
+      throw DatabaseException('BMI bazlı öneri getirme hatası: $e');
+    }
+  }
+
+  Future<List<GymMembersTracking>> getRecommendationsByExperience(int level) async {
+    final db = await database;
+    try {
+      if (kIsWeb) {
+        final transaction = db.transaction('gym_members_exercise_tracking', 'readonly');
+        final store = transaction.objectStore('gym_members_exercise_tracking');
+        final List rawResult = await store.getAll();
+
+        return rawResult
+            .map((item) => GymMembersTracking.fromMap(Map<String, dynamic>.from(item)))
+            .where((data) => data.experienceLevel == level)
+            .toList();
+      } else {
+        final result = await db.query(
+          'gym_members_exercise_tracking',
+          where: 'experience_level = ?',
+          whereArgs: [level],
+        );
+
+        return result.map((item) => GymMembersTracking.fromMap(item)).toList();
+      }
+    } catch (e) {
+      throw DatabaseException('Deneyim seviyesi bazlı öneri getirme hatası: $e');
+    }
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
 }
 
-/// Özel veritabanı exception sınıfı
 class DatabaseException implements Exception {
   final String message;
   DatabaseException(this.message);
-
   @override
   String toString() => 'DatabaseException: $message';
 }

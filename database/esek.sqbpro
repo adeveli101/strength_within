@@ -1,5 +1,78 @@
-<?xml version="1.0" encoding="UTF-8"?><sqlb_project><db path="dataset_1.db" readonly="0" foreign_keys="1" case_sensitive_like="0" temp_store="0" wal_autocheckpoint="1000" synchronous="2"/><attached/><window><main_tabs open="browser pragmas query structure" current="1"/></window><tab_structure><column_width id="0" width="300"/><column_width id="1" width="0"/><column_width id="2" width="100"/><column_width id="3" width="2413"/><column_width id="4" width="0"/><expanded_item id="0" parent="1"/><expanded_item id="1" parent="1"/><expanded_item id="2" parent="1"/><expanded_item id="3" parent="1"/></tab_structure><tab_browse><table title="final_dataset" custom_title="0" dock_id="4" table="4,13:mainfinal_dataset"/><dock_state state="000000ff00000000fd00000001000000020000041d0000036cfc0100000005fc00000000000003ee0000000000fffffffa000000000100000002fb000000160064006f0063006b00420072006f00770073006500310000000000ffffffff0000000000000000fb000000160064006f0063006b00420072006f00770073006500320100000000ffffffff0000000000000000fc00000000000003ba0000000000fffffffa000000000100000001fb000000160064006f0063006b00420072006f00770073006500330100000000ffffffff0000000000000000fb000000160064006f0063006b00420072006f00770073006500350100000000000004260000000000000000fb000000160064006f0063006b00420072006f00770073006500360100000000000004260000000000000000fb000000160064006f0063006b00420072006f00770073006500340100000000ffffffff0000011e00ffffff0000041d0000000000000004000000040000000800000008fc00000000"/><default_encoding codec=""/><browse_table_settings><table schema="main" name="final_dataset" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort/><column_widths><column index="1" value="135"/><column index="2" value="135"/><column index="3" value="135"/><column index="4" value="55"/><column index="5" value="35"/><column index="6" value="143"/><column index="7" value="185"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table></browse_table_settings></tab_browse><tab_sql><sql name="SQL 1">SELECT age, 
-       MIN(age) as Min_AGE, 
-FROM final_dataset
-
+<?xml version="1.0" encoding="UTF-8"?><sqlb_project><db path="dataset_1.db" readonly="0" foreign_keys="1" case_sensitive_like="0" temp_store="0" wal_autocheckpoint="1000" synchronous="2"/><attached/><window><main_tabs open="browser pragmas query structure" current="0"/></window><tab_structure><column_width id="0" width="300"/><column_width id="1" width="0"/><column_width id="2" width="100"/><column_width id="3" width="2626"/><column_width id="4" width="0"/><expanded_item id="0" parent="1"/><expanded_item id="1" parent="1"/><expanded_item id="2" parent="1"/><expanded_item id="3" parent="1"/></tab_structure><tab_browse><table title="final_dataset" custom_title="0" dock_id="4" table="4,13:mainfinal_dataset"/><table title="final_dataset_BFP" custom_title="0" dock_id="4" table="4,17:mainfinal_dataset_BFP"/><dock_state state="000000ff00000000fd00000001000000020000030f0000036cfc0100000005fc00000000000003ee0000000000fffffffa000000000100000002fb000000160064006f0063006b00420072006f00770073006500310000000000ffffffff0000000000000000fb000000160064006f0063006b00420072006f00770073006500320100000000ffffffff0000000000000000fc00000000000003ba0000000000fffffffa000000000100000001fb000000160064006f0063006b00420072006f00770073006500330100000000ffffffff0000000000000000fb000000160064006f0063006b00420072006f00770073006500350100000000000004260000000000000000fb000000160064006f0063006b00420072006f00770073006500360100000000000004260000000000000000fc000000000000030f0000013900fffffffa000000010100000002fb000000160064006f0063006b00420072006f00770073006500340100000000ffffffff0000013900fffffffb000000160064006f0063006b00420072006f00770073006500340100000000ffffffff0000013900ffffff0000030f0000000000000004000000040000000800000008fc00000000"/><default_encoding codec=""/><browse_table_settings><table schema="main" name="final_dataset" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort/><column_widths><column index="1" value="135"/><column index="2" value="135"/><column index="3" value="135"/><column index="4" value="55"/><column index="5" value="35"/><column index="6" value="143"/><column index="7" value="185"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="final_dataset_BFP" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort/><column_widths><column index="1" value="39"/><column index="2" value="135"/><column index="3" value="135"/><column index="4" value="135"/><column index="5" value="135"/><column index="6" value="87"/><column index="7" value="55"/><column index="8" value="35"/><column index="9" value="143"/><column index="10" value="87"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="gym_members_tracking" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort/><column_widths><column index="1" value="35"/><column index="2" value="55"/><column index="3" value="95"/><column index="4" value="87"/><column index="5" value="65"/><column index="6" value="61"/><column index="7" value="80"/><column index="8" value="199"/><column index="9" value="99"/><column index="10" value="88"/><column index="11" value="96"/><column index="12" value="175"/><column index="13" value="239"/><column index="14" value="105"/><column index="15" value="47"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table></browse_table_settings></tab_browse><tab_sql><sql name="SQL 3">-- 1. final_dataset için yeni tablo oluşturma
+CREATE TABLE new_final_dataset (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    weight REAL NOT NULL,
+    height REAL NOT NULL,
+    bmi REAL NOT NULL,
+    gender TEXT NOT NULL,
+    age INTEGER NOT NULL,
+    bmi_case TEXT NOT NULL,
+    exercise_plan INTEGER NOT NULL
+);
+
+-- 2. Mevcut verileri yeni tabloya taşıma
+INSERT INTO new_final_dataset (weight, height, bmi, gender, age, bmi_case, exercise_plan)
+SELECT weight, height, bmi, gender, age, bmi_case, exercise_plan FROM final_dataset;
+
+-- 3. Eski tabloyu silme
+DROP TABLE final_dataset;
+
+-- 4. Yeni tabloyu yeniden adlandırma
+ALTER TABLE new_final_dataset RENAME TO final_dataset;
+
+-- Aynı işlemleri diğer tablolar için de uygulayın
+
+-- 1. final_dataset_BFP için yeni tablo oluşturma
+CREATE TABLE new_final_dataset_BFP (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    weight REAL NOT NULL,
+    height REAL NOT NULL,
+    bmi REAL NOT NULL,
+    body_fat_percentage REAL NOT NULL,
+    bfp_case TEXT NOT NULL,
+    gender TEXT NOT NULL,
+    age INTEGER NOT NULL,
+    bmi_case TEXT NOT NULL,
+    exercise_plan INTEGER NOT NULL
+);
+
+-- 2. Mevcut verileri yeni tabloya taşıma
+INSERT INTO new_final_dataset_BFP (weight, height, bmi, body_fat_percentage, bfp_case, gender, age, bmi_case, exercise_plan)
+SELECT weight, height, bmi, body_fat_percentage, bfp_case, gender, age, bmi_case, exercise_plan FROM final_dataset_BFP;
+
+-- 3. Eski tabloyu silme
+DROP TABLE final_dataset_BFP;
+
+-- 4. Yeni tabloyu yeniden adlandırma
+ALTER TABLE new_final_dataset_BFP RENAME TO final_dataset_BFP;
+
+-- 1. gym_members_tracking için yeni tablo oluşturma
+CREATE TABLE new_gym_members_tracking (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    age INTEGER NOT NULL,
+    gender TEXT NOT NULL,
+    weight_kg REAL NOT NULL,
+    height_m REAL NOT NULL,
+    max_bpm INTEGER,
+    avg_bpm INTEGER,
+    resting_bpm INTEGER,
+    session_duration REAL,
+    calories_burned REAL,
+    workout_type TEXT,
+    fat_percentage REAL,
+    water_intake REAL,
+    workout_frequency INTEGER,
+    experience_level INTEGER NOT NULL,
+    bmi REAL NOT NULL
+);
+
+-- 2. Mevcut verileri yeni tabloya taşıma
+INSERT INTO new_gym_members_tracking (age, gender, weight_kg, height_m, max_bpm, avg_bpm, resting_bpm, session_duration, calories_burned, workout_type, fat_percentage, water_intake, workout_frequency, experience_level, bmi)
+SELECT age, gender, weight_kg, height_m, max_bpm, avg_bpm, resting_bpm, session_duration, calories_burned, workout_type, fat_percentage, water_intake, workout_frequency, experience_level, bmi FROM gym_members_tracking;
+
+-- 3. Eski tabloyu silme
+DROP TABLE gym_members_tracking;
+
+-- 4. Yeni tabloyu yeniden adlandırma
+ALTER TABLE new_gym_members_tracking RENAME TO gym_members_tracking;
 </sql><current_tab id="0"/></tab_sql></sqlb_project>
