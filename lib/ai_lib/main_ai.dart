@@ -1,64 +1,58 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:idb_shim/idb_browser.dart'; // IndexedDB için gerekli
+import 'package:idb_shim/idb.dart' as idb; // IndexedDB'nin temel sınıfları için
 
 import 'package:flutter/material.dart';
 import 'package:logging/logging.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+
 import 'ai_data_bloc/ai_repository.dart';
-import 'z_ai_ui/ModelDashboardScreen.dart';
+import 'z_ai_ui/ModelTestScreen.dart';
 import 'z_ai_ui/ModelTrainingScreen.dart';
-import 'z_ai_ui/RecommendationTestScreen.dart';
 
 
+
+idb.IdbFactory? indexedDbFactory; // IndexedDB için fabrika
+DatabaseFactory? sqliteDbFactory; // SQLite için fabrika
 
 Future<void> initializeDatabaseFactory() async {
   if (kIsWeb) {
-    // Web platformu için özel yapılandırma
-    databaseFactory = databaseFactoryFfiWeb;
+    // Web ortamında IndexedDB kullanılıyor
+    indexedDbFactory = getIdbFactory();
+    print("Web ortamında IndexedDB başlatıldı.");
   } else {
-    // Desktop platformları için
+    // Mobil ve masaüstü platformlarda SQLite kullanılıyor
     sqfliteFfiInit();
-    databaseFactory = databaseFactoryFfi;
+    sqliteDbFactory = databaseFactoryFfi;
+    print("SQLite FFI başlatıldı.");
   }
 }
 
-// Özel hata sınıfları
+
+
 class AIInitializationException implements Exception {
   final String message;
   AIInitializationException(this.message);
+
   @override
   String toString() => 'AI Başlatma Hatası: $message';
 }
 
-class AIStateException implements Exception {
-  final String message;
-  AIStateException(this.message);
-  @override
-  String toString() => 'AI Durum Hatası: $message';
-}
-
 Future<void> main() async {
-  try {
-    WidgetsFlutterBinding.ensureInitialized();
+  WidgetsFlutterBinding.ensureInitialized();
 
-    // Veritabanı factory'sini platform bazlı yapılandır
-    await initializeDatabaseFactory();
+  await initializeDatabaseFactory();
 
-    // Logger konfigürasyonu
-    Logger.root.level = Level.ALL;
-    Logger.root.onRecord.listen((record) {
-      print('${record.level.name}: ${record.time}: ${record.message}');
-    });
+  Logger.root.level = Level.ALL;
+  Logger.root.onRecord.listen((record) {
+    print('${record.level.name}: ${record.time}: ${record.message}');
+  });
 
-    FlutterError.onError = (FlutterErrorDetails details) {
-      Logger.root.severe('Flutter Hatası', details.exception, details.stack);
-    };
+  FlutterError.onError = (FlutterErrorDetails details) {
+    Logger.root.severe('Flutter Hatası', details.exception, details.stack);
+  };
 
-    runApp(AIManagerApp());
-  } catch (e, stackTrace) {
-    Logger.root.severe('Kritik Başlatma Hatası', e, stackTrace);
-    rethrow;
-  }
+  runApp(AIManagerApp());
 }
 
 class AIManagerApp extends StatelessWidget {
@@ -79,24 +73,6 @@ class AIManagerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    ErrorWidget.builder = (FlutterErrorDetails errorDetails) {
-      return Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.error_outline, size: 48, color: Colors.red),
-              Text('Uygulama Hatası: ${errorDetails.exception}'),
-              ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: Text('Geri Dön'),
-              ),
-            ],
-          ),
-        ),
-      );
-    };
-
     return MaterialApp(
       title: 'AI Model Manager',
       theme: ThemeData(
@@ -109,7 +85,6 @@ class AIManagerApp extends StatelessWidget {
       },
     );
   }
-
 }
 
 class AIHomePage extends StatefulWidget {
@@ -122,12 +97,10 @@ class AIHomePage extends StatefulWidget {
 class _AIHomePageState extends State<AIHomePage> {
   final AIRepository _repository = AIRepository();
   int _currentIndex = 0;
-  final _logger = Logger('AIHomePage');
 
   final List<Widget> _pages = [
-    ModelDashboardScreen(),
+    ModelTestScreen(),
     ModelTrainingScreen(),
-    RecommendationTestScreen(),
   ];
 
   @override
@@ -139,33 +112,30 @@ class _AIHomePageState extends State<AIHomePage> {
   Future<void> _initializeAI() async {
     try {
       await _repository.initialize();
-      _logger.info('AI sistemi başarıyla başlatıldı');
+      Logger.root.info('AI sistemi başarıyla başlatıldı');
     } on AIInitializationException catch (e) {
-      _logger.severe('AI başlatma hatası', e);
-      _showErrorDialog('AI Başlatma Hatası', e.toString());
-    } on AIStateException catch (e) {
-      _logger.severe('AI durum hatası', e);
-      _showErrorDialog('AI Durum Hatası', e.toString());
+      Logger.root.severe('AI başlatma hatası', e);
+      _showErrorDialog(context, 'AI Başlatma Hatası', e.toString()); // Burada context'i geçiriyoruz
     } catch (e, stackTrace) {
-      _logger.severe('Beklenmeyen hata', e, stackTrace);
-      _showErrorDialog('Beklenmeyen Hata', 'Sistem başlatılamadı: $e');
+      Logger.root.severe('Beklenmeyen hata', e, stackTrace);
+      _showErrorDialog(context, 'Beklenmeyen Hata', 'Sistem başlatılamadı: $e'); // Burada context'i geçiriyoruz
     }
   }
 
-  void _showErrorDialog(String title, String message) {
+  void _showErrorDialog(BuildContext dialogContext, String title, String message) {
     if (!mounted) return;
 
     showDialog(
-      context: context,
+      context: dialogContext,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
+      builder: (BuildContext context) => AlertDialog(
         title: Text(title),
         content: Text(message),
         actions: [
           TextButton(
             onPressed: () {
               Navigator.of(context).pop();
-              _initializeAI();
+              _initializeAI(); // Tekrar denemek için
             },
             child: Text('Tekrar Dene'),
           ),
@@ -180,88 +150,28 @@ class _AIHomePageState extends State<AIHomePage> {
       body: StreamBuilder<AIRepositoryState>(
         stream: _repository.stateStream,
         builder: (context, snapshot) {
-          try {
-            if (!snapshot.hasData) {
-              return _buildLoadingWidget();
-            }
+          if (!snapshot.hasData || snapshot.data == AIRepositoryState.initializing) {
+            return Center(child: CircularProgressIndicator());
+          }
 
-            switch (snapshot.data) {
-              case AIRepositoryState.uninitialized:
-              case AIRepositoryState.initializing:
-                return _buildLoadingWidget();
-
-              case AIRepositoryState.error:
-                return _buildErrorWidget();
-
-              case AIRepositoryState.ready:
-                return _pages[_currentIndex];
-
-              default:
-                throw AIStateException('Bilinmeyen AI durumu');
-            }
-          } catch (e, stackTrace) {
-            _logger.severe('Widget oluşturma hatası', e, stackTrace);
-            return _buildErrorWidget();
+          switch (snapshot.data) {
+            case AIRepositoryState.error:
+              return Center(child: Text('AI sistemi başlatılamadı.'));
+            case AIRepositoryState.ready:
+              return _pages[_currentIndex];
+            default:
+              return Container(); // Bilinmeyen durum
           }
         },
       ),
-      bottomNavigationBar: _buildBottomNavigation(),
-    );
-  }
-
-  Widget _buildLoadingWidget() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircularProgressIndicator(),
-          SizedBox(height: 16),
-          Text('AI Sistemi Başlatılıyor...'),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) => setState(() => _currentIndex = index),
+        items: [
+          BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dashboard'),
+          BottomNavigationBarItem(icon: Icon(Icons.school), label: 'Eğitim'),
         ],
       ),
-    );
-  }
-
-  Widget _buildErrorWidget() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.error_outline, size: 48, color: Colors.red),
-          Text('AI sistemi başlatılamadı'),
-          ElevatedButton(
-            onPressed: _initializeAI,
-            child: Text('Tekrar Dene'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBottomNavigation() {
-    return BottomNavigationBar(
-      currentIndex: _currentIndex,
-      onTap: (index) {
-        try {
-          setState(() => _currentIndex = index);
-        } catch (e) {
-          _logger.warning('Sayfa değiştirme hatası', e);
-        }
-      },
-      items: [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.dashboard),
-          label: 'Dashboard',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.school),
-          label: 'Eğitim',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.science),
-          label: 'Test',
-        ),
-      ],
     );
   }
 
@@ -269,9 +179,8 @@ class _AIHomePageState extends State<AIHomePage> {
   void dispose() {
     try {
       _repository.dispose();
-    } catch (e) {
-      _logger.warning('Repository dispose hatası', e);
-    }
+    } catch (e) {}
+
     super.dispose();
   }
 }
