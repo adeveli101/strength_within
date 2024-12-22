@@ -4,36 +4,32 @@ import '../core/ai_exceptions.dart';
 
 abstract class BaseModel {
   final _logger = Logger('BaseModel');
-  Map<String, Map<String, double>> _metrics = {};
-
-  // Ana metodlar
+  Map<String, double> _metrics = {};
 
 
 
-  Future<void> setup(List<dynamic> trainingData);
-  Future<void> fit(List<dynamic> trainingData);
+
+  Future<void> setup(List<Map<String, dynamic>> trainingData);
+  Future<void> fit(List<Map<String, dynamic>> trainingData);
   Future<FinalDataset> predict(GymMembersTracking input);
-  Future<bool> validateData(List<dynamic> data);
-
-  // Metriklerle ilgili metodlar
+  Future<bool> validateData(List<Map<String, dynamic>> data);
   Future<Map<String, double>> analyzeFit(int programId, GymMembersTracking profile);
   Future<Map<String, double>> analyzeProgress(List<GymMembersTracking> userData);
-  Future<Map<String, double>> calculateMetrics(List<dynamic> testData);
+  Future<Map<String, double>> calculateMetrics(List<Map<String, dynamic>> testData);
   Future<double> calculateConfidence(GymMembersTracking input, FinalDataset prediction);
 
-
-  // Metadata ve durum metodları
   Future<Map<String, dynamic>> getPredictionMetadata(GymMembersTracking input);
 
   // Yardımcı metodlar
-  void updateMetrics(Map<String, Map<String, double>> newMetrics) {
-    _metrics = Map.from(newMetrics);
+  void updateMetrics(Map<String, double> newMetrics) {
+    _metrics = Map<String, double>.from(newMetrics);
     _logger.info('Metrics updated: $_metrics');
   }
 
-  Map<String, Map<String, double>> getMetrics() {
-    return Map.from(_metrics);
+  Map<String, double> getMetrics() {
+    return Map<String, double>.from(_metrics);
   }
+
 
   // Kaynak temizleme
   Future<void> dispose() async {
@@ -70,7 +66,7 @@ abstract class BaseModel {
     return results;
   }
 
-  // Model durumu kontrolü
+// _trainingData tanımsız olduğu için düzeltme
   Future<bool> isReady() async {
     try {
       return await validate();
@@ -80,17 +76,19 @@ abstract class BaseModel {
     }
   }
 
-  // Model performans metrikleri
-  Future<Map<String, double>> evaluatePerformance(List<dynamic> testData) async {
+
+  Future<Map<String, double>> evaluatePerformance(List<Map<String, dynamic>> testData) async {
     try {
       final metrics = await calculateMetrics(testData);
-      updateMetrics({'performance': metrics});
+      updateMetrics(metrics);
       return metrics;
     } catch (e) {
       _logger.severe('Performance evaluation failed: $e');
       throw AIModelException('Performance evaluation failed: $e');
     }
   }
+
+
 
   // Early stopping için yardımcı metod
   bool shouldStopTraining(
@@ -121,7 +119,9 @@ abstract class BaseModel {
   Future<void> fromJson(Map<String, dynamic> json) async {
     try {
       if (json.containsKey('metrics')) {
-        _metrics = Map<String, Map<String, double>>.from(json['metrics']);
+        final metricsMap = json['metrics'] as Map<String, dynamic>;
+        _metrics = metricsMap.map((key, value) =>
+            MapEntry(key, (value as num).toDouble()));
       }
       _logger.info('Model loaded from JSON');
     } catch (e) {
@@ -129,6 +129,8 @@ abstract class BaseModel {
       throw AIModelException('Model loading failed: $e');
     }
   }
+
+
 
   // Model checkpoint yönetimi
   Future<Map<String, dynamic>> saveCheckpoint() async {
