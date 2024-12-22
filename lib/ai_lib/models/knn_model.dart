@@ -1,9 +1,9 @@
-import 'dart:math' show max, sqrt, pow;
+import 'dart:math';
 import 'package:logging/logging.dart';
-import '../ai_data_bloc/ai_repository.dart';
+import '../ai_data_bloc/ai_state.dart';
+import '../ai_data_bloc/datasets_models.dart';
 import '../core/ai_constants.dart';
 import '../core/ai_exceptions.dart';
-import '../core/ai_data_processor.dart';
 import 'base_model.dart';
 
 enum KNNModelState {
@@ -16,763 +16,556 @@ enum KNNModelState {
   error
 }
 
-
-enum KNNTaskType {
-  exerciseRecommendation,
-  userSimilarity,
-  fitnessLevelClassification
-}
-
 class KNNModel extends BaseModel {
   final _logger = Logger('KNNModel');
-  final _dataProcessor = AIDataProcessor();
-
-  // Model durumu
-  late List<Map<String, dynamic>> _trainingData;
-  late Map<KNNTaskType, int> _kValues;
-  late Map<KNNTaskType, List<String>> _taskFeatures;
-
-  // Feature normalizasyon değerleri
-  final Map<String, Map<String, double>> _featureRanges = {};
-
-  // Task-specific özellikler
-  static const Map<KNNTaskType, List<String>> defaultFeatures = {
-    KNNTaskType.exerciseRecommendation: [
-      'fitness_level',
-      'exercise_history',
-      'preferred_muscle_groups',
-      'workout_duration',
-      'intensity_preference'
-    ],
-    KNNTaskType.userSimilarity: [
-      'age',
-      'weight',
-      'height',
-      'fitness_goals',
-      'activity_level',
-      'exercise_preferences'
-    ],
-    KNNTaskType.fitnessLevelClassification: [
-      'exercise_frequency',
-      'workout_intensity',
-      'endurance_score',
-      'strength_score',
-      'recovery_rate'
-    ]
-  };
-  late int _k;
-
-
   KNNModelState _modelState = KNNModelState.uninitialized;
 
-  KNNTaskType _currentTaskType = KNNTaskType.exerciseRecommendation;
+  // Model Parametreleri
+  final List<int> kValues = [1, 3, 5, 7, 9, 11, 13, 15];
+  late int bestK;
+  late List<List<double>> _normalizedFeatures;
+  late List<int> _labels;
 
-  // Training history için limit
-  static const int MAX_HISTORY_SIZE = 1000;
-  final Map<String, List<double>> _trainingHistory = {
-    'accuracy': [],
-    'precision': [],
-    'recall': [],
-    'f1_score': [],
-  };
+  // Özellik istatistikleri
+  late List<double> _featureMeans;
+  late List<double> _featureStds;
 
+  // Model boyutları
+  late final int _inputSize;
+  late final int _numClasses;
 
-  // _performanceHistory'de eksik olabilecek metrikleri ekleyelim
-  final Map<String, List<double>> _performanceHistory = {
-    'inference_time': [],
-    'similarity_calculation_time': [],
-    'recommendation_generation_time': [],
-    'fit_analysis_time': [],      // Eklendi
-    'progress_analysis_time': [],  // Eklendi
-  };
 
   @override
-  Future<Map<String, dynamic>> analyzeFit(
-      int programId,
-      UserProfile profile
-      ) async {
-
+  Future<bool> validateData(List<Map<String, dynamic>> data) async {
+    if (data.isEmpty) {
+      throw AIModelException('Empty dataset provided');
+    }
 
     try {
-
-      if (_modelState != KNNModelState.trained) {
-        throw AIModelException('Model is not trained for analysis');
-      }
-      final startTime = DateTime.now();
-      // Performans izleme için
-
-      // Program ve kullanıcı özelliklerini birleştir
-      final inputData = {
-        ...profile.toMap(),
-        'program_id': programId,
-        'task_type': KNNTaskType.exerciseRecommendation.toString(),
-      };
-
-      // En yakın komşuları bul
-      final neighbors = _findNearestNeighbors(
-        inputData,
-        KNNTaskType.exerciseRecommendation,
-      );
-
-      // Success probability hesapla
-      final successProb = _calculateSuccessProbability(neighbors, programId);
-
-      // Kalori tahmini yap
-      final expectedCalories = _estimateCaloriesBurn(neighbors, profile);
-
-      // Önerilen frekansı belirle
-      final frequency = _determineWorkoutFrequency(neighbors);
-
-      // Yoğunluk ayarlamalarını hesapla
-      final intensityAdj = _calculateIntensityAdjustments(neighbors, profile);
-
-      return {
-        'success_probability': successProb,
-        'expected_calories': expectedCalories,
-        'recommended_frequency': frequency,
-        'intensity_adjustment': intensityAdj,
-      };
-    } catch (e) {
-      _logger.severe('KNN fit analysis failed: $e');
-      throw AIModelException('Fit analysis failed: $e');
-    }
-  }
-
-  @override
-  Future<Map<String, dynamic>> analyzeProgress(
-      List<Map<String, dynamic>> userData
-      ) async {
-    try {
-      if (_modelState != KNNModelState.trained) {
-        throw AIModelException('Model is not trained for analysis');
+      for (var sample in data) {
+        if (!_validateSample(sample)) {
+          return false;
+        }
       }
 
-      setTaskType(KNNTaskType.fitnessLevelClassification);
+      // Deneyim seviyelerinin geçerli aralıkta olup olmadığını kontrol et
+      for (var sample in data) {
+        var experienceLevel = GymMembersTracking.fromMap(sample).experienceLevel;
+        if (experienceLevel < 1 || experienceLevel > _numClasses) {
+          _logger.warning('Invalid experience level: $experienceLevel');
+          return false;
+        }
+      }
 
-      // Son verileri analiz et
-      final recentData = userData.take(10).toList();
-
-      // Benzer ilerleme gösteren kullanıcıları bul
-      final similarProgressUsers = _findProgressPatterns(recentData);
-
-      // Performans metriklerini hesapla
-      final performanceScore = _calculatePerformanceScore(recentData, similarProgressUsers);
-
-      // Yoğunluk seviyesini belirle
-      final intensityLevel = _determineIntensityLevel(recentData);
-
-      // Önerileri oluştur
-      final recommendations = _generateProgressRecommendations(
-          recentData,
-          similarProgressUsers,
-          performanceScore
-      );
-
-      return {
-        'intensity_level': intensityLevel,
-        'performance_score': performanceScore,
-        'recommendations': recommendations,
-      };
+      return true;
     } catch (e) {
-      _logger.severe('KNN progress analysis failed: $e');
-      throw AIModelException('Progress analysis failed: $e');
+      _logger.severe('Data validation failed: $e');
+      return false;
     }
   }
 
-  // Yardımcı metodlar
-  double _calculateSuccessProbability(
-      List<Map<String, dynamic>> neighbors,
-      int programId
-      ) {
-    var successfulNeighbors = neighbors.where((n) =>
-    n['program_id'] == programId &&
-        (n['success_rate'] ?? 0.0) > 0.7
-    ).length;
-
-    return successfulNeighbors / neighbors.length;
-  }
-
-  double _estimateCaloriesBurn(
-      List<Map<String, dynamic>> neighbors,
-      UserProfile profile
-      ) {
-    var totalCalories = 0.0;
-    var totalWeight = 0.0;
-
-    for (var neighbor in neighbors) {
-      final distance = _calculateDistance(
-          neighbor,
-          profile.toMap(),
-          defaultFeatures[KNNTaskType.userSimilarity]!
-      );
-      final weight = 1.0 / (distance + 1e-6); // Avoid division by zero
-
-      totalCalories += (neighbor['calories_burned'] ?? 300.0) * weight;
-      totalWeight += weight;
-    }
-
-    return totalCalories / totalWeight;
-  }
-
-  int _determineWorkoutFrequency(List<Map<String, dynamic>> neighbors) {
-    var frequencies = neighbors
-        .map((n) => n['workout_frequency'] as int? ?? 3)
-        .toList()
-      ..sort();
-
-    // Medyan frekansı döndür
-    return frequencies[frequencies.length ~/ 2];
-  }
-
-  Map<String, double> _calculateIntensityAdjustments(
-      List<Map<String, dynamic>> neighbors,
-      UserProfile profile
-      ) {
-    var adjustments = {
-      'cardio': 0.0,
-      'strength': 0.0,
-      'flexibility': 0.0
-    };
-
-    var totalWeights = 0.0;
-
-    for (var neighbor in neighbors) {
-      final distance = _calculateDistance(
-          neighbor,
-          profile.toMap(),
-          defaultFeatures[KNNTaskType.userSimilarity]!
-      );
-      final weight = 1.0 / (distance + 1e-6);
-
-      adjustments.forEach((key, value) {
-        adjustments[key] = value +
-            (neighbor['${key}_intensity'] ?? 1.0) * weight;
-      });
-
-      totalWeights += weight;
-    }
-
-    // Normalize adjustments
-    adjustments.forEach((key, value) {
-      adjustments[key] = value / totalWeights;
-    });
-
-    return adjustments;
-  }
-
-  List<Map<String, dynamic>> _findProgressPatterns(
-      List<Map<String, dynamic>> recentData
-      ) {
-    return _trainingData
-        .where((data) => _isProgressPatternSimilar(data, recentData))
-        .take(_k)
-        .toList();
-  }
-
-  bool _isProgressPatternSimilar(
-      Map<String, dynamic> data,
-      List<Map<String, dynamic>> recentData
-      ) {
-    // Progress pattern similarity logic
-    final patternFeatures = [
-      'exercise_frequency',
-      'workout_intensity',
-      'endurance_score',
-      'strength_score'
+  bool _validateSample(Map<String, dynamic> sample) {
+    final requiredFields = [
+      'age',
+      'gender',
+      'weight_kg',
+      'height_m',
+      'max_bpm',
+      'avg_bpm',
+      'resting_bpm',
+      'session_duration',
+      'calories_burned',
+      'workout_type',
+      'fat_percentage',
+      'water_intake',
+      'workout_frequency',
+      'experience_level',
+      'bmi'
     ];
 
-    var similarityScore = 0.0;
-    for (var feature in patternFeatures) {
-      final dataValue = data[feature] as double? ?? 0.0;
-      final recentAvg = recentData
-          .map((d) => d[feature] as double? ?? 0.0)
-          .reduce((a, b) => a + b) / recentData.length;
-
-      similarityScore += pow(dataValue - recentAvg, 2);
-    }
-
-    return sqrt(similarityScore) < AIConstants.SIMILARITY_THRESHOLD;
-  }
-
-  double _calculatePerformanceScore(
-      List<Map<String, dynamic>> recentData,
-      List<Map<String, dynamic>> similarUsers
-      ) {
-    // Performance metrics calculation
-    final currentMetrics = _calculateCurrentMetrics(recentData);
-    final expectedMetrics = _calculateExpectedMetrics(similarUsers);
-
-    return _compareMetrics(currentMetrics, expectedMetrics);
-  }
-
-  String _determineIntensityLevel(List<Map<String, dynamic>> recentData) {
-    final avgIntensity = recentData
-        .map((d) => d['workout_intensity'] as double? ?? 0.0)
-        .reduce((a, b) => a + b) / recentData.length;
-
-    if (avgIntensity > 0.8) return 'high';
-    if (avgIntensity > 0.5) return 'medium';
-    return 'low';
-  }
-
-  List<String> _generateProgressRecommendations(
-      List<Map<String, dynamic>> recentData,
-      List<Map<String, dynamic>> similarUsers,
-      double performanceScore
-      ) {
-    final recommendations = <String>[];
-
-    if (performanceScore < 0.3) {
-      recommendations.addAll([
-        'Consider reducing workout intensity',
-        'Focus on proper form and technique',
-        'Increase rest periods between exercises'
-      ]);
-    } else if (performanceScore < 0.7) {
-      recommendations.addAll([
-        'Maintain current progress',
-        'Gradually increase weights or repetitions',
-        'Add variety to your routine'
-      ]);
-    } else {
-      recommendations.addAll([
-        'Consider increasing workout intensity',
-        'Try more advanced exercise variations',
-        'Add complex movement patterns'
-      ]);
-    }
-
-    return recommendations;
-  }
-
-  Map<String, double> _calculateCurrentMetrics(
-      List<Map<String, dynamic>> recentData
-      ) {
-    return {
-      'avg_intensity': recentData
-          .map((d) => d['workout_intensity'] as double? ?? 0.0)
-          .reduce((a, b) => a + b) / recentData.length,
-      // _calculateConsistency yerine _calculateF1Score kullan
-      'consistency': _calculateF1Score(
-          recentData,
-          recentData.map((d) => {'label': d['target']}).toList()
-      ),
-      // _calculateProgressRate yerine performans metriklerinin ortalamasını kullan
-      'progress_rate': _calculatePerformanceRate(recentData)
-    };
-  }
-
-  // Yeni eklenen metod
-  double _calculatePerformanceRate(List<Map<String, dynamic>> data) {
-    if (data.length < 2) return 0.0;
-
-    var improvements = 0.0;
-    for (var i = 1; i < data.length; i++) {
-      final current = data[i]['performance_score'] as double? ?? 0.0;
-      final previous = data[i-1]['performance_score'] as double? ?? 0.0;
-      improvements += (current - previous);
-    }
-
-    return improvements / (data.length - 1);
-  }
-
-  // Mevcut precision ve recall metodlarını kullanarak tutarlılığı hesapla
-  double _calculateOverallConsistency(List<Map<String, dynamic>> data) {
-    final predictions = data.map((d) => {
-      'prediction': d['actual_performance'],
-      'label': d['target_performance']
-    }).toList();
-
-    final precision = _calculatePrecision(predictions, data);
-    final recall = _calculateRecall(predictions, data);
-
-    // F1 skoru tutarlılık ölçüsü olarak kullan
-    return (2 * precision * recall) / (precision + recall);
-  }
-
-
-
-  Map<String, double> _calculateExpectedMetrics(
-      List<Map<String, dynamic>> similarUsers
-      ) {
-    return {
-      'avg_intensity': similarUsers
-          .map((u) => u['workout_intensity'] as double? ?? 0.0)
-          .reduce((a, b) => a + b) / similarUsers.length,
-      'consistency': similarUsers
-          .map((u) => u['consistency'] as double? ?? 0.0)
-          .reduce((a, b) => a + b) / similarUsers.length,
-      'progress_rate': similarUsers
-          .map((u) => u['progress_rate'] as double? ?? 0.0)
-          .reduce((a, b) => a + b) / similarUsers.length
-    };
-  }
-
-  double _compareMetrics(
-      Map<String, double> current,
-      Map<String, double> expected
-      ) {
-    var totalScore = 0.0;
-    current.forEach((key, value) {
-      totalScore += value / (expected[key] ?? 1.0);
-    });
-    return totalScore / current.length;
-  }
-
-
-
-
-  // Metrik güncelleme metodu
-  void _updateMetricsWithLimit(Map<String, double> metrics) {
-    metrics.forEach((key, value) {
-      _trainingHistory[key]?.add(value);
-      if ((_trainingHistory[key]?.length ?? 0) > MAX_HISTORY_SIZE) {
-        _trainingHistory[key]?.removeAt(0);
-      }
-    });
-  }
-
-  // Task tipi ayarlama metodu
-  void setTaskType(KNNTaskType taskType) {
-    _currentTaskType = taskType;
-    // Task değiştiğinde k değerini güncelle
-    if (_kValues.containsKey(taskType)) {
-      _k = _kValues[taskType]!;
-    }
-  }
-
-  // State güncelleme yardımcı metodu
-  void _updateState(KNNModelState newState) {
-    _modelState = newState;
-    _logger.info('KNN Model state updated to: $_modelState');
-  }
-
-  // Add metric calculation methods
-  double _calculateAccuracy(List<Map<String, dynamic>> predictions, List<Map<String, dynamic>> actual) {
-    int correct = 0;
-    for (var i = 0; i < predictions.length; i++) {
-      if (predictions[i]['prediction'] == actual[i]['label']) {
-        correct++;
-      }
-    }
-    return correct / predictions.length;
-  }
-
-  double _calculatePrecision(List<Map<String, dynamic>> predictions, List<Map<String, dynamic>> actual) {
-    Map<int, Map<String, int>> metrics = {};
-
-    for (var i = 0; i < predictions.length; i++) {
-      final predicted = predictions[i]['prediction'] as int;
-      final actualLabel = actual[i]['label'] as int;
-
-      metrics.putIfAbsent(predicted, () => {'tp': 0, 'fp': 0});
-      if (predicted == actualLabel) {
-        metrics[predicted]!['tp'] = metrics[predicted]!['tp']! + 1;
-      } else {
-        metrics[predicted]!['fp'] = metrics[predicted]!['fp']! + 1;
-      }
-    }
-
-    double totalPrecision = 0.0;
-    int classCount = 0;
-    metrics.forEach((key, value) {
-      final tp = value['tp']!;
-      final fp = value['fp']!;
-      if (tp + fp > 0) {
-        totalPrecision += tp / (tp + fp);
-        classCount++;
-      }
-    });
-
-    return classCount > 0 ? totalPrecision / classCount : 0.0;
-  }
-
-  double _calculateRecall(List<Map<String, dynamic>> predictions, List<Map<String, dynamic>> actual) {
-    Map<int, Map<String, int>> metrics = {};
-
-    for (var i = 0; i < predictions.length; i++) {
-      final predicted = predictions[i]['prediction'] as int;
-      final actualLabel = actual[i]['label'] as int;
-
-      metrics.putIfAbsent(actualLabel, () => {'tp': 0, 'fn': 0});
-      if (predicted == actualLabel) {
-        metrics[actualLabel]!['tp'] = metrics[actualLabel]!['tp']! + 1;
-      } else {
-        metrics[actualLabel]!['fn'] = metrics[actualLabel]!['fn']! + 1;
-      }
-    }
-
-    double totalRecall = 0.0;
-    int classCount = 0;
-    metrics.forEach((key, value) {
-      final tp = value['tp']!;
-      final fn = value['fn']!;
-      if (tp + fn > 0) {
-        totalRecall += tp / (tp + fn);
-        classCount++;
-      }
-    });
-
-    return classCount > 0 ? totalRecall / classCount : 0.0;
-  }
-
-  double _calculateF1Score(List<Map<String, dynamic>> predictions, List<Map<String, dynamic>> actual) {
-    final precision = _calculatePrecision(predictions, actual);
-    final recall = _calculateRecall(predictions, actual);
-
-    return (precision + recall) > 0
-        ? 2 * (precision * recall) / (precision + recall)
-        : 0.0;
-  }
-
-
-  // Remove duplicate calculateConfidence and replace with override
-  @override
-  Future<double> calculateConfidence(Map<String, dynamic> input, dynamic prediction) async {
-    final distances = prediction['distances'] as List<double>;
-    if (distances.isEmpty) return 0.0;
-
-    final maxDistance = distances.reduce(max);
-    final confidences = distances.map((d) => 1 - (d / maxDistance)).toList();
-    return confidences.reduce((a, b) => a + b) / confidences.length;
-  }
-
-
-
-  @override
-  Future<Map<String, double>> calculateMetrics(List<Map<String, dynamic>> testData) async {
-    final predictions = await Future.wait(
-        testData.map((sample) => inference(sample))
-    );
-
-    return {
-      'accuracy': _calculateAccuracy(predictions, testData),
-      'precision': _calculatePrecision(predictions, testData),
-      'recall': _calculateRecall(predictions, testData),
-      'f1_score': _calculateF1Score(predictions, testData)
-    };
-  }
-
-  @override
-  Future<void> fit(List<Map<String, dynamic>> trainingData) async {
     try {
-      if (_modelState != KNNModelState.initialized) {
-        throw AIModelException('Model must be initialized before training');
+      // Tüm gerekli alanların var olup olmadığını kontrol et
+      if (!requiredFields.every((field) => sample.containsKey(field))) {
+        return false;
       }
 
-      _modelState = KNNModelState.training;
+      // Sayısal değerlerin geçerliliğini kontrol et
+      if (sample['age'] < 0 ||
+          sample['weight_kg'] <= 0 ||
+          sample['height_m'] <= 0 ||
+          sample['experience_level'] < 1 ||
+          sample['experience_level'] > _numClasses) {
+        return false;
+      }
 
-      // Validate input data
-      await validateData(trainingData);
+      // Gender alanının geçerliliğini kontrol et
+      if (!['male', 'female'].contains(sample['gender'])) {
+        return false;
+      }
 
-      // Store and preprocess training data
-      _trainingData = await Future.wait(
-          trainingData.map((sample) async {
-            final processedSample = Map<String, dynamic>.from(sample);
-            // Normalize features
-            for (var feature in _taskFeatures[_currentTaskType]!) {
-              if (processedSample.containsKey(feature)) {
-                processedSample[feature] = _normalizeFeature(
-                    feature,
-                    processedSample[feature].toDouble()
-                );
-              }
-            }
-            return processedSample;
-          })
-      );
-
-      // Calculate feature ranges for future normalization
-      await _calculateFeatureRanges();
-
-      // Calculate initial metrics
-      final metrics = await calculateMetrics(trainingData);
-      _updateMetricsWithLimit(metrics);
-
-      _modelState = KNNModelState.trained;
-      _logger.info('KNN Model training completed with ${_trainingData.length} samples');
-
+      return true;
     } catch (e) {
-      _modelState = KNNModelState.error;
-      _logger.severe('Training error: $e');
-      throw AIModelException('Model training failed: $e');
+      _logger.warning('Sample validation failed: $e');
+      return false;
     }
   }
 
-
-  @override
-  Future<Map<String, dynamic>> getPredictionMetadata(Map<String, dynamic> input) async {
-    return {
-      'model_type': 'knn',
-      'k_neighbors': _k,
-      'training_size': _trainingData.length,
-      'timestamp': DateTime.now().toIso8601String(),
-    };
-  }
 
 
   @override
   Future<void> setup(List<Map<String, dynamic>> trainingData) async {
     try {
-      await validateData(trainingData);
-      _trainingData = trainingData;
+      _modelState = KNNModelState.initializing;
 
-      // Task-specific k değerlerini ayarla
-      _kValues = {
-        KNNTaskType.exerciseRecommendation: AIConstants.KNN_EXERCISE_K,
-        KNNTaskType.userSimilarity: AIConstants.KNN_USER_K,
-        KNNTaskType.fitnessLevelClassification: AIConstants.KNN_FITNESS_K,
-      };
+      if (!await validateData(trainingData)) {
+        throw AIModelException('Invalid training data');
+      }
 
-      _taskFeatures = Map.from(defaultFeatures);
+      _inputSize = _calculateInputSize();
+      _numClasses = 7; // Experience level 1-7 arası
 
-      // Feature ranges'i hesapla
-      await _calculateFeatureRanges();
+      await _initializeFeatureStats(trainingData);
+      await _prepareTrainingData(trainingData);
 
-      _logger.info('KNN Model setup completed with ${_trainingData.length} samples');
+      _modelState = KNNModelState.initialized;
+      _logger.info('KNN model setup completed');
     } catch (e) {
-      _logger.severe('Setup error: $e');
-      throw AIModelException('Model setup failed: $e');
+      _modelState = KNNModelState.error;
+      throw AIModelException('KNN model setup failed: $e');
     }
+  }
+
+  Future<void> _initializeFeatureStats(List<Map<String, dynamic>> trainingData) async {
+    _featureMeans = List.filled(_inputSize, 0.0);
+    _featureStds = List.filled(_inputSize, 0.0);
+
+    for (var data in trainingData) {
+      var features = _extractFeatures(GymMembersTracking.fromMap(data));
+      for (int i = 0; i < _inputSize; i++) {
+        _featureMeans[i] += features[i];
+      }
+    }
+
+    // Ortalama hesaplama
+    for (int i = 0; i < _inputSize; i++) {
+      _featureMeans[i] /= trainingData.length;
+    }
+
+    // Standart sapma hesaplama
+    for (var data in trainingData) {
+      var features = _extractFeatures(GymMembersTracking.fromMap(data));
+      for (int i = 0; i < _inputSize; i++) {
+        _featureStds[i] += pow(features[i] - _featureMeans[i], 2);
+      }
+    }
+
+    for (int i = 0; i < _inputSize; i++) {
+      _featureStds[i] = sqrt(_featureStds[i] / trainingData.length);
+      if (_featureStds[i] == 0) _featureStds[i] = 1.0;
+    }
+  }
+
+  List<double> _extractFeatures(GymMembersTracking sample) {
+    return [
+      sample.age.toDouble(),
+      sample.gender == 'male' ? 1.0 : 0.0,
+      sample.weightKg,
+      sample.heightM,
+      sample.bmi,
+      sample.maxBpm.toDouble(),
+      sample.avgBpm.toDouble(),
+      sample.restingBpm.toDouble(),
+      sample.sessionDuration,
+      sample.caloriesBurned,
+      sample.fatPercentage,
+      sample.waterIntake,
+      sample.workoutFrequency.toDouble(),
+      sample.workoutType == 'strength' ? 1.0 : 0.0
+    ];
+  }
+
+  int _calculateInputSize() {
+    return 14; // Toplam özellik sayısı
   }
 
   @override
-  Future<void> validateData(List<Map<String, dynamic>> data) async {
-    if (data.isEmpty) {
-      throw AIModelException('Empty training data');
-    }
+  Future<void> fit(List<Map<String, dynamic>> trainingData) async {
+    try {
+      _modelState = KNNModelState.training;
+      AIStateManager().updateModelState(AIModelState.training);
 
-    for (var entry in data) {
-      for (var taskType in KNNTaskType.values) {
-        for (var feature in defaultFeatures[taskType]!) {
-          if (!entry.containsKey(feature)) {
-            throw AIModelException(
-                'Missing required feature: $feature for task ${taskType.toString()}',
-                code: AIConstants.ERROR_INVALID_INPUT
-            );
-          }
+      await _prepareTrainingData(trainingData);
+      await _optimizeK();
+
+      _modelState = KNNModelState.trained;
+      AIStateManager().updateModelState(AIModelState.initialized);
+      _logger.info('KNN model training completed');
+    } catch (e) {
+      _modelState = KNNModelState.error;
+      AIStateManager().handleError(AIError('KNN model training failed: $e', type: AIErrorType.training));
+      throw AIModelException('KNN model training failed: $e');
+    }
+  }
+
+  Future<void> _prepareTrainingData(List<Map<String, dynamic>> trainingData) async {
+    _normalizedFeatures = [];
+    _labels = [];
+
+    for (var data in trainingData) {
+      var sample = GymMembersTracking.fromMap(data);
+      var features = _extractFeatures(sample);
+      var normalizedFeatures = _normalizeFeatures(features);
+      _normalizedFeatures.add(normalizedFeatures);
+      _labels.add(sample.experienceLevel);
+    }
+  }
+
+  List<double> _normalizeFeatures(List<double> features) {
+    return List.generate(_inputSize, (i) =>
+    (features[i] - _featureMeans[i]) / _featureStds[i]);
+  }
+
+  Future<void> _optimizeK() async {
+    double bestAccuracy = 0.0;
+    for (var k in kValues) {
+      double accuracy = await _crossValidate(k);
+      if (accuracy > bestAccuracy) {
+        bestAccuracy = accuracy;
+        bestK = k;
+      }
+      AIStateManager().updateProgress(k / kValues.last);
+    }
+    _logger.info('Best K value: $bestK with accuracy: ${bestAccuracy.toStringAsFixed(4)}');
+  }
+
+  Future<double> _crossValidate(int k) async {
+    const int folds = 5;
+    int foldSize = _normalizedFeatures.length ~/ folds;
+    double totalAccuracy = 0.0;
+
+    for (int i = 0; i < folds; i++) {
+      var testStart = i * foldSize;
+      var testEnd = (i + 1) * foldSize;
+
+      var testFeatures = _normalizedFeatures.sublist(testStart, testEnd);
+      var testLabels = _labels.sublist(testStart, testEnd);
+
+      var trainFeatures = [
+        ..._normalizedFeatures.sublist(0, testStart),
+        ..._normalizedFeatures.sublist(testEnd)
+      ];
+      var trainLabels = [
+        ..._labels.sublist(0, testStart),
+        ..._labels.sublist(testEnd)
+      ];
+
+      int correctPredictions = 0;
+      for (int j = 0; j < testFeatures.length; j++) {
+        int prediction = _predict(testFeatures[j], trainFeatures, trainLabels, k);
+        if (prediction == testLabels[j]) {
+          correctPredictions++;
         }
       }
+      totalAccuracy += correctPredictions / testFeatures.length;
     }
+
+    return totalAccuracy / folds;
   }
 
-  Future<void> _calculateFeatureRanges() async {
-    for (var taskType in KNNTaskType.values) {
-      for (var feature in _taskFeatures[taskType]!) {
-        var values = _trainingData.map((e) => e[feature] as num).toList();
-        _featureRanges[feature] = {
-          'min': values.reduce((a, b) => a < b ? a : b).toDouble(),
-          'max': values.reduce((a, b) => a > b ? a : b).toDouble()
-        };
-      }
-    }
+  int _predict(List<double> input, List<List<double>> features, List<int> labels, int k) {
+    var distances = List.generate(features.length, (i) =>
+        MapEntry(i, _calculateDistance(input, features[i])));
+
+    distances.sort((a, b) => a.value.compareTo(b.value));
+    var nearestNeighbors = distances.take(k).map((e) => labels[e.key]).toList();
+
+    return _getMostFrequent(nearestNeighbors);
   }
 
-  double _normalizeFeature(String feature, double value) {
-    var range = _featureRanges[feature]!;
-    return _dataProcessor.normalize(value, range['min']!, range['max']!);
-  }
-
-  double _calculateDistance(
-      Map<String, dynamic> point1,
-      Map<String, dynamic> point2,
-      List<String> features
-      ) {
+  double _calculateDistance(List<double> a, List<double> b) {
     double sum = 0.0;
-
-    for (var feature in features) {
-      var value1 = _normalizeFeature(feature, point1[feature]);
-      var value2 = _normalizeFeature(feature, point2[feature]);
-      sum += pow(value1 - value2, 2);
+    for (int i = 0; i < a.length; i++) {
+      sum += pow(a[i] - b[i], 2);
     }
-
     return sqrt(sum);
   }
 
-  List<Map<String, dynamic>> _findNearestNeighbors(
-      Map<String, dynamic> input,
-      KNNTaskType taskType
-      ) {
-    var distances = _trainingData.map((dataPoint) {
-      return {
-        'point': dataPoint,
-        'distance': _calculateDistance(
-            input,
-            dataPoint,
-            _taskFeatures[taskType]!
-        )
-      };
-    }).toList();
-
-    distances.sort((a, b) =>
-        (a['distance'] as double).compareTo(b['distance'] as double));
-
-    return distances
-        .take(_kValues[taskType]!)
-        .map((e) => e['point'] as Map<String, dynamic>)
-        .toList();
+  int _getMostFrequent(List<int> list) {
+    var counts = <int, int>{};
+    for (var element in list) {
+      counts[element] = (counts[element] ?? 0) + 1;
+    }
+    return counts.entries.reduce((a, b) => a.value > b.value ? a : b).key;
   }
 
   @override
-  Future<Map<String, dynamic>> inference(Map<String, dynamic> input) async {
+  Future<FinalDataset> predict(GymMembersTracking input) async {
     try {
-      if (!input.containsKey('task_type')) {
-        throw AIModelException('Task type must be specified');
+      if (_modelState != KNNModelState.trained) {
+        throw AIModelException('Model must be trained before prediction');
       }
 
-      final taskType = KNNTaskType.values.firstWhere(
-              (e) => e.toString() == input['task_type'],
-          orElse: () => throw AIModelException('Invalid task type')
+      _modelState = KNNModelState.predicting;
+
+      final features = _extractFeatures(input);
+      final normalizedFeatures = _normalizeFeatures(features);
+
+      final predictedLevel = _predict(
+          normalizedFeatures,
+          _normalizedFeatures,
+          _labels,
+          bestK
       );
 
-      final neighbors = _findNearestNeighbors(input, taskType);
+      _modelState = KNNModelState.trained;
 
-      switch (taskType) {
-        case KNNTaskType.exerciseRecommendation:
-          return await _generateExerciseRecommendations(neighbors);
-
-        case KNNTaskType.userSimilarity:
-          return await _findSimilarUsers(neighbors);
-
-        case KNNTaskType.fitnessLevelClassification:
-          return await _classifyFitnessLevel(neighbors);
-
-        default:
-          throw AIModelException('Unsupported task type');
-      }
+      return FinalDataset(
+          id: 0,
+          weight: input.weightKg,
+          height: input.heightM,
+          bmi: input.bmi,
+          gender: input.gender,
+          age: input.age,
+          bmiCase: _getBMICase(input.bmi),
+          exercisePlan: predictedLevel
+      );
     } catch (e) {
-      _logger.severe('Inference error: $e');
+      _modelState = KNNModelState.error;
       throw AIModelException('Prediction failed: $e');
     }
   }
 
-  Future<Map<String, dynamic>> _generateExerciseRecommendations(
-      List<Map<String, dynamic>> neighbors
-      ) async {
-    // Egzersiz önerilerini oluştur
-    var recommendations = <Map<String, dynamic>>[];
-    // ... implementasyon
-    return {'recommendations': recommendations};
+  @override
+  Future<Map<String, double>> analyzeFit(int programId, GymMembersTracking profile) async {
+    try {
+      final prediction = await predict(profile);
+
+      return {
+        'program_match': _calculateProgramMatch(programId, prediction.exercisePlan),
+        'level_match': _calculateLevelMatch(profile.experienceLevel, prediction.exercisePlan),
+        'bmi_compatibility': _calculateBMICompatibility(profile.bmi, prediction.bmiCase),
+        'confidence': await calculateConfidence(profile, prediction)
+      };
+    } catch (e) {
+      throw AIModelException('Fit analysis failed: $e');
+    }
   }
 
-  Future<Map<String, dynamic>> _findSimilarUsers(
-      List<Map<String, dynamic>> neighbors
-      ) async {
-    // Benzer kullanıcıları bul
-    var similarUsers = <Map<String, dynamic>>[];
-    // ... implementasyon
-    return {'similar_users': similarUsers};
+  @override
+  Future<Map<String, double>> analyzeProgress(List<GymMembersTracking> userData) async {
+    if (userData.length < 2) {
+      throw AIModelException('Insufficient data for progress analysis');
+    }
+
+    try {
+      final first = userData.first;
+      final last = userData.last;
+
+      return {
+        'level_improvement': (last.experienceLevel - first.experienceLevel) / 6.0,
+        'bmi_change': (last.bmi - first.bmi) / first.bmi,
+        'endurance_improvement': _calculateEnduranceImprovement(first, last),
+        'consistency_score': _calculateConsistencyScore(userData)
+      };
+    } catch (e) {
+      throw AIModelException('Progress analysis failed: $e');
+    }
   }
 
-  Future<Map<String, dynamic>> _classifyFitnessLevel(
-      List<Map<String, dynamic>> neighbors
-      ) async {
-    // Fitness seviyesini sınıflandır
-    var fitnessLevels = neighbors.map((n) => n['fitness_level']).toList();
-    // ... implementasyon
-    return {'fitness_level': 0}; // örnek dönüş
+  @override
+  Future<Map<String, double>> calculateMetrics(List<Map<String, dynamic>> testData) async {
+    try {
+      int correctPredictions = 0;
+      double totalError = 0.0;
+
+      for (var data in testData) {
+        final actual = GymMembersTracking.fromMap(data);
+        final predicted = await predict(actual);
+
+        if (predicted.exercisePlan == actual.experienceLevel) {
+          correctPredictions++;
+        }
+        totalError += (predicted.exercisePlan - actual.experienceLevel).abs();
+      }
+
+      final accuracy = correctPredictions / testData.length;
+      final mae = totalError / testData.length;
+
+      return {
+        'accuracy': accuracy,
+        'mae': mae,
+        'k_value': bestK.toDouble()
+      };
+    } catch (e) {
+      throw AIModelException('Metrics calculation failed: $e');
+    }
   }
 
+  @override
+  Future<double> calculateConfidence(GymMembersTracking input, FinalDataset prediction) async {
+    try {
+      final features = _extractFeatures(input);
+      final normalizedFeatures = _normalizeFeatures(features);
 
+      // En yakın k komşunun uzaklıklarını hesapla
+      var distances = List.generate(_normalizedFeatures.length, (i) =>
+          MapEntry(i, _calculateDistance(normalizedFeatures, _normalizedFeatures[i])));
+
+      distances.sort((a, b) => a.value.compareTo(b.value));
+      var kNearest = distances.take(bestK);
+
+      // Uzaklığa dayalı güven skoru hesapla
+      double confidence = kNearest.where((e) =>
+      _labels[e.key] == prediction.exercisePlan).length / bestK;
+
+      return confidence;
+    } catch (e) {
+      throw AIModelException('Confidence calculation failed: $e');
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> getPredictionMetadata(GymMembersTracking input) async {
+    final prediction = await predict(input);
+    final confidence = await calculateConfidence(input, prediction);
+
+    return {
+      'k_value': bestK,
+      'confidence': confidence,
+      'model_state': _modelState.toString(),
+      'nearest_neighbors': await _getNearestNeighborsInfo(input),
+      'timestamp': DateTime.now().toIso8601String(),
+    };
+  }
+
+  Future<List<Map<String, dynamic>>> _getNearestNeighborsInfo(GymMembersTracking input) async {
+    final features = _extractFeatures(input);
+    final normalizedFeatures = _normalizeFeatures(features);
+
+    var distances = List.generate(_normalizedFeatures.length, (i) =>
+        MapEntry(i, _calculateDistance(normalizedFeatures, _normalizedFeatures[i])));
+
+    distances.sort((a, b) => a.value.compareTo(b.value));
+
+    return distances.take(bestK).map((e) => {
+      'distance': e.value,
+      'label': _labels[e.key],
+    }).toList();
+  }
+
+  double _calculateBMICompatibility(double bmi, String bmiCase) {
+    final targetBMI = {
+      'underweight': 18.5,
+      'normal': 22.0,
+      'overweight': 27.0,
+      'obese': 30.0
+    }[bmiCase] ?? 22.0;
+
+    return 1.0 - (bmi - targetBMI).abs() / 10.0;
+  }
+
+  double _calculateEnduranceImprovement(
+      GymMembersTracking first,
+      GymMembersTracking last
+      ) {
+    double bpmImprovement = (first.avgBpm - last.avgBpm) / first.avgBpm;
+    double durationImprovement = (last.sessionDuration - first.sessionDuration) /
+        first.sessionDuration;
+
+    return ((bpmImprovement + durationImprovement) / 2).clamp(0.0, 1.0);
+  }
+
+  double _calculateConsistencyScore(List<GymMembersTracking> userData) {
+    int consecutiveWorkouts = 0;
+    int maxConsecutiveWorkouts = 0;
+
+    for (int i = 1; i < userData.length; i++) {
+      if (userData[i].sessionDuration > 0) {
+        consecutiveWorkouts++;
+        maxConsecutiveWorkouts = max(maxConsecutiveWorkouts, consecutiveWorkouts);
+      } else {
+        consecutiveWorkouts = 0;
+      }
+    }
+
+    return (maxConsecutiveWorkouts / userData.length).clamp(0.0, 1.0);
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    return {
+      'model_state': _modelState.toString(),
+      'best_k': bestK,
+      'feature_means': _featureMeans,
+      'feature_stds': _featureStds,
+      'normalized_features': _normalizedFeatures,
+      'labels': _labels,
+      'metrics': getMetrics(),
+      'timestamp': DateTime.now().toIso8601String(),
+    };
+  }
+
+  @override
+  Future<void> fromJson(Map<String, dynamic> json) async {
+    try {
+      bestK = json['best_k'] as int;
+
+      _featureMeans = (json['feature_means'] as List)
+          .map((e) => e as double)
+          .toList();
+
+      _featureStds = (json['feature_stds'] as List)
+          .map((e) => e as double)
+          .toList();
+
+      _normalizedFeatures = (json['normalized_features'] as List)
+          .map((list) => (list as List).map((e) => e as double).toList())
+          .toList();
+
+      _labels = (json['labels'] as List)
+          .map((e) => e as int)
+          .toList();
+
+      if (json.containsKey('metrics')) {
+        updateMetrics(json['metrics'] as Map<String, double>);
+      }
+
+      _modelState = KNNModelState.trained;
+      _logger.info('KNN model loaded from JSON successfully');
+    } catch (e) {
+      _modelState = KNNModelState.error;
+      throw AIModelException('Error loading KNN model from JSON: $e');
+    }
+  }
+
+  @override
+  Future<void> dispose() async {
+    try {
+      _normalizedFeatures.clear();
+      _labels.clear();
+      _featureMeans.clear();
+      _featureStds.clear();
+      _modelState = KNNModelState.uninitialized;
+      _logger.info('KNN model resources released');
+    } catch (e) {
+      _logger.severe('Error during KNN model disposal: $e');
+      throw AIModelException('KNN model disposal failed: $e');
+    }
+  }
+
+  String _getBMICase(double bmi) {
+    if (bmi < 18.5) return 'underweight';
+    if (bmi < 25.0) return 'normal';
+    if (bmi < 30.0) return 'overweight';
+    return 'obese';
+  }
+
+  double _calculateProgramMatch(int programId, int predictedPlan) {
+    return 1.0 - (programId - predictedPlan).abs() / 6.0;
+  }
+
+  double _calculateLevelMatch(int actualLevel, int predictedLevel) {
+    return 1.0 - (actualLevel - predictedLevel).abs() / 6.0;
+  }
 
 }

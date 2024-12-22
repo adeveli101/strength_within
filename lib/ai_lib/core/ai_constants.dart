@@ -27,6 +27,7 @@ class AIConstants {
   static const int OUTPUT_CLASSES = 7;
   static const int CHECKPOINT_INTERVAL = 10;
   static const int ENSEMBLE_SIZE = 5;
+  static const int MAX_GENERATIONS = 50;
 
   /// KNN Parametreleri
   static const int KNN_EXERCISE_K = 5;
