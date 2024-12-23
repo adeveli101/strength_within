@@ -41,7 +41,7 @@ class AGDEModel extends BaseModel {
   AGDEModelState _modelState = AGDEModelState.uninitialized;
 
   // AGDE Evrim Parametreleri
-  final int populationSize = 100;
+  final int populationSize = 50;
   final int maxGenerations = AIConstants.EPOCHS;
   final double initialMutationRate = 0.3;
   final double initialCrossoverRate = 0.8;
@@ -56,8 +56,8 @@ class AGDEModel extends BaseModel {
   late List<double> _previousFitnessValues;
 
   // Model boyutları
-  late final int _inputSize;
-  late final int _outputSize;
+  late  int _inputSize;
+  late int _outputSize;
 
   // Training Progress için Stream
   final _trainingProgressController = StreamController<TrainingProgress>.broadcast();
@@ -76,33 +76,71 @@ class AGDEModel extends BaseModel {
     'avg_fitness': [],
   };
 
+
+  // AGDEModel sınıfında
   @override
   Future<void> setup(List<Map<String, dynamic>> trainingData) async {
     try {
       _modelState = AGDEModelState.initializing;
+      _logger.info('AGDE Model setup started...');
 
-      if (!await validateData(trainingData)) {
-        throw AIModelException('Invalid training data');
-      }
+      // Veri validasyonu
+      await _validateTrainingData(trainingData);
 
-      // GymMembersTracking özellik sayısı
-      _inputSize = 15;
-      // FinalDataset exercisePlan için çıktı sayısı (1-7 arası planlar)
-      _outputSize = AIConstants.OUTPUT_CLASSES;
+      // Model boyutlarını belirle
+      await _initializeModelDimensions(trainingData.first);
 
       _initializePopulation();
+
+      // İstatistiksel değerleri hesapla
       await _initializeFeatureStats(trainingData);
 
-      adaptiveMutationRate = initialMutationRate;
-      adaptiveCrossoverRate = initialCrossoverRate;
-      _previousFitnessValues = List.filled(populationSize, 0.0);
+      // Model parametrelerini ayarla
+      _initializeModelParameters();
+
+      // Popülasyonu oluştur
+      _initializePopulation();
 
       _modelState = AGDEModelState.initialized;
-      _logger.info('AGDE model setup completed successfully');
+      _logger.info('AGDE Model setup completed successfully');
+
     } catch (e) {
       _modelState = AGDEModelState.error;
-      throw AIModelException('AGDE model setup failed: $e');
+      _logger.severe('AGDE Model setup failed: $e');
+      throw AIModelException('AGDE model kurulumu başarısız: $e');
     }
+  }
+
+  Future<void> _validateTrainingData(List<Map<String, dynamic>> data) async {
+    if (data.isEmpty) {
+      throw AIModelException('Boş eğitim verisi');
+    }
+
+    for (var sample in data) {
+      _validateSampleFields(sample);
+    }
+  }
+
+  Future<void> _initializeModelDimensions(Map<String, dynamic> firstSample) async {
+    try {
+      _inputSize = 16; // Toplam feature sayısı
+      _outputSize = 6; // Sabit çıktı boyutu
+
+      _featureMeans = List.filled(_inputSize, 0.0);
+      _featureStds = List.filled(_inputSize, 0.0);
+
+      _logger.info('Model dimensions initialized: Input=$_inputSize, Output=$_outputSize');
+    } catch (e) {
+      throw AIModelException('Model boyutları belirlenemedi: $e');
+    }
+  }
+
+  void _initializeModelParameters() {
+    adaptiveMutationRate = initialMutationRate;
+    adaptiveCrossoverRate = initialCrossoverRate;
+
+    _previousFitnessValues = List.filled(populationSize, 0.0);
+    fitnessValues = List.filled(populationSize, 0.0);
   }
 
   void _initializePopulation() {
@@ -111,61 +149,387 @@ class AGDEModel extends BaseModel {
         populationSize,
             (_) => List.generate(
             _inputSize,
-                (_) => random.nextDouble() * 2 - 1 // [-1, 1] aralığında başlangıç değerleri
+                (_) => random.nextDouble() * 2 - 1 // [-1, 1] aralığında
         )
     );
-    fitnessValues = List.filled(populationSize, 0.0);
   }
 
-  Future<void> _initializeFeatureStats(List<Map<String, dynamic>> trainingData) async {
-    _featureMeans = List.filled(_inputSize, 0.0);
-    _featureStds = List.filled(_inputSize, 0.0);
+  void _validateNumericRange(dynamic value, num min, num max, String field) {
+    if (value is! num) {
+      throw AIModelException('$field sayısal bir değer olmalıdır');
+    }
+    if (value < min || value > max) {
+      throw AIModelException('$field değeri $min ile $max arasında olmalıdır');
+    }
+  }
 
-    // Ortalama hesaplama
-    for (var data in trainingData) {
-      var features = _extractFeatures(GymMembersTracking.fromMap(data));
-      for (int i = 0; i < _inputSize; i++) {
-        _featureMeans[i] += features[i];
+  double _parseNumericField(dynamic value, double defaultValue) {
+    if (value == null) return defaultValue;
+
+    if (value is num) return value.toDouble();
+
+    if (value is String) {
+      // Özel format temizleme
+      String cleanValue = value
+          .toLowerCase()
+          .replaceAll(RegExp(r'[^0-9.]'), '')
+          .replaceAll(RegExp(r'\.(?=.*\.)'), '');
+
+      return double.tryParse(cleanValue) ?? defaultValue;
+    }
+
+    return defaultValue;
+  }
+
+  void _cleanNumericFields(Map<String, dynamic> data) {
+    final numericFields = [
+      'height_m', 'weight_kg', 'session_duration',
+      'water_intake', 'workout_frequency'
+    ];
+    for (var field in numericFields) {
+      if (data[field] is String) {
+        data[field] = _parseNumericValue(data[field], field);
       }
     }
+  }
 
-    for (int i = 0; i < _inputSize; i++) {
-      _featureMeans[i] /= trainingData.length;
-    }
-
-    // Standart sapma hesaplama
-    for (var data in trainingData) {
-      var features = _extractFeatures(GymMembersTracking.fromMap(data));
-      for (int i = 0; i < _inputSize; i++) {
-        _featureStds[i] += pow(features[i] - _featureMeans[i], 2);
-      }
-    }
-
-    for (int i = 0; i < _inputSize; i++) {
-      _featureStds[i] = sqrt(_featureStds[i] / trainingData.length);
-      if (_featureStds[i] == 0) _featureStds[i] = 1.0; // Sıfır bölme hatası önleme
+  double _getDefaultValue(String field) {
+    switch (field) {
+      case 'height_m':
+        return 1.70;
+      case 'weight_kg':
+        return 70.0;
+      case 'session_duration':
+        return 1.0;
+      case 'water_intake':
+        return 2.0;
+      case 'workout_frequency':
+        return 3.0;
+      default:
+        return 0.0;
     }
   }
 
   List<double> _extractFeatures(GymMembersTracking sample) {
-    return [
-      sample.weightKg,
-      sample.heightM,
-      sample.bmi,
-      sample.age.toDouble(),
-      sample.maxBpm.toDouble(),
-      sample.avgBpm.toDouble(),
-      sample.restingBpm.toDouble(),
-      sample.sessionDuration,
-      sample.caloriesBurned,
-      sample.fatPercentage,
-      sample.waterIntake,
-      sample.workoutFrequency.toDouble(),
-      sample.experienceLevel.toDouble(),
-      sample.gender == 'male' ? 1.0 : 0.0,
-      sample.workoutType == 'strength' ? 1.0 : 0.0,
-    ];
+    try {
+      return [
+        _safeDouble(sample.id),
+        _safeDouble(sample.age),
+        _safeDouble(sample.avgBpm),
+        sample.bmi,
+        sample.caloriesBurned,
+        _safeDouble(sample.experienceLevel),
+        sample.fatPercentage,
+        _safeDouble(sample.maxBpm),
+        _safeDouble(sample.restingBpm),
+        sample.sessionDuration,
+        sample.waterIntake,
+        _safeDouble(sample.workoutFrequency),
+        _encodeGender(sample.gender),
+        _encodeWorkoutType(sample.workoutType),
+        _safeDouble(sample.heightM),
+        _safeDouble(sample.weightKg)
+      ];
+    } catch (e) {
+      _logger.severe('Feature extraction error: $e');
+      throw AIModelException('Feature extraction hatası: $e');
+    }
   }
+
+  double _safeDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is num) return value.toDouble();
+    if (value is String) {
+      return double.tryParse(value.replaceAll(RegExp(r'[^0-9.-]'), '')) ?? 0.0;
+    }
+    return 0.0;
+  }
+
+  double _encodeGender(String? gender) {
+    if (gender == null) return 0.0;
+    return gender.toLowerCase() == 'male' ? 1.0 : 0.0;
+  }
+
+  Future<void> _initializeFeatureStats(List<Map<String, dynamic>> trainingData) async {
+    try {
+      _logger.info('Feature stats initialization started');
+      for (var data in trainingData) {
+        try {
+          _logger.info('Processing sample ID: ${data['id']}');
+          var cleanData = _cleanSampleData(data);
+          var features = _extractFeatures(GymMembersTracking.fromMap(cleanData));
+
+          if (features.length != _inputSize) {
+            throw AIModelException('Feature boyutu tutarsız: Beklenen=$_inputSize, Alınan=${features.length}');
+          }
+
+          for (int i = 0; i < _inputSize; i++) {
+            _featureMeans[i] += features[i];
+          }
+        } catch (e) {
+          _logger.severe('Error processing sample ${data['id']}: $e');
+        }
+      }
+
+      _calculateMeanAndStd(trainingData.length);
+    } catch (e) {
+      _logger.severe('Feature stats initialization failed: $e');
+      throw AIModelException('Feature istatistikleri hesaplanamadı: $e');
+    }
+  }
+
+  Map<String, dynamic> _cleanSampleData(Map<String, dynamic> sample) {
+    var cleanData = Map<String, dynamic>.from(sample);
+    cleanData.forEach((key, value) {
+      if (value is String) {
+        cleanData[key] = _parseNumericValue(value, key);
+      }
+    });
+    return cleanData;
+  }
+
+  dynamic _parseNumericValue(String value, String field) {
+    if (field == 'gender' || field == 'workout_type') return value;
+
+    try {
+      return double.parse(value.replaceAll(RegExp(r'[^0-9.-]'), ''));
+    } catch (e) {
+      _logger.warning('Failed to parse $field: $value. Using default value.');
+      return 0.0;
+    }
+  }
+
+  void _validateNumericField(Map<String, dynamic> sample, String field, num min, num max) {
+    try {
+      var value = sample[field];
+      _logger.info('Validating $field: $value (${value.runtimeType})');
+
+      if (value == null) {
+        _logger.severe('$field is null');
+        throw AIModelException('$field için eksik değer');
+      }
+
+      if (value is String) {
+        _logger.info('Converting string value to number for $field');
+        value = double.tryParse(value.replaceAll(RegExp(r'[^0-9.]'), ''));
+      }
+
+      if (value is! num) {
+        _logger.severe('$field is not a number: $value (${value.runtimeType})');
+        throw AIModelException('$field sayısal bir değer olmalıdır');
+      }
+
+      if (value < min || value > max) {
+        _logger.severe('$field out of range: $value (min: $min, max: $max)');
+        throw AIModelException('$field değeri $min ile $max arasında olmalıdır');
+      }
+
+      sample[field] = value.toDouble();
+
+    } catch (e, stackTrace) {
+      _logger.severe('Validation failed for $field');
+      _logger.severe('Error: $e');
+      _logger.severe('Stack trace: $stackTrace');
+      throw AIModelException('$field validasyonu başarısız: $e');
+    }
+  }
+
+
+
+  double _encodeWorkoutType(String? type) {
+    if (type == null) return 0.0;
+    switch (type.toLowerCase()) {
+      case 'strength': return 0.0;
+      case 'cardio': return 1.0;
+      case 'hiit': return 2.0;
+      case 'yoga': return 3.0;
+      default: return 0.0;
+    }
+  }
+
+
+
+
+
+  void _validateSampleFields(Map<String, dynamic> sample) {
+    // Önce string değerleri temizle
+    if (sample['height_m'] is String) {
+      sample['height_m'] = _cleanStringValue(sample['height_m']);
+    }
+    if (sample['weight_kg'] is String) {
+      sample['weight_kg'] = _cleanStringValue(sample['weight_kg']);
+    }
+    if (sample['session_duration'] is String) {
+      sample['session_duration'] = _cleanStringValue(sample['session_duration']);
+    }
+    if (sample['workout_frequency'] is String) {
+      sample['workout_frequency'] = _cleanStringValue(sample['workout_frequency']);
+    }
+
+    // Sonra validasyonları yap
+    _validateNumericField(sample, 'height_m', 1.0, 2.5);
+    _validateNumericField(sample, 'weight_kg', 30.0, 250.0);
+    _validateNumericField(sample, 'session_duration', 0.25, 4.0);
+    _validateNumericField(sample, 'workout_frequency', 1, 7);
+  }
+
+  double _cleanStringValue(String value) {
+    if (value.contains('(')) {
+      return 0.0; // Başlık satırı, varsayılan değer döndür
+    }
+    return double.tryParse(value.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0;
+  }
+
+
+  double _parseHeightValue(String value) {
+    // "Height (m)" formatını temizle
+    String cleanValue = value
+        .toLowerCase()
+        .replaceAll('height', '')
+        .replaceAll('(m)', '')
+        .replaceAll(' ', '');
+
+    var parsed = double.tryParse(cleanValue);
+    if (parsed == null) {
+      // Varsayılan değer ata
+      parsed = 1.70; // Ortalama boy değeri
+      _logger.warning('height_m için geçersiz değer, varsayılan değer atandı: $parsed');
+    }
+    return parsed;
+  }
+
+  double _parseWeightValue(String value) {
+    String cleanValue = value
+        .toLowerCase()
+        .replaceAll('weight', '')
+        .replaceAll('(kg)', '')
+        .replaceAll(' ', '');
+
+    var parsed = double.tryParse(cleanValue);
+    if (parsed == null) {
+      parsed = 70.0; // Ortalama kilo değeri
+      _logger.warning('weight_kg için geçersiz değer, varsayılan değer atandı: $parsed');
+    }
+    return parsed;
+  }
+
+  double _parseTimeValue(String value) {
+    String cleanValue = value
+        .toLowerCase()
+        .replaceAll('session_duration', '')
+        .replaceAll('(hours)', '')
+        .replaceAll(' ', '');
+
+    var parsed = double.tryParse(cleanValue);
+    if (parsed == null) {
+      parsed = 1.0; // Ortalama seans süresi
+      _logger.warning('session_duration için geçersiz değer, varsayılan değer atandı: $parsed');
+    }
+    return parsed;
+  }
+
+  double _parseGenericNumeric(String value) {
+    String cleanValue = value.replaceAll(RegExp(r'[^0-9.]'), '');
+    return double.tryParse(cleanValue) ?? 0.0;
+  }
+
+
+  void _validateStringField(Map<String, dynamic> sample, String field, List<String> allowedValues) {
+    var value = sample[field]?.toString().toLowerCase();
+    if (value == null || value.isEmpty) {
+      throw AIModelException('Eksik alan: $field');
+    }
+
+    // Workout type için tüm değerleri ekle
+    final workoutTypes = ['yoga', 'hiit', 'strength', 'cardio'];
+    if (field == 'workout_type' && !workoutTypes.contains(value)) {
+      throw AIModelException('Geçersiz workout_type değeri: $value. İzin verilen değerler: $workoutTypes');
+    }
+
+    if (!allowedValues.contains(value)) {
+      throw AIModelException('Geçersiz $field değeri: $value. İzin verilen değerler: $allowedValues');
+    }
+  }
+
+  void _validateDependentFields(Map<String, dynamic> sample) {
+    // BMI kontrolü - tolerans eklenmiş
+    final double tolerance = 0.5;
+    double calculatedBMI = _calculateBMI(
+        sample['weight_kg'],
+        sample['height_m']
+    );
+
+    if ((sample['bmi'] - calculatedBMI).abs() > tolerance) {
+      throw AIModelException(
+          'BMI tutarsız: Hesaplanan=${calculatedBMI.toStringAsFixed(2)}, '
+              'Verilen=${sample['bmi'].toStringAsFixed(2)}'
+      );
+    }
+
+    // Nabız kontrolleri
+  }
+
+
+  // Ortalama ve standart sapma hesaplama metodu
+  void _calculateMeanAndStd(int sampleSize) {
+    try {
+      // Ortalama hesaplama
+      for (int i = 0; i < _inputSize; i++) {
+        _featureMeans[i] /= sampleSize;
+      }
+
+      // Standart sapma hesaplama
+      for (int i = 0; i < _inputSize; i++) {
+        double sumSquaredDiff = 0.0;
+        for (var individual in population) {
+          sumSquaredDiff += pow(individual[i] - _featureMeans[i], 2);
+        }
+        _featureStds[i] = sqrt(sumSquaredDiff / sampleSize);
+
+        // Sıfır bölme hatasını önle
+        if (_featureStds[i] < 1e-10) {
+          _featureStds[i] = 1.0;
+        }
+      }
+    } catch (e) {
+      throw AIModelException('Mean and std calculation failed: $e');
+    }
+  }
+
+// BMI hesaplama metodu
+  double _calculateBMI(double weightKg, double heightM) {
+    if (heightM <= 0 || weightKg <= 0) {
+      throw AIModelException('Invalid height or weight values');
+    }
+
+    try {
+      return weightKg / (heightM * heightM);
+    } catch (e) {
+      throw AIModelException('BMI calculation failed: $e');
+    }
+  }
+
+// BMI değerine göre kategori belirleme
+  String _getBMICategory(double bmi) {
+    if (bmi < 18.5) return 'Underweight';
+    if (bmi < 25.0) return 'Normal';
+    if (bmi < 30.0) return 'Overweight';
+    return 'Obese';
+  }
+
+// BMI uyumluluğunu hesaplama
+  double _calculateBMICompatibility(double userBMI, String targetBMICase) {
+    final userCategory = _getBMICategory(userBMI);
+    if (userCategory == targetBMICase) return 1.0;
+
+    // Komşu kategoriler için kısmi uyumluluk
+    final categories = ['Underweight', 'Normal', 'Overweight', 'Obese'];
+    final userIndex = categories.indexOf(userCategory);
+    final targetIndex = categories.indexOf(targetBMICase);
+
+    return 1.0 - (userIndex - targetIndex).abs() * 0.25;
+  }
+
 
   @override
   Future<void> fit(List<Map<String, dynamic>> trainingData) async {
@@ -408,6 +772,7 @@ class AGDEModel extends BaseModel {
   }
 
 // Yardımcı hesaplama metodları
+
   List<double> _normalizeFeatures(List<double> features) {
     List<double> normalized = List.filled(_inputSize, 0.0);
     for (int i = 0; i < _inputSize; i++) {
@@ -588,16 +953,7 @@ class AGDEModel extends BaseModel {
     return 1.0 - (actualLevel - predictedLevel).abs() / 6.0;
   }
 
-  double _calculateBMICompatibility(double bmi, String bmiCase) {
-    final targetBMI = {
-      'underweight': 18.5,
-      'normal': 22.0,
-      'overweight': 27.0,
-      'obese': 30.0
-    }[bmiCase] ?? 22.0;
 
-    return 1.0 - (bmi - targetBMI).abs() / 10.0;
-  }
 
   double _calculatePrecision(int predicted, int actual) {
     return predicted == actual ? 1.0 : 0.0;
@@ -621,7 +977,7 @@ class AGDEModel extends BaseModel {
     };
   }
 
-  bool _validateSample(Map<String, dynamic> sample) {
+  bool _validateSample(Map sample) {
     final requiredFields = [
       'age',
       'gender',

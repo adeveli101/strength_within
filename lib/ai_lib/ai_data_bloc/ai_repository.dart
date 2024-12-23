@@ -4,9 +4,12 @@ import 'dart:math';
 import 'package:logging/logging.dart';
 import '../core/ai_constants.dart';
 import '../core/ai_exceptions.dart';
+import '../models/EnsembleNeuralModel.dart';
 import '../models/agde_model.dart';
+import '../models/base_model.dart';
 import '../models/collab_model.dart';
 import '../models/knn_model.dart';
+import 'ai_state.dart';
 import 'dataset_provider.dart';
 import 'datasets_models.dart';
 
@@ -25,12 +28,14 @@ class AIRepository {
   AIRepository._internal();
 
   final _logger = Logger('AIRepository');
-  final _datasetProvider = DatasetDBProvider();
+  final _datasetProvider = DatasetProvider();
+
+
 
   // Models
-  late final AGDEModel _agdeModel;
+  late final EnsembleNeuralModel _EnsembleNeuralModel;
   late final KNNModel _knnModel;
-  late final CollaborativeFilteringModel _collabModel;
+  late final AGDEModel _agdeModel;
 
   // Repository state
   AIRepositoryState _state = AIRepositoryState.uninitialized;
@@ -44,137 +49,252 @@ class AIRepository {
   Stream<Map<String, Map<String, double>>> get metricsStream => _metricsController.stream;
   Stream<AIRepositoryState> get stateStream => _stateController.stream;
 
-  // Model weights
-  final Map<String, double> _modelWeights = {
-    'agde': 0.4,
-    'knn': 0.3,
-    'collaborative': 0.3,
-  };
+
+
+
 
   Future<void> initialize() async {
-    if (_state != AIRepositoryState.uninitialized) return;
-
     try {
       _updateState(AIRepositoryState.initializing);
+      await _datasetProvider.initialize();
 
-      // Initialize models
-      _agdeModel = AGDEModel();
-      _knnModel = KNNModel();
-      _collabModel = CollaborativeFilteringModel();
-
-      // Get training data
-      final List<GymMembersTracking> trackingData = await _datasetProvider.getExerciseTrackingData()
-          .then((data) => data.map((d) => GymMembersTracking.fromMap(d)).toList());
-
-      final List<FinalDatasetBFP> bfpData = await _datasetProvider.getBFPDataset()
-          .then((data) => data.map((d) => FinalDatasetBFP.fromMap(d)).toList());
-
-      final List<FinalDataset> baseData = await _datasetProvider.getBMIDataset()
-          .then((data) => data.map((d) => FinalDataset.fromMap(d)).toList());
-
-      // Setup models
-      await Future.wait([
-        _agdeModel.setup(trackingData),
-        _knnModel.setup(bfpData),
-        _collabModel.setup(baseData)
-      ]);
 
       _updateState(AIRepositoryState.ready);
-      _logger.info('AI Repository initialized successfully');
     } catch (e) {
-      _updateState(AIRepositoryState.error);
       _logger.severe('Repository initialization failed: $e');
+      _updateState(AIRepositoryState.error);
       throw AIInitializationException('Repository initialization failed: $e');
     }
   }
 
-  Future<void> trainModels() async {
-    if (_state != AIRepositoryState.ready) {
-      throw AITrainingException('Repository not ready for training');
-    }
-
+  Future<void> trainModels(String modelType) async {
+    _logger.info('Starting model training for type: $modelType');
     try {
-      _updateState(AIRepositoryState.training);
+      _logger.info('Initializing DatasetProvider for model training...');
+      await _datasetProvider.initialize();
+      _logger.info('DatasetProvider initialized successfully for all models');
 
-      final trackingData = await _datasetProvider.getExerciseTrackingData()
-          .then((data) => data.map((d) => GymMembersTracking.fromMap(d)).toList());
+      switch (modelType) {
+        case 'AGDE Model':
+          _logger.info('Starting AGDE Model training...');
+          await runAGDEModel();
+          break;
+        case 'KNN Model':
+          _logger.info('Starting KNN Model training...');
+          await runKNNModel();
+          break;
+        case 'ENN Model':
+          _logger.info('Starting ENN Model training...');
+          await runENModel();
+          break;
+        default:
+          _logger.severe('Invalid model type requested: $modelType');
+          throw AIModelException('Invalid model type: $modelType');
+      }
+      _logger.info('Model training completed successfully for: $modelType');
+    } catch (e, stackTrace) {
+      _logger.severe('Model training failed: $e\nStackTrace: $stackTrace');
+      throw AIModelException('Model training failed: $e');
+    }
+  }
 
-      await Future.wait([
-        _trainAGDEModel(trackingData),
-        _trainKNNModel(trackingData),
-        _trainCollabModel(trackingData)
-      ]);
+  Future<void> runAGDEModel() async {
+    _logger.info('=== AGDE Model Training Started ===');
+    try {
+      _logger.info('Initializing DatasetProvider for AGDE model...');
+      await _datasetProvider.initialize();
+      _logger.info('DatasetProvider initialized successfully');
 
-      _updateState(AIRepositoryState.ready);
-    } catch (e) {
-      _updateState(AIRepositoryState.error);
-      throw AITrainingException('Training failed: $e');
+      // Model instance'ını sınıf field'ına ata
+      _agdeModel = AGDEModel();
+      AIStateManager().updateModelState(AIModelState.initializing);
+      _logger.info('AGDE model instance created');
+
+      _logger.info('Loading training data...');
+      final trainingData = await _datasetProvider.getGymMembersTracking();
+      _logger.info('Training data loaded successfully: ${trainingData.length} samples');
+
+      _logger.info('Setting up AGDE model...');
+      await _agdeModel.setup(trainingData);
+      _logger.info('AGDE model setup completed successfully');
+      AIStateManager().updateModelState(AIModelState.initialized);
+
+      _logger.info('Starting AGDE model training...');
+      AIStateManager().updateModelState(AIModelState.training);
+
+      var generationCount = 0;
+      _agdeModel.trainingProgress.listen((progress) {
+        generationCount++;
+        _logger.info('''
+      === Training Progress ===
+      Generation: ${progress.generation}
+      Best Fitness: ${progress.bestFitness.toStringAsFixed(6)}
+      Average Fitness: ${progress.avgFitness.toStringAsFixed(6)}
+      Current State: ${progress.state}
+      Progress: ${(progress.generation / AIConstants.MAX_GENERATIONS * 100).toStringAsFixed(2)}%
+      ''');
+        AIStateManager().updateProgress(progress.generation / AIConstants.MAX_GENERATIONS);
+      });
+
+      await _agdeModel.fit(trainingData);
+      _logger.info('AGDE model training completed successfully');
+
+      _logger.info('Starting model validation...');
+      AIStateManager().updateModelState(AIModelState.validating);
+      final metrics = await _agdeModel.calculateMetrics(trainingData);
+      _logger.info('''
+    === Model Metrics ===
+    ${metrics.entries.map((e) => '${e.key}: ${e.value.toStringAsFixed(4)}').join('\n    ')}
+    ''');
+
+      _logger.info('Saving AGDE model...');
+      await saveModel(_agdeModel);
+      _logger.info('AGDE model saved successfully');
+
+    } catch (e, stackTrace) {
+      _logger.severe('''
+    AGDE model execution failed:
+    Error: $e
+    StackTrace: $stackTrace
+    ''');
+      AIStateManager().updateModelState(AIModelState.error);
+      throw AIModelException('AGDE model execution failed: $e');
+    } finally {
+      _logger.info('Cleaning up AGDE model resources...');
+      AIStateManager().updateModelState(AIModelState.disposed);
+      if (_agdeModel != null) {
+        await _agdeModel.dispose();
+      }
+      _logger.info('=== AGDE Model Training Completed ===');
+    }
+  }
+
+  Future<void> runKNNModel() async {
+    _logger.info('=== KNN Model Training Started ===');
+    try {
+      // DatasetProvider zaten sınıf seviyesinde tanımlı, yeni instance oluşturmaya gerek yok
+      await _datasetProvider.initialize();
+      _logger.info('DatasetProvider initialized for KNN model');
+
+      final knnModel = KNNModel();
+      AIStateManager().updateModelState(AIModelState.initializing);
+
+      _logger.info('Loading training data...');
+      final trainingData = await _datasetProvider.getGymMembersTracking();
+      _logger.info('''
+    Training data loaded successfully:
+    - Sample count: ${trainingData.length}
+    - Data type: ${trainingData.runtimeType}
+    ''');
+
+      _logger.info('Setting up KNN model...');
+      await knnModel.setup(trainingData);
+      _logger.info('KNN model setup completed successfully');
+      AIStateManager().updateModelState(AIModelState.initialized);
+
+      _logger.info('Starting KNN model training...');
+      AIStateManager().updateModelState(AIModelState.training);
+      await knnModel.fit(trainingData);
+      _logger.info('KNN model training completed successfully');
+
+      _logger.info('Starting model validation...');
+      AIStateManager().updateModelState(AIModelState.validating);
+      final metrics = await knnModel.calculateMetrics(trainingData);
+      _logger.info('''
+    === Model Metrics ===
+    ${metrics.entries.map((e) => '${e.key}: ${e.value.toStringAsFixed(4)}').join('\n    ')}
+    ''');
+
+      _logger.info('Saving KNN model...');
+      await saveModel(knnModel);
+      _logger.info('KNN model saved successfully');
+
+    } catch (e, stackTrace) {
+      _logger.severe('''
+    KNN model execution failed:
+    Error: $e
+    StackTrace: $stackTrace
+    ''');
+      AIStateManager().updateModelState(AIModelState.error);
+      throw AIModelException('KNN model execution failed: $e');
+    } finally {
+      _logger.info('Cleaning up KNN model resources...');
+      AIStateManager().updateModelState(AIModelState.disposed);
+      await _knnModel.dispose();
+      _logger.info('=== KNN Model Training Completed ===');
+    }
+  }
+
+  Future<void> runENModel() async {
+    _logger.info('=== ENN Model Training Started ===');
+    try {
+      await _datasetProvider.initialize();
+      _logger.info('DatasetProvider initialized for ENN model');
+
+      final ennModel = EnsembleNeuralModel();
+      AIStateManager().updateModelState(AIModelState.initializing);
+
+      _logger.info('Loading training data...');
+      final trainingData = await _datasetProvider.getGymMembersTracking();
+      _logger.info('''
+    Training data loaded successfully:
+    - Sample count: ${trainingData.length}
+    - Data type: ${trainingData.runtimeType}
+    ''');
+
+      _logger.info('Setting up ENN model...');
+      await ennModel.setup(trainingData);
+      _logger.info('ENN model setup completed successfully');
+      AIStateManager().updateModelState(AIModelState.initialized);
+
+      _logger.info('Starting ENN model training...');
+      AIStateManager().updateModelState(AIModelState.training);
+      await ennModel.fit(trainingData);
+      _logger.info('ENN model training completed successfully');
+
+      _logger.info('Starting model validation...');
+      AIStateManager().updateModelState(AIModelState.validating);
+      final metrics = await ennModel.calculateMetrics(trainingData);
+      _logger.info('''
+    === Model Metrics ===
+    ${metrics.entries.map((e) => '${e.key}: ${e.value.toStringAsFixed(4)}').join('\n    ')}
+    ''');
+
+      _logger.info('Saving ENN model...');
+      await saveModel(ennModel);
+      _logger.info('ENN model saved successfully');
+
+    } catch (e, stackTrace) {
+      _logger.severe('''
+    ENN model execution failed:
+    Error: $e
+    StackTrace: $stackTrace
+    ''');
+      AIStateManager().updateModelState(AIModelState.error);
+      throw AIModelException('ENN model execution failed: $e');
+    } finally {
+      _logger.info('Cleaning up ENN model resources...');
+      AIStateManager().updateModelState(AIModelState.disposed);
+      await _EnsembleNeuralModel.dispose();
+      _logger.info('=== ENN Model Training Completed ===');
     }
   }
 
 
-
-  Future<FinalDataset> getProgramRecommendation(GymMembersTracking profile) async {
-    if (_state != AIRepositoryState.ready) {
-      throw AIException('Repository not ready');
-    }
-
+  Future<void> saveModel(BaseModel model) async {
     try {
-      final predictions = await Future.wait([
-        _agdeModel.predict(profile),
-        _knnModel.predict(profile),
-        _collabModel.predict(profile)
-      ]);
-
-      return _combineModelPredictions(predictions);
+      final modelJson = model.toJson();
+      final modelType = model.runtimeType.toString();
+      await _datasetProvider.saveModelData(
+          modelType: modelType,
+          modelData: modelJson,
+          timestamp: DateTime.now()
+      );
+      _logger.info('$modelType model saved successfully');
     } catch (e) {
-      _logger.severe('Program recommendation failed: $e');
-      throw AIException('Failed to get program recommendation: $e');
+      _logger.severe('Model saving failed: $e');
+      throw AIModelException('Model saving failed: $e');
     }
-  }
-
-  FinalDataset _combineModelPredictions(List<FinalDataset> predictions) {
-    0; // ID'yi burada belirtin
-    double weightSum = 0;
-    double heightSum = 0;
-    double bmiSum = 0;
-    Map<String, int> genderVotes = {};
-    int ageSum = 0;
-    Map<String, int> bmiCaseVotes = {};
-    int exercisePlanSum = 0;
-
-    for (var i = 0; i < predictions.length; i++) {
-      final weight = _modelWeights.values.elementAt(i); // Her modelin ağırlığını al
-      final pred = predictions[i];
-
-      // Ağırlıklı toplamları hesapla
-      weightSum += pred.weight * weight;
-      heightSum += pred.height * weight;
-      bmiSum += pred.bmi * weight;
-
-      // Cinsiyet oylaması
-      genderVotes[pred.gender] = (genderVotes[pred.gender] ?? 0) + 1;
-
-      // Yaş toplamı
-      ageSum += pred.age;
-
-      // BMI durumu oylaması
-      bmiCaseVotes[pred.bmiCase] = (bmiCaseVotes[pred.bmiCase] ?? 0) + 1;
-
-      // Egzersiz planı toplamı
-      exercisePlanSum += pred.exercisePlan;
-    }
-
-    return FinalDataset(
-        id: 0,
-        weight: weightSum / predictions.length,
-        height: heightSum / predictions.length,
-        bmi: bmiSum / predictions.length,
-        gender: genderVotes.entries.reduce((a, b) => a.value > b.value ? a : b).key,
-        age: (ageSum / predictions.length).round(),
-        bmiCase: bmiCaseVotes.entries.reduce((a, b) => a.value > b.value ? a : b).key,
-        exercisePlan: (exercisePlanSum / predictions.length).round()
-    );
   }
 
   void _updateState(AIRepositoryState newState) {
@@ -189,9 +309,14 @@ class AIRepository {
   Future<void> dispose() async {
     await _metricsController.close();
     await _stateController.close();
-    await _agdeModel.dispose();
+    await _EnsembleNeuralModel.dispose();
     await _knnModel.dispose();
-    await _collabModel.dispose();
+    await _agdeModel.dispose();
+    await _datasetProvider.dispose();
     _state = AIRepositoryState.uninitialized;
   }
+
+
+
+
 }
