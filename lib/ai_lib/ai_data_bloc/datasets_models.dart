@@ -1,5 +1,5 @@
 class GymMembersTracking {
-  final int id; // ID eklendi
+  final int id;
   final int age;
   final String gender;
   final double weightKg;
@@ -17,7 +17,7 @@ class GymMembersTracking {
   final double bmi;
 
   GymMembersTracking({
-    required this.id, // ID zorunlu hale getirildi
+    required this.id,
     required this.age,
     required this.gender,
     required this.weightKg,
@@ -35,43 +35,45 @@ class GymMembersTracking {
     required this.bmi,
   });
 
+  factory GymMembersTracking.fromMap(Map<String, dynamic> map) {
+    return GymMembersTracking(
+      id: map['id'] as int,
+      age: map['age'] as int,
+      gender: map['gender'] as String,
+      weightKg: (map['weight_kg'] as num).toDouble(),
+      heightM: (map['height_m'] as num).toDouble(),
+      maxBpm: map['max_bpm'] as int,
+      avgBpm: map['avg_bpm'] as int,
+      restingBpm: map['resting_bpm'] as int,
+      sessionDuration: (map['session_duration'] as num).toDouble(),
+      caloriesBurned: (map['calories_burned'] as num).toDouble(),
+      workoutType: map['workout_type'] as String,
+      fatPercentage: (map['fat_percentage'] as num).toDouble(),
+      waterIntake: (map['water_intake'] as num).toDouble(),
+      workoutFrequency: map['workout_frequency'] as int,
+      experienceLevel: map['experience_level'] as int,
+      bmi: (map['bmi'] as num).toDouble(),
+    );
+  }
+
   Map<String, dynamic> toMap() => {
-    'id': id, // ID haritaya eklendi
+    'id': id,
     'age': age,
     'gender': gender,
-    'weightKg': weightKg,
-    'heightM': heightM,
-    'maxBpm': maxBpm,
-    'avgBpm': avgBpm,
-    'restingBpm': restingBpm,
-    'sessionDuration': sessionDuration,
-    'caloriesBurned': caloriesBurned,
-    'workoutType': workoutType,
-    'fatPercentage': fatPercentage,
-    'waterIntake': waterIntake,
-    'workoutFrequency': workoutFrequency,
-    'experienceLevel': experienceLevel,
+    'weight_kg': weightKg,
+    'height_m': heightM,
+    'max_bpm': maxBpm,
+    'avg_bpm': avgBpm,
+    'resting_bpm': restingBpm,
+    'session_duration': sessionDuration,
+    'calories_burned': caloriesBurned,
+    'workout_type': workoutType,
+    'fat_percentage': fatPercentage,
+    'water_intake': waterIntake,
+    'workout_frequency': workoutFrequency,
+    'experience_level': experienceLevel,
     'bmi': bmi,
   };
-
-  factory GymMembersTracking.fromMap(Map<String, dynamic> map) => GymMembersTracking(
-    id: map['id'], // ID haritadan alındı
-    age: map['age'],
-    gender: map['gender'],
-    weightKg: map['weightKg'],
-    heightM: map['heightM'],
-    maxBpm: map['maxBpm'],
-    avgBpm: map['avgBpm'],
-    restingBpm: map['restingBpm'],
-    sessionDuration: map['sessionDuration'],
-    caloriesBurned: map['caloriesBurned'],
-    workoutType: map['workoutType'],
-    fatPercentage: map['fatPercentage'],
-    waterIntake: map['waterIntake'],
-    workoutFrequency: map['workoutFrequency'],
-    experienceLevel: map['experienceLevel'],
-    bmi: map['bmi'],
-  );
 }
 
 class FinalDatasetBFP {

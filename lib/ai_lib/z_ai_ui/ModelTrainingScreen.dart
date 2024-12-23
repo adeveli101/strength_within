@@ -71,8 +71,7 @@ class _ModelTrainingScreenState extends State<ModelTrainingScreen> {
       setState(() => _isTraining = true);
 
       await AIRepository().trainModels(
-        config: _trainingConfig,
-        useBatchProcessing: true,
+        'AGDE Model',
       );
 
     } catch (e) {

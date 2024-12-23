@@ -5,6 +5,7 @@ class Assets {
   static const String aiDataBlocAiRepository = 'lib/ai_lib/ai_data_bloc/ai_repository.dart';
   static const String aiDataBlocAiState = 'lib/ai_lib/ai_data_bloc/ai_state.dart';
   static const String aiDataBlocDatasetProvider = 'lib/ai_lib/ai_data_bloc/dataset_provider.dart';
+  static const String aiDataBlocDatasetsModels = 'lib/ai_lib/ai_data_bloc/datasets_models.dart';
   static const String aiLibMainAi = 'lib/ai_lib/main_ai.dart';
   static const String androidAnalysisOptions = 'android/analysis_options.yaml';
   static const String androidBuild = 'android/build.gradle';
@@ -27,7 +28,6 @@ class Assets {
   static const String blocsForYouBloc = 'lib/blocs/for_you_bloc.dart';
   static const String componentsProgramMerger = 'lib/ui/components/program_merger.dart';
   static const String coreAiConstants = 'lib/ai_lib/core/ai_constants.dart';
-  static const String coreAiDataProcessor = 'lib/ai_lib/core/ai_data_processor.dart';
   static const String coreAiExceptions = 'lib/ai_lib/core/ai_exceptions.dart';
   static const String coreTrainingConfig = 'lib/ai_lib/core/trainingConfig.dart';
   static const String dataBlocPartPartBloc = 'lib/blocs/data_bloc_part/part_bloc.dart';
@@ -44,6 +44,9 @@ class Assets {
   static const String dataScheduleBlocScheduleRepository = 'lib/blocs/data_schedule_bloc/schedule_repository.dart';
   static const String databaseDataset1 = 'database/dataset_1.db';
   static const String databaseEsek = 'database/esek.db';
+  static const String databaseFinalDataset = 'database/final_dataset.json';
+  static const String databaseFinalDatasetBFP = 'database/final_dataset_BFP.json';
+  static const String databaseGymMembersTracking = 'database/gym_members_tracking.json';
   static const String debugAndroidManifest = 'android/app/src/debug/AndroidManifest.xml';
   static const String drawableBackground = 'android/app/src/main/res/drawable/background.png';
   static const String drawableHdpiAndroid12splash = 'android/app/src/main/res/drawable-hdpi/android12splash.png';
@@ -111,6 +114,7 @@ class Assets {
   static const String modelsAgdeModel = 'lib/ai_lib/models/agde_model.dart';
   static const String modelsBaseModel = 'lib/ai_lib/models/base_model.dart';
   static const String modelsCollabModel = 'lib/ai_lib/models/collab_model.dart';
+  static const String modelsEnsembleNeuralModel = 'lib/ai_lib/models/EnsembleNeuralModel.dart';
   static const String modelsKnnModel = 'lib/ai_lib/models/knn_model.dart';
   static const String partUiPartCard = 'lib/ui/part_ui/part_card.dart';
   static const String partUiPartDetail = 'lib/ui/part_ui/part_detail.dart';
@@ -150,6 +154,7 @@ class Assets {
   static const String sqlModelsWorkoutType = 'lib/models/sql_models/WorkoutType.dart';
   static const String sqlModelsWorkoutTypeGoals = 'lib/models/sql_models/workoutType_goals.dart';
   static const String strengthWithinAndroidGradlew = 'android/gradlew.bat';
+  static const String strengthWithinDatabaseDataset1 = 'database/dataset_1.sqbpro';
   static const String strengthWithinDatabaseEsek = 'database/esek.sqbpro';
   static const String strengthWithinPubspec = 'pubspec.yaml';
   static const String testingAbTestRunner = 'lib/ai_lib/testing/ab_test_runner.dart';
@@ -176,6 +181,7 @@ class Assets {
   static const String wrapperGradleWrapper = 'android/gradle/wrapper/gradle-wrapper.jar';
 
   static const String zAiUiModelDashboardScreen = 'lib/ai_lib/z_ai_ui/ModelDashboardScreen.dart';
+  static const String zAiUiModelTestScreen = 'lib/ai_lib/z_ai_ui/ModelTestScreen.dart';
   static const String zAiUiModelTrainingScreen = 'lib/ai_lib/z_ai_ui/ModelTrainingScreen.dart';
   static const String zAiUiRecommendationTestScreen = 'lib/ai_lib/z_ai_ui/RecommendationTestScreen.dart';
 
