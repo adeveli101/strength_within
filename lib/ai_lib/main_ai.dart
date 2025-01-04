@@ -177,9 +177,9 @@ class _AIHomePageState extends State<AIHomePage> {
 
   @override
   void dispose() {
-    try {
+
       _repository.dispose();
-    } catch (e) {}
+
 
     super.dispose();
   }

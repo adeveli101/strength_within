@@ -88,6 +88,12 @@ dependencies:
   shared_preferences: ^2.3.3
 
 
+  tflite_flutter: ^0.11.0
+  toml: ^0.15.0
+  firebase_ml_model_downloader: ^0.3.1+6
+
+  ffi: ^2.1.3
+  flet: ^0.25.2
   sqflite: ^2.4.1
   sqlite3_flutter_libs: ^0.5.27
   sqlite3: ^2.5.0
@@ -173,50 +179,80 @@ flutter:
 
   assets:
     - android/app/src/main/res/
-    - android/app/src/main/res/values/
-    - android/app/src/main/res/drawable/
-    - android/app/src/main/res/values-v31/
-    - android/app/src/main/res/drawable-v21/
-    - android/app/src/main/res/values-night/
     - android/app/src/main/res/drawable-hdpi/
     - android/app/src/main/res/drawable-mdpi/
-    - android/app/src/main/res/drawable-xhdpi/
-    - android/app/src/main/res/drawable-xxhdpi/
-    - android/app/src/main/res/drawable-xxxhdpi/
-    - android/app/src/main/res/values-night-v31/
     - android/app/src/main/res/drawable-night-hdpi/
     - android/app/src/main/res/drawable-night-mdpi/
     - android/app/src/main/res/drawable-night-xhdpi/
     - android/app/src/main/res/drawable-night-xxhdpi/
     - android/app/src/main/res/drawable-night-xxxhdpi/
-    - pubspec.yaml
-    - lib/generated/assets.dart
+    - android/app/src/main/res/drawable-v21/
+    - android/app/src/main/res/drawable-xhdpi/
+    - android/app/src/main/res/drawable-xxhdpi/
+    - android/app/src/main/res/drawable-xxxhdpi/
+    - android/app/src/main/res/drawable/
+    - android/app/src/main/res/values-night-v31/
+    - android/app/src/main/res/values-night/
+    - android/app/src/main/res/values-v31/
+    - android/app/src/main/res/values/
     - assets/
+    - assets/ai_models/body_composition_model.tflite
+    - assets/ai_models/exercise_plan.tflite
+    - assets/ai_models/exercise_plan_model.tflite
+    - assets/ai_models/fitness_model.tflite
+    - assets/ai_models/fitness_model_v1_calories_burned.tflite
+    - assets/ai_models/fitness_model_v1_exercise_plan.tflite
+    - assets/ai_models/fitness_model_v1_session_duration.tflite
+    - assets/ai_models/fitness_model_v1_workout_type.tflite
     - database/
+    - lib/generated/assets.dart
     - lib/z.app_theme/
+    - pubspec.yaml
 
 
 
 
   fonts:
-    - family: PetitFormalScript
+    - family: PetitFormalScript-Regular
       fonts:
         - asset: fonts/PetitFormalScript-Regular.ttf
-    - family: Roboto
+    - family: Roboto-Black
       fonts:
         - asset: fonts/Roboto-Black.ttf
+    - family: Roboto-BlackItalic
+      fonts:
         - asset: fonts/Roboto-BlackItalic.ttf
+    - family: Roboto-Bold
+      fonts:
         - asset: fonts/Roboto-Bold.ttf
+    - family: Roboto-BoldItalic
+      fonts:
         - asset: fonts/Roboto-BoldItalic.ttf
+    - family: Roboto-Italic
+      fonts:
         - asset: fonts/Roboto-Italic.ttf
+    - family: Roboto-Light
+      fonts:
         - asset: fonts/Roboto-Light.ttf
+    - family: Roboto-LightItalic
+      fonts:
         - asset: fonts/Roboto-LightItalic.ttf
+    - family: Roboto-Medium
+      fonts:
         - asset: fonts/Roboto-Medium.ttf
+    - family: Roboto-MediumItalic
+      fonts:
         - asset: fonts/Roboto-MediumItalic.ttf
+    - family: Roboto-Regular
+      fonts:
         - asset: fonts/Roboto-Regular.ttf
+    - family: Roboto-Thin
+      fonts:
         - asset: fonts/Roboto-Thin.ttf
+    - family: Roboto-ThinItalic
+      fonts:
         - asset: fonts/Roboto-ThinItalic.ttf
-    - family: Staatliches
+    - family: Staatliches-Regular
       fonts:
         - asset: fonts/Staatliches-Regular.ttf
 
