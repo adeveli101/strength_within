@@ -7,15 +7,33 @@ class Assets {
   static const String aiDataBlocDatasetProvider = 'lib/ai_lib/ai_data_bloc/dataset_provider.dart';
   static const String aiDataBlocDatasetsModels = 'lib/ai_lib/ai_data_bloc/datasets_models.dart';
   static const String aiLibMainAi = 'lib/ai_lib/main_ai.dart';
+  static const String aiModelsBodyCompositionModel = 'assets/ai_models/body_composition_model.tflite';
+  static const String aiModelsExercisePlan = 'assets/ai_models/exercise_plan.tflite';
+  static const String aiModelsExercisePlanModel = 'assets/ai_models/exercise_plan_model.tflite';
+  static const String aiModelsFitnessModel = 'assets/ai_models/fitness_model.tflite';
+  static const String aiModelsFitnessModelV1CaloriesBurned = 'assets/ai_models/fitness_model_v1_calories_burned.tflite';
+  static const String aiModelsFitnessModelV1ExercisePlan = 'assets/ai_models/fitness_model_v1_exercise_plan.tflite';
+  static const String aiModelsFitnessModelV1SessionDuration = 'assets/ai_models/fitness_model_v1_session_duration.tflite';
+  static const String aiModelsFitnessModelV1WorkoutType = 'assets/ai_models/fitness_model_v1_workout_type.tflite';
+  static const String aiPredictorsExercisePlanPredictor = 'lib/ai_predictors/exercise_plan_predictor.dart';
+  static const String aiPredictorsFPredictorV2 = 'lib/ai_predictors/f_predictor_v2.dart';
+  static const String aiPredictorsFitnessPredictor = 'lib/ai_predictors/fitness_predictor.dart';
+  static const String aiPredictorsMainPredictor = 'lib/ai_predictors/main_predictor.dart';
   static const String androidAnalysisOptions = 'android/analysis_options.yaml';
   static const String androidBuild = 'android/build.gradle';
   static const String androidGradle = 'android/gradle.properties';
   static const String androidGradlew = 'android/gradlew';
   static const String androidLocal = 'android/local.properties';
   static const String androidSettings = 'android/settings.gradle';
-  static const String androidWorkoutAndroid = 'android/workout_android.iml';
   static const String appBuild = 'android/app/build.gradle';
   static const String appGoogleServices = 'android/app/google-services.json';
+  static const String assetsAiModelsBodyCompositionModel = 'assets/ai_models/body_composition_model.tflite';
+  static const String assetsAiModelsExercisePlan = 'assets/ai_models/exercise_plan.tflite';
+  static const String assetsAiModelsExercisePlanModel = 'assets/ai_models/exercise_plan_model.tflite';
+  static const String assetsAiModelsFitnessModelV1CaloriesBurned = 'assets/ai_models/fitness_model_v1_calories_burned.tflite';
+  static const String assetsAiModelsFitnessModelV1ExercisePlan = 'assets/ai_models/fitness_model_v1_exercise_plan.tflite';
+  static const String assetsAiModelsFitnessModelV1SessionDuration = 'assets/ai_models/fitness_model_v1_session_duration.tflite';
+  static const String assetsAiModelsFitnessModelV1WorkoutType = 'assets/ai_models/fitness_model_v1_workout_type.tflite';
   static const String assetsArmModified = 'assets/arm-modified.png';
   static const String assetsBackModified = 'assets/back-modified.png';
   static const String assetsChestsModified = 'assets/chests-modified.png';
@@ -184,5 +202,9 @@ class Assets {
   static const String zAiUiModelTestScreen = 'lib/ai_lib/z_ai_ui/ModelTestScreen.dart';
   static const String zAiUiModelTrainingScreen = 'lib/ai_lib/z_ai_ui/ModelTrainingScreen.dart';
   static const String zAiUiRecommendationTestScreen = 'lib/ai_lib/z_ai_ui/RecommendationTestScreen.dart';
-
+  /*static const String z.appThemeAppTheme = 'lib/z.app_theme/app_theme.dart';
+  static const String z.appThemeCircularLogo = 'lib/z.app_theme/circular_logo.dart';
+  static const String z.appThemeSplashScreen = 'lib/z.app_theme/splash_screen.dart';
+  static const String z.appThemeWelcomeHeader = 'lib/z.app_theme/welcome_header.dart';
+*/
 }

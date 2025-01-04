@@ -19,6 +19,14 @@ android {
     kotlinOptions {
         jvmTarget = '17'
     }
+    aaptOptions {
+        noCompress 'tflite'
+        noCompress 'lite'
+    }
+    buildFeatures {
+        buildConfig true // BuildConfig alanlarını etkinleştir
+    }
+
 
 
     defaultConfig {
@@ -47,5 +55,11 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'com.google.android.gms:play-services-safetynet:18.1.0'
     implementation 'com.google.android.play:integrity:1.4.0'
+
+    implementation 'org.tensorflow:tensorflow-lite:2.13.0'
+    implementation 'org.tensorflow:tensorflow-lite-gpu:2.13.0'
+    implementation 'org.tensorflow:tensorflow-lite-support:0.4.4'
+    implementation("com.google.firebase:firebase-ml-modeldownloader")
+
 
 }
