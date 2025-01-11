@@ -11,6 +11,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../models/firebase_models/RoutineHistory.dart';
 import '../../models/firebase_models/firebase_parts.dart';
 import '../../models/firebase_models/firebase_routines.dart';
+import '../../models/firebase_models/user_ai_profile.dart';
 import '../../models/firebase_models/user_schedule.dart';
 import '../data_provider/firebase_provider.dart';
 import '../data_provider/sql_provider.dart';
@@ -25,40 +26,35 @@ class FirebaseProvider {
   // MARK: - Auth Operations
   Future<String?> signInAnonymously() async {
     try {
-      String deviceId = await _getDeviceId();
-      _logger.info('Device ID: $deviceId');
+      // 1. Önce anonim giriş yap
+      final userCredential = await _auth.signInAnonymously();
+      final user = userCredential.user;
 
-      QuerySnapshot userQuery = await _firestore
-          .collection('users')
-          .where('deviceId', isEqualTo: deviceId)
-          .limit(1)
-          .get();
+      if (user != null) {
+        // 2. Firestore'da kullanıcı dokümanını kontrol et
+        final userDoc = await _firestore.collection('users').doc(user.uid).get();
 
-      if (userQuery.docs.isNotEmpty) {
-        String existingUserId = userQuery.docs.first.id;
-        await _auth.signInAnonymously();
-        await _firestore.collection('users').doc(existingUserId).update({
-          'lastLoginAt': FieldValue.serverTimestamp(),
-        });
-        return existingUserId;
-      } else {
-        final userCredential = await _auth.signInAnonymously();
-        final user = userCredential.user;
-        if (user != null) {
-          await _firestore.collection('users').doc(user.uid).set({
-            'deviceId': deviceId,
+        if (userDoc.exists) {
+          // Kullanıcı varsa sadece son giriş tarihini güncelle
+          await userDoc.reference.update({
+            'lastLoginAt': FieldValue.serverTimestamp(),
+          });
+        } else {
+          // Yeni kullanıcı oluştur
+          await userDoc.reference.set({
             'createdAt': FieldValue.serverTimestamp(),
             'lastLoginAt': FieldValue.serverTimestamp(),
           });
-          return user.uid;
         }
+        return user.uid;
       }
-      return null;
     } catch (e) {
       _logger.severe('Auth error', e);
-      return null;
     }
+    return null;
   }
+
+
 
   Future<String> _getDeviceId() async {
     final DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
@@ -82,6 +78,87 @@ class FirebaseProvider {
         .get();
     return doc.data()?['deviceId'] == deviceId;
   }
+
+
+
+  ///latest ai update.
+  ///
+
+
+  Future<void> addUserPrediction(String userId, Map<String, dynamic> prediction) async {
+    try {
+      final batch = _firestore.batch();
+
+      final userPredictions = _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('predictions');
+
+      batch.set(
+        userPredictions.doc('latest'),
+        prediction,
+      );
+
+      batch.set(
+        userPredictions.doc('history'),
+        {
+          'predictions': FieldValue.arrayUnion([prediction])
+        },
+        SetOptions(merge: true),
+      );
+
+      await batch.commit();
+      _logger.info('AI prediction saved for user: $userId');
+    } catch (e) {
+      _logger.severe('Error saving prediction', e);
+      rethrow;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getUserPredictionHistory(String userId) async {
+    try {
+      final doc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('predictions')
+          .doc('history')
+          .get();
+
+      if (!doc.exists) return [];
+
+      final data = doc.data();
+      return List<Map<String, dynamic>>.from(data?['predictions'] ?? []);
+    } catch (e) {
+      _logger.severe('Error getting prediction history', e);
+      rethrow;
+    }
+  }
+
+  Future<UserAIProfile?> getLatestUserPrediction(String userId) async {
+    try {
+      final doc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('predictions')
+          .doc('latest')
+          .get();
+
+      if (!doc.exists) return null;
+
+      // Dönüşüm işlemi
+      return UserAIProfile.fromFirestore(doc);
+    } catch (e) {
+      _logger.severe('Error getting latest prediction', e);
+      rethrow;
+    }
+  }
+
+
+///
+
+
+
+
 
 
   // MARK: - Schedule Operations

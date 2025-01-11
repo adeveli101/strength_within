@@ -9,8 +9,8 @@ import '../../blocs/data_provider/firebase_provider.dart';
 import '../../blocs/data_provider/sql_provider.dart';
 import '../../models/sql_models/ExerciseTargetedBodyParts.dart';
 import '../../models/sql_models/exercises.dart';
+import '../../sw_app_theme/app_theme.dart';
 import '../../utils/video_player.dart';
-import '../../z.app_theme/app_theme.dart';
 
 class ExerciseDetails extends StatefulWidget {
   final int exerciseId;

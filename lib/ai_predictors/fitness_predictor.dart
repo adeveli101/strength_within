@@ -63,12 +63,11 @@ class FitnessPredictor {
       double bmi = outputArray[0][0];
       double bodyFat = outputArray[0][1];
 
-      // Gerçek BMI hesaplaması ile karşılaştır
-      double calculatedBMI = weight / (height * height);
+
 
       // Tahminleri döndür
       return {
-        'bmi': (bmi + calculatedBMI) / 2, // Model tahmini ve hesaplanan değerin ortalaması
+        'bmi': (bmi) , // Model tahmini ve hesaplanan değerin ortalaması
         'body_fat': bodyFat,
       };
     } catch (e) {

@@ -14,6 +14,8 @@ import '../../models/sql_models/WorkoutType.dart';
 import '../../models/sql_models/exercises.dart';
 import '../../models/sql_models/routine_frequency.dart';
 import '../../models/sql_models/routines.dart';
+import '../../models/sql_models/workoutGoals.dart';
+import '../../models/sql_models/workoutType_goals.dart';
 import '../../utils/routine_helpers.dart';
 import '../data_provider_cache/app_cache.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -258,6 +260,180 @@ class SQLProvider {
     await db.execute('CREATE INDEX idx_bodyparts_search ON BodyParts(name COLLATE NOCASE, isCompound)');
   }
 
+
+///ai services update
+
+  // BMI kategorisine göre hedefleri getir
+  Future<List<WorkoutGoals>> getGoalsByBMIRange(double minBMI, double maxBMI) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'WorkoutGoals',
+      where: 'minBMI <= ? AND maxBMI >= ?',
+      whereArgs: [maxBMI, minBMI],
+    );
+
+    return List.generate(maps.length, (i) {
+      return WorkoutGoals.fromMap(maps[i]);
+    });
+  }
+
+// Hedef bazlı program önerileri için
+  Future<List<Routines>> getRecommendedRoutinesByGoal({
+    required int goalId,
+    required int difficulty,
+    required double confidence,
+    int limit = 5
+  }) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.rawQuery('''
+    SELECT r.*, 
+           wtg.recommendedPercentage as goalMatch,
+           ? as aiConfidence
+    FROM Routines r
+    INNER JOIN WorkoutTypeGoals wtg 
+      ON r.workoutTypeId = wtg.workoutTypeId 
+      AND wtg.goalId = ?
+    WHERE r.difficulty BETWEEN ? AND ?
+    ORDER BY (wtg.recommendedPercentage * ?) DESC
+    LIMIT ?
+  ''', [confidence, goalId, difficulty - 1, difficulty + 1, confidence, limit]);
+
+    return List.generate(maps.length, (i) {
+      return Routines.fromMap(maps[i]);
+    });
+  }
+
+// Hedef ve WorkoutType uyumluluğu için
+  Future<double> getGoalWorkoutTypeCompatibility(
+      int goalId,
+      int workoutTypeId
+      ) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+    SELECT recommendedPercentage 
+    FROM WorkoutTypeGoals
+    WHERE goalId = ? AND workoutTypeId = ?
+  ''', [goalId, workoutTypeId]);
+
+    return result.isNotEmpty ? result.first['recommendedPercentage'] as double : 0.0;
+  }
+
+
+  Future<List<Map<String, dynamic>>> getWorkoutTypeGoalPercentages(int goalId) async {
+    final db = await database;
+    return await db.rawQuery('''
+    SELECT wt.id, wt.name, wtg.recommendedPercentage 
+    FROM WorkoutTypes wt
+    INNER JOIN WorkoutTypeGoals wtg ON wt.id = wtg.workoutTypeId
+    WHERE wtg.goalId = ?
+  ''', [goalId]);
+  }
+
+  Future<List<Routines>> getRoutinesByGoalAndType(
+      int goalId,
+      int workoutTypeId
+      ) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'Routines',
+      where: 'goalId = ? AND workoutTypeId = ?',
+      whereArgs: [goalId, workoutTypeId],
+    );
+
+    return List.generate(maps.length, (i) {
+      return Routines.fromMap(maps[i]);
+    });
+  }
+
+
+
+
+  Future<List<Routines>> getRoutinesByDifficultyRange(
+      int minDifficulty,
+      int maxDifficulty
+      ) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'Routines',
+      where: 'difficulty BETWEEN ? AND ?',
+      whereArgs: [minDifficulty, maxDifficulty],
+    );
+
+    return List.generate(maps.length, (i) {
+      return Routines.fromMap(maps[i]);
+    });
+  }
+
+
+  Future<List<Routines>> getRoutinesByGoalAndDifficulty(
+      int goalId,
+      int difficulty,
+      int range
+      ) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'Routines',
+      where: 'goalId = ? AND difficulty BETWEEN ? AND ?',
+      whereArgs: [goalId, difficulty - range, difficulty + range],
+    );
+
+    return List.generate(maps.length, (i) {
+      return Routines.fromMap(maps[i]);
+    });
+  }
+
+
+
+
+
+  Future<List<WorkoutTypeGoals>> getWorkoutTypeGoalsForGoals(List<int> goalIds) async {
+    final db = await database;
+
+    final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT wtg.*, wt.name as workoutTypeName 
+      FROM WorkoutTypeGoals wtg
+      INNER JOIN WorkoutTypes wt ON wtg.workoutTypeId = wt.id
+      WHERE wtg.goalId IN (${goalIds.join(',')})
+      ORDER BY wtg.recommendedPercentage DESC
+    ''');
+
+    return List.generate(maps.length, (i) {
+      return WorkoutTypeGoals(
+        id: maps[i]['id'],
+        workoutTypeId: maps[i]['workoutTypeId'],
+        goalId: maps[i]['goalId'],
+        recommendedPercentage: maps[i]['recommendedPercentage'],
+      );
+    });
+  }
+
+  Future<List<Routines>> getRoutinesByGoalsAndDifficulty({
+    required List<int> goalIds,
+    required int minDifficulty,
+    required int maxDifficulty,
+  }) async {
+    final db = await database;
+
+    final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT r.*, wt.name as workoutTypeName
+      FROM Routines r
+      INNER JOIN WorkoutTypes wt ON r.workoutTypeId = wt.id
+      WHERE r.goalId IN (${goalIds.join(',')})
+      AND r.difficulty BETWEEN ? AND ?
+      ORDER BY r.difficulty ASC
+    ''', [minDifficulty, maxDifficulty]);
+
+    return List.generate(maps.length, (i) {
+      return Routines(
+        id: maps[i]['id'],
+        name: maps[i]['name'],
+        description: maps[i]['description'],
+        workoutTypeId: maps[i]['workoutTypeId'],
+        difficulty: maps[i]['difficulty'],
+        goalId: maps[i]['goalId'],
+      );
+    });
+  }
 
 
 

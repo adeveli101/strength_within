@@ -1,10 +1,21 @@
-// ignore_for_file: unused_element
+// ignore_for_file: unused_element, unused_field
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../blocs/data_bloc_routine/routines_bloc.dart';
 import '../../blocs/data_schedule_bloc/schedule_bloc.dart';
 import '../../models/sql_models/routines.dart';
+import '../../sw_app_theme/app_theme.dart';
+
+
+enum ExpansionDirection {
+  left,
+  right,
+  down,
+  up
+}
+
 
 class RoutineCard extends StatefulWidget {
   final Routines routine;
@@ -23,22 +34,53 @@ class RoutineCard extends StatefulWidget {
 }
 
 class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
+  late AnimationController _expandController;
+  late Animation<double> _expandAnimation;
+  late Animation<double> _blurAnimation;
+  bool _isExpanded = false;
+
+
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
+    _initializeAnimations();
+  }
+  void _handleAnimationStatus(AnimationStatus status) {
+    setState(() => _isExpanded = status == AnimationStatus.completed);
+  }
+
+  void _initializeAnimations() {
+    _expandController = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
+
+    _expandAnimation = CurvedAnimation(
+      parent: _expandController,
+      curve: Curves.easeOutBack,
+      reverseCurve: Curves.easeInBack,
+    );
+
+    _blurAnimation = Tween<double>(
+      begin: 0.0,
+      end: 3.0,
+    ).animate(_expandAnimation);
+
+    _expandController.addStatusListener((status) {
+      setState(() {
+        _isExpanded = status == AnimationStatus.completed;
+      });
+    });
   }
+
 
   @override
   void dispose() {
-    _controller.dispose();
+    _expandController.dispose();
     super.dispose();
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -50,106 +92,122 @@ class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStat
           );
         }
       },
-      child: Card(
-        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        elevation: 0,
+      child: Material(
+        color: Colors.transparent,
         child: InkWell(
+          borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
           onTap: () {
             if (widget.routine.id > 0) {
+              HapticFeedback.lightImpact();
               context.read<RoutinesBloc>().add(
-                FetchRoutineExercises(routineId: widget.routine.id),
+                  FetchRoutineExercises(routineId: widget.routine.id)
               );
               widget.onTap?.call();
             }
           },
-          borderRadius: BorderRadius.circular(12),
-          child: Stack(  // Column yerine Stack kullanıyoruz
-            children: [
-              // Ana içerik
-              Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      _getRoutineColor(),
-                      _getRoutineColor().withOpacity(0.8),
+          child: Container(
+            height: 400,
+            width: 400,
+            margin: EdgeInsets.all(AppTheme.paddingSmall),
+            decoration: AppTheme.decoration(
+              gradient: AppTheme.getPartGradient(
+                difficulty: widget.routine.difficulty,
+                secondaryColor: AppTheme.getTargetColor(widget.routine.goalId ?? 0),
+              ),
+              borderRadius: AppTheme.getBorderRadius(all: AppTheme.borderRadiusMedium),
+              shadows: [
+                BoxShadow(
+                  color: AppTheme.getDifficultyColor(widget.routine.difficulty)
+                      .withOpacity(AppTheme.shadowOpacity),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Stack(
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        AppTheme.cardBackground.withOpacity(AppTheme.primaryOpacity),
+                        AppTheme.surfaceColor.withOpacity(AppTheme.secondaryOpacity),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildHeader(),
+                      _buildBody(),
+                      _buildFooter(),
                     ],
                   ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildHeader(),
-                    _buildBody(),
-                    _buildFooter(),
-                  ],
-                ),
-              ),
+                Positioned(
+                  top: AppTheme.paddingSmall,
+                  right: AppTheme.paddingSmall,
+                  child: BlocBuilder<ScheduleBloc, ScheduleState>(
+                    builder: (context, state) {
+                      if (state is SchedulesLoaded) {
+                        final schedules = state.schedules
+                            .where((schedule) =>
+                        schedule.itemId == widget.routine.id &&
+                            schedule.type == 'routine'
+                        ).toList();
+                        if (schedules.isEmpty) return const SizedBox.shrink();
 
-              // Schedule göstergesi
-              Positioned(
-                top: 8,
-                right: 8,
-                child: BlocBuilder<ScheduleBloc, ScheduleState>(
-                  builder: (context, state) {
-                    if (state is SchedulesLoaded) {
-                      final schedules = state.schedules.where(
-                              (schedule) =>
-                          schedule.itemId == widget.routine.id &&
-                              schedule.type == 'routine'
-                      ).toList();
-
-                      if (schedules.isEmpty) return const SizedBox.shrink();
-
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.2),
-                            width: 1,
+                        return Container(
+                          padding: EdgeInsets.symmetric(
+                              horizontal: AppTheme.paddingSmall,
+                              vertical: AppTheme.paddingSmall / 2
                           ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.calendar_today,
-                              size: 14,
-                              color: Colors.white.withOpacity(0.9),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              _formatScheduleDays(schedules.first.selectedDays),
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.9),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
+                          decoration: AppTheme.decoration(
+                            color: AppTheme.surfaceColor.withOpacity(AppTheme.cardOpacity),
+                            borderRadius: AppTheme.getBorderRadius(all: AppTheme.borderRadiusSmall),
+                            shadows: [
+                              BoxShadow(
+                                color: AppTheme.shadowColor,
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
                               ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  },
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.calendar_today,
+                                size: AppTheme.difficultyStarBaseSize,
+                                color: AppTheme.textPrimary,
+                              ),
+                              SizedBox(width: AppTheme.paddingSmall / 2),
+                              Text(
+                                _formatScheduleDays(schedules.first.selectedDays),
+                                style: AppTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    },
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
+
+
+
 
 
   String _formatScheduleDays(List<int> days) {
@@ -163,31 +221,28 @@ class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStat
   }
 
 
-  Color _getRoutineColor() {
-    // Egzersiz türüne göre renk belirleme
-    switch (widget.routine.workoutTypeId) {
-      case 1:
-        return const Color(0xFF1E88E5); // Mavi
-      case 2:
-        return const Color(0xFF43A047); // Yeşil
-      default:
-        return const Color(0xFF1E88E5); // Varsayılan mavi
-    }
-  }
 
   Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.all(12),
+    return Container(
+      padding: EdgeInsets.all(AppTheme.paddingSmall),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.surfaceColor.withOpacity(AppTheme.primaryOpacity),
+            AppTheme.cardBackground.withOpacity(AppTheme.secondaryOpacity),
+          ],
+        ),
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Expanded(
             child: Text(
               widget.routine.name,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
+              style: AppTheme.headingSmall.copyWith(
+                color: AppTheme.textPrimary,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -201,62 +256,60 @@ class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStat
 
   Widget _buildBody() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: EdgeInsets.symmetric(
+        horizontal: AppTheme.paddingMedium,
+        vertical: AppTheme.paddingMedium,
+      ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Icon(Icons.fitness_center,
-                  color: Colors.white.withOpacity(0.7),
-                  size: 16
+                  color: AppTheme.textSecondary,
+                  size: AppTheme.difficultyStarBaseSize
               ),
-              const SizedBox(width: 8),
-              Text(
-                'Tür: ${_getWorkoutTypeByName(widget.routine.workoutTypeId)}',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.7),
-                  fontSize: 14,
+              SizedBox(width: AppTheme.paddingSmall),
+              Expanded(
+                child: Text(
+                  _getWorkoutTypeByName(widget.routine.workoutTypeId),
+                  style: AppTheme.bodySmall.copyWith(
+                    color: AppTheme.textSecondary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: AppTheme.paddingMedium),
           Row(
             children: [
               Icon(Icons.speed,
-                  color: Colors.white.withOpacity(0.7),
-                  size: 16
+                  color: AppTheme.textSecondary,
+                  size: AppTheme.difficultyStarBaseSize
               ),
-              const SizedBox(width: 8),
-              Text(
-                'Zorluk: ',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.7),
-                  fontSize: 14,
+              SizedBox(width: AppTheme.paddingSmall),
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: AppTheme.buildDifficultyStars(widget.routine.difficulty),
+                  ),
                 ),
               ),
-              ...List.generate(5, (index) {
-                return Icon(
-                  index < widget.routine.difficulty ? Icons.star : Icons.star_border,
-                  color: Colors.white,
-                  size: 16,
-                );
-              }),
             ],
           ),
-          if (widget.routine.description.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              widget.routine.description,
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.9),
-                fontSize: 12,
+          if (widget.routine.description.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.only(top: AppTheme.paddingSmall),
+              child: Text(
+                widget.routine.description,
+                style: AppTheme.bodySmall,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
             ),
-          ],
         ],
       ),
     );
@@ -265,57 +318,100 @@ class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStat
   Widget _buildFooter() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      margin: const EdgeInsets.only(top: 12),
-      decoration: BoxDecoration(
-        color: Colors.black12,
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(12),
-          bottomRight: Radius.circular(12),
-        ),
+      padding: EdgeInsets.symmetric(
+        horizontal: AppTheme.paddingMedium,
+        vertical: AppTheme.paddingSmall,
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.play_circle_outline,
-            color: Colors.white.withOpacity(0.9),
-            size: 18,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            'Başlamak için hazır',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.9),
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.play_circle_outline,
+              color: AppTheme.primaryRed,
+              size: AppTheme.difficultyStarBaseSize,
             ),
-          ),
-        ],
+            SizedBox(width: AppTheme.paddingSmall),
+            Text(
+              'Başlamak için hazır',
+              style: AppTheme.bodySmall.copyWith(
+                fontWeight: FontWeight.w500,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
+          ],
+        ),
       ),
     );
   }
 
+
+
+
+
   Widget _buildFavoriteButton() {
-    return IconButton(
-      icon: Icon(
-        widget.routine.isFavorite ? Icons.favorite : Icons.favorite_border,
-        color: Colors.white,
-        size: 20,
-      ),
-      onPressed: () {
-        if (widget.routine.id > 0) {
-          context.read<RoutinesBloc>().add(
-            ToggleRoutineFavorite(
-              userId: widget.userId,
-              routineId: widget.routine.id.toString(),
-              isFavorite: !widget.routine.isFavorite,
+    return BlocBuilder<RoutinesBloc, RoutinesState>(
+      builder: (context, state) {
+        bool isLoading = state is RoutinesLoading;
+
+        return AnimatedContainer(
+          duration: AppTheme.quickAnimation,
+          decoration: AppTheme.decoration(
+            color: widget.routine.isFavorite
+                ? AppTheme.primaryRed.withOpacity(AppTheme.cardOpacity)
+                : AppTheme.surfaceColor.withOpacity(AppTheme.cardOpacity),
+            borderRadius: AppTheme.getBorderRadius(all: AppTheme.borderRadiusSmall),
+            shadows: [
+              BoxShadow(
+                color: widget.routine.isFavorite
+                    ? AppTheme.primaryRed.withOpacity(AppTheme.shadowOpacity)
+                    : AppTheme.shadowColor,
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: IconButton(
+            icon: AnimatedSwitcher(
+              duration: AppTheme.quickAnimation,
+              transitionBuilder: (Widget child, Animation<double> animation) {
+                return ScaleTransition(scale: animation, child: child);
+              },
+              child: Icon(
+                widget.routine.isFavorite ? Icons.favorite : Icons.favorite_border,
+                key: ValueKey<bool>(widget.routine.isFavorite),
+                color: widget.routine.isFavorite
+                    ? AppTheme.textPrimary
+                    : AppTheme.textSecondary,
+                size: AppTheme.difficultyStarBaseSize,
+              ),
             ),
-          );
-        }
+            onPressed: isLoading ? null : () {
+              if (widget.routine.id > 0) {
+                HapticFeedback.lightImpact();
+                context.read<RoutinesBloc>().add(
+                  ToggleRoutineFavorite(
+                    userId: widget.userId,
+                    routineId: widget.routine.id.toString(),
+                    isFavorite: !widget.routine.isFavorite,
+                  ),
+                );
+              }
+            },
+            splashColor: AppTheme.primaryRed.withOpacity(AppTheme.cardOpacity),
+            highlightColor: AppTheme.surfaceColor,
+          ),
+        );
       },
     );
   }
+
+
+
+
 
 
   String _getWorkoutTypeByName(int workouttypeId) {

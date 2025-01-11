@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:logging/logging.dart';
@@ -380,6 +382,7 @@ class RoutinesBloc extends Bloc<RoutinesEvent, RoutinesState> {
         userId: currentState.userId,
         repository: currentState.repository,
         routines: updatedRoutines,
+        targetedBodyParts: currentState.targetedBodyParts,
       ));
 
       try {
@@ -388,6 +391,9 @@ class RoutinesBloc extends Bloc<RoutinesEvent, RoutinesState> {
           event.routineId,
           event.isFavorite,
         );
+
+        HapticFeedback.lightImpact();
+
       } catch (e, stackTrace) {
         _logger.severe('Error updating routine favorite', e, stackTrace);
         // Revert to previous state
@@ -400,6 +406,8 @@ class RoutinesBloc extends Bloc<RoutinesEvent, RoutinesState> {
       }
     }
   }
+
+
 
   Future<void> _onUpdateRoutineProgress(
       UpdateRoutineProgress event,
