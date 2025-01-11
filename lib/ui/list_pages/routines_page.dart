@@ -326,7 +326,7 @@ class _RoutinesPageState extends State<RoutinesPage> {
     return GridView.builder(
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        childAspectRatio: 0.95,
+        childAspectRatio: 0.85,
       ),
       itemCount: routines.length,
       itemBuilder: (context, index) {

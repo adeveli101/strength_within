@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:strength_within/z.app_theme/app_theme.dart';
+import '../sw_app_theme/app_theme.dart';
 import 'exercise_plan_predictor.dart';
 import 'fitness_predictor.dart';
 

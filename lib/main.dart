@@ -9,14 +9,23 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get/get.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 import 'package:strength_within/generated/assets.dart';
+import 'package:strength_within/sw_app_theme/app_theme.dart';
+import 'package:strength_within/sw_app_theme/circular_logo.dart';
+import 'package:strength_within/sw_app_theme/splash_screen.dart';
+import 'package:strength_within/ui/ai_setup_page.dart';
 import 'package:strength_within/ui/home_page.dart';
 import 'package:strength_within/ui/for_you_page.dart';
 import 'package:strength_within/ui/library.dart';
 import 'package:strength_within/ui/list_pages/program_merger/program_merger_page.dart';
+import 'package:strength_within/ui/test/recommend_page.dart';
 import 'package:strength_within/ui/setting_pages.dart';
-import 'package:strength_within/z.app_theme/app_theme.dart';
-import 'package:strength_within/z.app_theme/circular_logo.dart';
-import 'package:strength_within/z.app_theme/splash_screen.dart';
+import 'package:strength_within/ui/userpprofilescreen.dart';
+
+import 'ai_predictors/ai_bloc/ai_module.dart';
+import 'ai_predictors/ai_bloc/ai_repository.dart';
+import 'ai_predictors/ai_bloc/exercisetype_classifier.dart';
+import 'ai_predictors/exercise_plan_predictor.dart';
+import 'ai_predictors/fitness_predictor.dart';
 import 'blocs/data_bloc_part/PartRepository.dart';
 import 'blocs/data_bloc_part/part_bloc.dart';
 import 'blocs/data_bloc_routine/RoutineRepository.dart';
@@ -30,102 +39,142 @@ import 'blocs/for_you_bloc.dart';
 import 'firebase_options.dart';
 import 'package:logging/logging.dart';
 
+import 'models/firebase_models/user_ai_profile.dart';
+
 final _logger = Logger('Main');
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // 1) Firebase'i başlat
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
   } catch (e) {
-    // Firebase zaten başlatılmışsa
     if (e.toString().contains('duplicate-app')) {
       debugPrint('Firebase already initialized');
     } else {
-      rethrow;
+      debugPrint('Firebase initialization error: $e');
+      return; // Ciddi hata durumunda uygulamayı başlatma
     }
   }
 
+  // 2) Anonim giriş yap
+  final firebaseProvider = FirebaseProvider();
+  String? userId;
+  try {
+    userId = await firebaseProvider.signInAnonymously();
+  } catch (e) {
+    _logger.severe('Anonim giriş sırasında hata oluştu: $e');
+    runApp(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(
+          body: Center(child: Text('Giriş yapılamadı. Lütfen tekrar deneyin.')),
+        ),
+      ),
+    );
+    return; // Giriş yapılamadıysa uygulamaya devam etmeyelim
+  }
 
-
-
-
-  // Show splash screen immediately
+  // 3) SplashScreen'e geç: onInitComplete tetiklendikten sonra asıl uygulamayı başlat
   runApp(
     MaterialApp(
       debugShowCheckedModeBanner: false,
       home: SplashScreen(
-        onInitComplete: (String? userId) async {
-          if (userId != null) {
-            // Initialize providers and repositories
-            final sqlProvider = SQLProvider();
-            await sqlProvider.initDatabase();
-            final firebaseProvider = FirebaseProvider();
+        onInitComplete: (String? userIdFromSplash) async {
+          // Eğer SplashScreen içerisinde başka bir giriş akışı varsa,
+          // onInitComplete parametresine de bakıyoruz. Boş kalırsa, yukarıda aldığımız userId'yi kullanabiliriz.
+          final resolvedUserId = userIdFromSplash ?? userId;
 
-            final routineRepository = RoutineRepository(sqlProvider, firebaseProvider);
-            final partRepository = PartRepository(sqlProvider, firebaseProvider);
-            final exerciseRepository = ExerciseRepository(
-              sqlProvider: sqlProvider,
-              firebaseProvider: firebaseProvider,
-            );
-            final scheduleRepository = ScheduleRepository(firebaseProvider, sqlProvider);
+          if (resolvedUserId != null) {
+            try {
+              // 4) Provider ve Repository'leri başlat
+              final sqlProvider = SQLProvider();
+              await sqlProvider.initDatabase();
 
-            // Launch main app with all providers initialized
-            runApp(
-              MultiRepositoryProvider(
-                providers: [
-                  RepositoryProvider<SQLProvider>(create: (context) => sqlProvider),
-                  RepositoryProvider<FirebaseProvider>(create: (context) => firebaseProvider),
-                  RepositoryProvider<ExerciseRepository>(create: (context) => exerciseRepository),
-                  RepositoryProvider<ScheduleRepository>(create: (context) => scheduleRepository),
-                  RepositoryProvider<PartRepository>(create: (context) => partRepository),
-                  RepositoryProvider<RoutineRepository>(create: (context) => routineRepository),
-                ],
-                child: MultiBlocProvider(
+              // (Zaten tanımladığımız firebaseProvider örneğini tekrar oluşturabilir veya kullanmaya devam edebilirsiniz)
+              final routineRepository = RoutineRepository(sqlProvider, firebaseProvider);
+              final partRepository = PartRepository(sqlProvider, firebaseProvider);
+              final exerciseRepository = ExerciseRepository(
+                sqlProvider: sqlProvider,
+                firebaseProvider: firebaseProvider,
+              );
+              final scheduleRepository = ScheduleRepository(firebaseProvider, sqlProvider);
+              // AIModule için gerekli bileşenleri oluştur
+              final aiModule = AIModule(
+                sqlProvider: sqlProvider,
+                firebaseProvider: firebaseProvider,
+                fitnessPredictor: FitnessPredictor(),
+                exercisePlanPredictor: ExercisePlanPredictor(),
+                exerciseTypeClassifier: ExerciseTypeClassifier(routineRepository),
+              );
+
+              // 5) Asıl uygulamayı başlat
+              runApp(
+                MultiRepositoryProvider(
                   providers: [
-                    BlocProvider(
-                      create: (context) => RoutinesBloc(
-                        repository: routineRepository,
-                        scheduleRepository: scheduleRepository,
-                        userId: userId,
-                      ),
-                    ),
-                    BlocProvider(
-                      create: (context) => PartsBloc(
-                        repository: partRepository,
-                        scheduleRepository: scheduleRepository,
-                        userId: userId,
-                      )..add(FetchParts()),
-                    ),
-                    BlocProvider(
-                      create: (context) => ScheduleBloc(
-                        repository: scheduleRepository,
-                        userId: userId,
-                      ),
-                    ),
-                    BlocProvider(
-                      create: (context) => ForYouBloc(
-                        partRepository: partRepository,
-                        routineRepository: routineRepository,
-                        scheduleRepository: scheduleRepository,
-                        userId: userId,
-                      ),
-                    ),
+                    RepositoryProvider(create: (context) => sqlProvider),
+                    RepositoryProvider(create: (context) => firebaseProvider),
+                    RepositoryProvider(create: (context) => exerciseRepository),
+                    RepositoryProvider(create: (context) => scheduleRepository),
+                    RepositoryProvider(create: (context) => partRepository),
+                    RepositoryProvider(create: (context) => routineRepository),
                   ],
-                  child: App(userId: userId),
+                  child: MultiBlocProvider(
+                    providers: [
+                      BlocProvider(
+                        create: (context) => RoutinesBloc(
+                          repository: routineRepository,
+                          scheduleRepository: scheduleRepository,
+                          userId: resolvedUserId,
+                        ),
+                      ),
+                      BlocProvider(
+                        create: (context) => PartsBloc(
+                          repository: partRepository,
+                          scheduleRepository: scheduleRepository,
+                          userId: resolvedUserId,
+                        )..add(FetchParts()),
+                      ),
+                      BlocProvider(
+                        create: (context) => ScheduleBloc(
+                          repository: scheduleRepository,
+                          userId: resolvedUserId,
+                        ),
+                      ),
+                      BlocProvider(
+                        create: (context) => ForYouBloc(
+                          partRepository: partRepository,
+                          routineRepository: routineRepository,
+                          scheduleRepository: scheduleRepository,
+                          userId: resolvedUserId,
+                        ),
+                      ),
+                    ],
+                    child: App(userId: resolvedUserId),
+                  ),
                 ),
-              ),
-            );
+              );
+            } catch (e) {
+              _logger.severe('Uygulama başlatma hatası: $e');
+              runApp(
+                MaterialApp(
+                  debugShowCheckedModeBanner: false,
+                  home: Scaffold(
+                    body: Center(child: Text('Uygulama başlatılamadı. Lütfen tekrar deneyin.')),
+                  ),
+                ),
+              );
+            }
           } else {
-            _logger.severe('Anonim giriş başarısız oldu.');
+            _logger.severe('Anonim giriş başarısız oldu. (resolvedUserId == null)');
             runApp(
               MaterialApp(
+                debugShowCheckedModeBanner: false,
                 home: Scaffold(
-                  body: Center(
-                    child: Text('Giriş yapılamadı. Lütfen tekrar deneyin.'),
-                  ),
+                  body: Center(child: Text('Giriş yapılamadı. Lütfen tekrar deneyin.')),
                 ),
               ),
             );
@@ -134,11 +183,10 @@ void main() async {
       ),
     ),
   );
-
-  // Perform anonymous login
-  final firebaseProvider = FirebaseProvider();
-  String? userId = await firebaseProvider.signInAnonymously();
 }
+
+
+
 
 
 class App extends StatelessWidget {
@@ -148,35 +196,62 @@ class App extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GetMaterialApp(
-      builder: (context, child) => ResponsiveBreakpoints.builder(
-        child: child!,
-        breakpoints: [
-          const Breakpoint(
-              start: 0,
-              end: AppTheme.mobileBreakpoint, // 450
-              name: MOBILE
+    // Providers
+    final sqlProvider = SQLProvider();
+    final firebaseProvider = FirebaseProvider();
+
+    // Repositories
+    final routineRepository = RoutineRepository(sqlProvider, firebaseProvider);
+    final partRepository = PartRepository(sqlProvider, firebaseProvider);
+    final scheduleRepository = ScheduleRepository(firebaseProvider, sqlProvider);
+
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider<RoutinesBloc>(
+          create: (context) => RoutinesBloc(
+            repository: routineRepository,
+            scheduleRepository: scheduleRepository,
+            userId: userId,
           ),
-          const Breakpoint(
-              start: AppTheme.mobileBreakpoint + 1,
-              end: AppTheme.tabletBreakpoint, // 800
-              name: TABLET
+        ),
+        BlocProvider<PartsBloc>(
+          create: (context) => PartsBloc(
+            repository: partRepository,
+            userId: userId,
+            scheduleRepository: scheduleRepository,
           ),
-          const Breakpoint(
-              start: AppTheme.tabletBreakpoint + 1,
-              end: AppTheme.desktopBreakpoint, // 1920
-              name: DESKTOP
-          ),
-          const Breakpoint(
-              start: AppTheme.desktopBreakpoint + 1,
-              end: double.infinity,
-              name: '4K'
-          ),
-        ],
+        ),
+      ],
+      child: GetMaterialApp(
+        builder: (context, child) => ResponsiveBreakpoints.builder(
+          child: child!,
+          breakpoints: [
+            const Breakpoint(
+                start: 0,
+                end: AppTheme.mobileBreakpoint,
+                name: MOBILE
+            ),
+            const Breakpoint(
+                start: AppTheme.mobileBreakpoint + 1,
+                end: AppTheme.tabletBreakpoint,
+                name: TABLET
+            ),
+            const Breakpoint(
+                start: AppTheme.tabletBreakpoint + 1,
+                end: AppTheme.desktopBreakpoint,
+                name: DESKTOP
+            ),
+            const Breakpoint(
+                start: AppTheme.desktopBreakpoint + 1,
+                end: double.infinity,
+                name: '4K'
+            ),
+          ],
+        ),
+        title: 'Strength Within',
+        theme: AppTheme.darkTheme,
+        home: MainScreen(userId: userId),
       ),
-      title: 'Strenght Within',
-      theme: AppTheme.darkTheme,
-      home: MainScreen(userId: userId),
     );
   }
 }
@@ -193,34 +268,75 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   int _currentIndex = 0;
   bool _isHovered = false;
 
+  // Provider ve Repository'leri state olarak tutuyoruz
+  late final SQLProvider _sqlProvider;
+  late final FirebaseProvider _firebaseProvider;
+  late final RoutineRepository _routineRepository;
+  late final PartRepository _partRepository;
+  late final ScheduleRepository _scheduleRepository;
+  late final AIModule _aiModule;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _initializeDependencies();
+  }
+
+  void _initializeDependencies() {
+    // Providers
+    _sqlProvider = SQLProvider();
+    _firebaseProvider = FirebaseProvider();
+
+    // Repositories
+    _routineRepository = RoutineRepository(_sqlProvider, _firebaseProvider);
+    _partRepository = PartRepository(_sqlProvider, _firebaseProvider);
+    _scheduleRepository = ScheduleRepository(_firebaseProvider, _sqlProvider);
+
+    // AI Module
+    _aiModule = AIModule(
+      sqlProvider: _sqlProvider,
+      firebaseProvider: _firebaseProvider,
+      fitnessPredictor: FitnessPredictor(),
+      exercisePlanPredictor: ExercisePlanPredictor(),
+      exerciseTypeClassifier: ExerciseTypeClassifier(_routineRepository),
+    );
   }
 
   @override
   void dispose() {
+
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
-  Future _refreshData() async {
+  Future<void> _refreshData() async {
     final routinesBloc = context.read<RoutinesBloc>();
     final partsBloc = context.read<PartsBloc>();
-    routinesBloc.add(FetchRoutines());
-    partsBloc.add(FetchParts());
+
+    if (!routinesBloc.isClosed) {
+      routinesBloc.add(FetchRoutines());
+    }
+    if (!partsBloc.isClosed) {
+      partsBloc.add(FetchParts());
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async => true,
-      child: Scaffold(
-        backgroundColor: AppTheme.darkBackground,
-        appBar: _buildAppBar(),
-        body: _buildBody(),
-        bottomNavigationBar: _buildBottomNav(),
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider.value(value: context.read<RoutinesBloc>()),
+        BlocProvider.value(value: context.read<PartsBloc>()),
+      ],
+      child: WillPopScope(
+        onWillPop: () async => true,
+        child: Scaffold(
+          backgroundColor: AppTheme.darkBackground,
+          appBar: _buildAppBar(),
+          body: _buildBody(),
+          bottomNavigationBar: _buildBottomNav(),
+        ),
       ),
     );
   }
@@ -235,45 +351,75 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           mainAxisAlignment: MainAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Logo
             CircularLogo(
               size: 40,
               showBorder: true,
               onTap: _refreshData,
             ),
             SizedBox(width: AppTheme.paddingMedium),
-
-            // App Title
             _buildAnimatedTitle(),
           ],
         ),
       ),
       actions: [
         _buildSettingsButton(),
-        IconButton(
-          icon: Icon(Icons.add_chart),
-          tooltip: 'Özel Program Oluştur',
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => BlocProvider(
-                  create: (context) => PartsBloc(
-                    repository: PartRepository(
-                      context.read<SQLProvider>(),
-                      context.read<FirebaseProvider>(),
+        BlocBuilder<RoutinesBloc, RoutinesState>(
+          builder: (context, state) {
+            return IconButton(
+              icon: Icon(Icons.add_chart),
+              tooltip: 'Özel Program Oluştur',
+              onPressed: () {
+                if (state is! RoutinesLoading) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ProgramMergerPage(
+                        userId: widget.userId,
+                      ),
                     ),
-                    userId: widget.userId,
-                    scheduleRepository: context.read<ScheduleRepository>(),
-                  ),
-                  child: ProgramMergerPage(userId: widget.userId,),
-                ),
-              ),
+                  );
+                }
+              },
             );
           },
         ),
       ],
+    );
+  }
 
+  Widget _buildSettingsButton() {
+    return Container(
+      margin: EdgeInsets.only(right: AppTheme.paddingSmall),
+      child: IconButton(
+        icon: Icon(
+          Icons.settings_outlined,
+          color: AppTheme.primaryRed.withOpacity(0.5),
+        ),
+        onPressed: () => SettingsPage(),
+      ),
+    );
+  }
+
+
+
+  Widget _buildBody() {
+    return IndexedStack(
+      index: _currentIndex,
+      children: [
+        HomePage(userId: widget.userId),
+        ForYouPage(userId: widget.userId),
+
+        UserProfileScreen(
+          userId: widget.userId,
+          aiModule: _aiModule,
+        ),
+        LibraryPage(
+          userId: widget.userId,
+          routineRepository: _routineRepository,
+          partRepository: _partRepository,
+          scheduleRepository: _scheduleRepository,
+        ),
+      ],
     );
   }
 
@@ -303,7 +449,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  // Shadow layer
                   Text(
                     'Strength Within',
                     style: AppTheme.headingSmall.copyWith(
@@ -314,7 +459,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                       fontSize: 20,
                     ),
                   ),
-                  // Main text layer
                   Text(
                     'Strength Within',
                     style: AppTheme.headingSmall.copyWith(
@@ -343,59 +487,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           );
         },
       ),
-    );
-  }
-
-
-  Widget _buildSettingsButton() {
-    return Container(
-      margin: EdgeInsets.only(right: AppTheme.paddingSmall),
-      child: IconButton(
-        icon: Icon(
-          Icons.settings_outlined,
-          color: AppTheme.primaryRed.withOpacity(0.5),
-        ),
-        onPressed: () => _showSettingsSheet(),
-      ),
-    );
-  }
-
-  void _showSettingsSheet() {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => const SettingsPage(),
-      isScrollControlled: true,
-      backgroundColor: AppTheme.darkBackground,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppTheme.borderRadiusLarge),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBody() {
-    // Providers
-    final sqlProvider = SQLProvider();
-    final firebaseProvider = FirebaseProvider();
-
-    // Repositories
-    final routineRepository = RoutineRepository(sqlProvider, firebaseProvider);
-    final partRepository = PartRepository(sqlProvider, firebaseProvider);
-    final scheduleRepository = ScheduleRepository(firebaseProvider, sqlProvider);
-
-    return IndexedStack(
-      index: _currentIndex,
-      children: [
-        HomePage(userId: widget.userId),
-        ForYouPage(userId: widget.userId),
-        LibraryPage(
-          userId: widget.userId,
-          routineRepository: routineRepository,
-          partRepository: partRepository,
-          scheduleRepository: scheduleRepository, // Eklendi
-        ),
-      ],
     );
   }
 
@@ -437,8 +528,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             currentIndex: _currentIndex,
             onTap: (index) {
               setState(() => _currentIndex = index);
+              if (!mounted) return;
               _refreshData();
-              // Haptic feedback ekleyelim
               HapticFeedback.lightImpact();
             },
             backgroundColor: Colors.transparent,
@@ -462,6 +553,12 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 icon: Icons.recommend_outlined,
                 activeIcon: Icons.recommend_rounded,
                 label: 'Senin İçin',
+              ),
+
+              _buildNavItem(
+                icon: Icons.library_books_outlined,
+                activeIcon: Icons.library_books_rounded,
+                label: 'UserProfileAI',
               ),
               _buildNavItem(
                 icon: Icons.library_books_outlined,
@@ -487,6 +584,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       ),
     );
   }
+
 
   BottomNavigationBarItem _buildNavItem({
     required IconData icon,
@@ -518,6 +616,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     );
   }
 
+
   IconData _getBodyPartIcon(int bodyPartId) {
     switch (bodyPartId) {
       case 1: return Icons.fitness_center; // Göğüs
@@ -529,5 +628,5 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       default: return Icons.fitness_center;
     }
   }
-
 }
+

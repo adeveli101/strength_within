@@ -15,8 +15,8 @@ import '../blocs/data_bloc_part/part_bloc.dart';
 import '../blocs/data_bloc_routine/routines_bloc.dart';
 import '../models/sql_models/Parts.dart';
 import '../models/sql_models/routines.dart';
-import '../z.app_theme/app_theme.dart';
-import '../z.app_theme/welcome_header.dart';
+import '../sw_app_theme/app_theme.dart';
+import '../sw_app_theme/welcome_header.dart';
 import 'list_pages/parts_page.dart';
 import 'list_pages/routines_page.dart';
 
@@ -52,6 +52,7 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
     _routinesBloc = BlocProvider.of<RoutinesBloc>(context);
     _partsBloc = BlocProvider.of<PartsBloc>(context);
     _loadAllData(resetRandomParts: true);
+
   }
 
 
@@ -115,22 +116,47 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
     });
   }
 
+  void _updateRoutineFavoriteStatus(int routineId, bool isFavorite) {
+    setState(() {
+      _randomRoutines = _randomRoutines.map((routine) {
+        if (routine.id == routineId) {
+          return routine.copyWith(
+            isFavorite: isFavorite,
+          );
+        }
+        return routine;
+      }).toList();
+    });
+  }
+
+
   @override
   void dispose() {
     _routinesBloc.close();
     _partsBloc.close();
     super.dispose();
   }
-
   void _handleError(String message) {
     if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
-        backgroundColor: AppTheme.primaryRed.withOpacity(0.8),
+        content: Text(
+          message,
+          style: AppTheme.bodySmall,
+        ),
+        backgroundColor: AppTheme.errorRed.withOpacity(AppTheme.primaryOpacity),
+        duration: AppTheme.normalAnimation,
       ),
     );
+
+    // Otomatik yenileme
+    Future.delayed(AppTheme.quickAnimation, () {
+      _loadAllData(resetRandomParts: true);
+    });
   }
+
+
 
 
   @override
@@ -438,7 +464,7 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
             ),
           ),
           SizedBox(
-            height: isWideScreen ? 320 : 270,
+            height: isWideScreen ? 320 : 290,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               physics: const BouncingScrollPhysics(),
@@ -446,13 +472,43 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
               itemCount: routines.length,
               itemBuilder: (context, index) {
                 return SizedBox(
-                  width: isWideScreen ? 300 : 250,
+                  width: isWideScreen ? 300 : 320,
                   child: _buildRoutineCard(routines[index]),
                 );
               },
             ),
           ),
         ],
+      ),
+    );
+  }
+
+
+  Widget _buildRoutineCard(Routines routine) {
+    return Card(
+      margin: EdgeInsets.all(AppTheme.paddingSmall),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
+      ),
+      color: AppTheme.cardBackground,
+      child: RoutineCard(
+        key: ValueKey(routine.id),
+        routine: routine,
+        userId: widget.userId,
+        onTap: () => _showRoutineDetailBottomSheet(routine.id),
+      ),
+    );
+  }
+
+
+  Future _showRoutineDetailBottomSheet(int routineId) async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => RoutineDetailBottomSheet(
+        routineId: routineId,
+        userId: widget.userId,
       ),
     );
   }
@@ -486,22 +542,6 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
     );
   }
 
-  Widget _buildRoutineCard(Routines routine) {
-    return Card(
-      margin: EdgeInsets.all(AppTheme.paddingSmall),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
-      ),
-      color: AppTheme.cardBackground,
-      child: RoutineCard(
-        key: ValueKey(routine.id),
-        routine: routine,
-        userId: widget.userId,
-        onTap: () => _showRoutineDetailBottomSheet(routine.id),
-      ),
-    );
-  }
-
   List<Routines> _getRandomRoutines(List<dynamic> routines) {
     if (_randomRoutines.isEmpty) {
       if (routines.isEmpty) return [];
@@ -512,17 +552,5 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
       return _randomRoutines.cast<Routines>();
     }
     return _randomRoutines.cast<Routines>();
-  }
-
-  Future _showRoutineDetailBottomSheet(int routineId) async {
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => RoutineDetailBottomSheet(
-        routineId: routineId,
-        userId: widget.userId,
-      ),
-    );
   }
 }

@@ -5,7 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:logging/logging.dart';
 import 'package:strength_within/ui/exercises_ui/exercise_details.dart';
 import '../../blocs/data_schedule_bloc/schedule_bloc.dart';
-import '../../z.app_theme/app_theme.dart';
+import '../../sw_app_theme/app_theme.dart';
 
 class ScheduleModal extends StatefulWidget {
   final String userId;

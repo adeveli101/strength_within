@@ -11,7 +11,7 @@ import '../../blocs/data_schedule_bloc/schedule_bloc.dart';
 import '../../blocs/data_schedule_bloc/schedule_repository.dart';
 import '../../models/sql_models/Parts.dart';
 import '../../models/sql_models/exercises.dart';
-import '../../z.app_theme/app_theme.dart';
+import '../../sw_app_theme/app_theme.dart';
 import '../exercises_ui/exercise_card.dart';
 import '../exercises_ui/exercise_details.dart';
 import '../list_pages/schedule_modal.dart';

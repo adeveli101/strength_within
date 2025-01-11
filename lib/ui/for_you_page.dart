@@ -10,12 +10,12 @@ import '../blocs/data_provider/sql_provider.dart';
 import '../blocs/data_schedule_bloc/schedule_repository.dart';
 import '../models/sql_models/Parts.dart';
 import '../models/sql_models/routines.dart';
+import '../sw_app_theme/app_theme.dart';
 import '../ui/part_ui/part_card.dart';
 import '../ui/part_ui/part_detail.dart';
 import '../ui/routine_ui/routine_card.dart';
 import '../ui/routine_ui/routine_detail.dart';
 import '../blocs/for_you_bloc.dart';
-import '../z.app_theme/app_theme.dart';
 import 'list_pages/parts_page.dart';
 import 'list_pages/routines_page.dart';
 

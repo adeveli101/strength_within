@@ -2,11 +2,10 @@
 class Assets {
   Assets._();
 
-  static const String aiDataBlocAiRepository = 'lib/ai_lib/ai_data_bloc/ai_repository.dart';
-  static const String aiDataBlocAiState = 'lib/ai_lib/ai_data_bloc/ai_state.dart';
-  static const String aiDataBlocDatasetProvider = 'lib/ai_lib/ai_data_bloc/dataset_provider.dart';
-  static const String aiDataBlocDatasetsModels = 'lib/ai_lib/ai_data_bloc/datasets_models.dart';
-  static const String aiLibMainAi = 'lib/ai_lib/main_ai.dart';
+  static const String aiBlocAiModule = 'lib/ai_predictors/ai_bloc/ai_module.dart';
+  static const String aiBlocAiRepository = 'lib/ai_predictors/ai_bloc/ai_repository.dart';
+  static const String aiBlocExercisetypeClassifier = 'lib/ai_predictors/ai_bloc/exercisetype_classifier.dart';
+  static const String aiBlocReccomendSystem = 'lib/ai_predictors/ai_bloc/reccomend_system.dart';
   static const String aiModelsBodyCompositionModel = 'assets/ai_models/body_composition_model.tflite';
   static const String aiModelsExercisePlan = 'assets/ai_models/exercise_plan.tflite';
   static const String aiModelsExercisePlanModel = 'assets/ai_models/exercise_plan_model.tflite';
@@ -30,6 +29,7 @@ class Assets {
   static const String assetsAiModelsBodyCompositionModel = 'assets/ai_models/body_composition_model.tflite';
   static const String assetsAiModelsExercisePlan = 'assets/ai_models/exercise_plan.tflite';
   static const String assetsAiModelsExercisePlanModel = 'assets/ai_models/exercise_plan_model.tflite';
+  static const String assetsAiModelsFitnessModel = 'assets/ai_models/fitness_model.tflite';
   static const String assetsAiModelsFitnessModelV1CaloriesBurned = 'assets/ai_models/fitness_model_v1_calories_burned.tflite';
   static const String assetsAiModelsFitnessModelV1ExercisePlan = 'assets/ai_models/fitness_model_v1_exercise_plan.tflite';
   static const String assetsAiModelsFitnessModelV1SessionDuration = 'assets/ai_models/fitness_model_v1_session_duration.tflite';
@@ -45,9 +45,6 @@ class Assets {
   static const String assetsShoulderModified = 'assets/shoulder-modified.png';
   static const String blocsForYouBloc = 'lib/blocs/for_you_bloc.dart';
   static const String componentsProgramMerger = 'lib/ui/components/program_merger.dart';
-  static const String coreAiConstants = 'lib/ai_lib/core/ai_constants.dart';
-  static const String coreAiExceptions = 'lib/ai_lib/core/ai_exceptions.dart';
-  static const String coreTrainingConfig = 'lib/ai_lib/core/trainingConfig.dart';
   static const String dataBlocPartPartBloc = 'lib/blocs/data_bloc_part/part_bloc.dart';
   static const String dataBlocPartPartRepository = 'lib/blocs/data_bloc_part/PartRepository.dart';
   static const String dataBlocRoutineRoutineRepository = 'lib/blocs/data_bloc_routine/RoutineRepository.dart';
@@ -90,6 +87,7 @@ class Assets {
   static const String firebaseModelsFirebaseParts = 'lib/models/firebase_models/firebase_parts.dart';
   static const String firebaseModelsFirebaseRoutines = 'lib/models/firebase_models/firebase_routines.dart';
   static const String firebaseModelsRoutineHistory = 'lib/models/firebase_models/RoutineHistory.dart';
+  static const String firebaseModelsUserAiProfile = 'lib/models/firebase_models/user_ai_profile.dart';
   static const String firebaseModelsUserSchedule = 'lib/models/firebase_models/user_schedule.dart';
   static const String firebaseModelsUsers = 'lib/models/firebase_models/users.dart';
   static const String generatedAssets = 'lib/generated/assets.dart';
@@ -129,11 +127,6 @@ class Assets {
   static const String mipmapXxxhdpiIcLauncherForeground = 'android/app/src/res/mipmap-xxxhdpi/ic_launcher_foreground.png';
   static const String mipmapXxxhdpiIcLauncherRound = 'android/app/src/res/mipmap-xxxhdpi/ic_launcher_round.png';
   static const String mipmapXxxhdpiSplash = 'android/app/src/main/res/mipmap-xxxhdpi/splash.png';
-  static const String modelsAgdeModel = 'lib/ai_lib/models/agde_model.dart';
-  static const String modelsBaseModel = 'lib/ai_lib/models/base_model.dart';
-  static const String modelsCollabModel = 'lib/ai_lib/models/collab_model.dart';
-  static const String modelsEnsembleNeuralModel = 'lib/ai_lib/models/EnsembleNeuralModel.dart';
-  static const String modelsKnnModel = 'lib/ai_lib/models/knn_model.dart';
   static const String partUiPartCard = 'lib/ui/part_ui/part_card.dart';
   static const String partUiPartDetail = 'lib/ui/part_ui/part_detail.dart';
   static const String pluginsGeneratedPluginRegistrant = 'android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java';
@@ -175,13 +168,18 @@ class Assets {
   static const String strengthWithinDatabaseDataset1 = 'database/dataset_1.sqbpro';
   static const String strengthWithinDatabaseEsek = 'database/esek.sqbpro';
   static const String strengthWithinPubspec = 'pubspec.yaml';
-  static const String testingAbTestRunner = 'lib/ai_lib/testing/ab_test_runner.dart';
-  static const String testingModelTester = 'lib/ai_lib/testing/model_tester.dart';
-  static const String testingScenarioRunner = 'lib/ai_lib/testing/scenario_runner.dart';
+  static const String swAppThemeAppTheme = 'lib/sw_app_theme/app_theme.dart';
+  static const String swAppThemeCircularLogo = 'lib/sw_app_theme/circular_logo.dart';
+  static const String swAppThemeSplashScreen = 'lib/sw_app_theme/splash_screen.dart';
+  static const String swAppThemeWelcomeHeader = 'lib/sw_app_theme/welcome_header.dart';
+  static const String uiAiSetupPage = 'lib/ui/ai_setup_page.dart';
   static const String uiForYouPage = 'lib/ui/for_you_page.dart';
   static const String uiHomePage = 'lib/ui/home_page.dart';
   static const String uiLibrary = 'lib/ui/library.dart';
+  static const String uiProfileResultScreen = 'lib/ui/profile_result_screen.dart';
+  static const String uiRecommendPage = 'lib/ui/recommend_page.dart';
   static const String uiSettingPages = 'lib/ui/setting_pages.dart';
+  static const String uiUserpprofilescreen = 'lib/ui/userpprofilescreen.dart';
   static const String utilsRoutineHelpers = 'lib/utils/routine_helpers.dart';
   static const String utilsVideoPlayer = 'lib/utils/video_player.dart';
   static const String valuesColor = 'android/app/src/res/values/color.xml';
@@ -198,13 +196,4 @@ class Assets {
   static const String workoutMainActivity = 'android/app/src/main/kotlin/com/example/workout/MainActivity.kt';
   static const String wrapperGradleWrapper = 'android/gradle/wrapper/gradle-wrapper.jar';
 
-  static const String zAiUiModelDashboardScreen = 'lib/ai_lib/z_ai_ui/ModelDashboardScreen.dart';
-  static const String zAiUiModelTestScreen = 'lib/ai_lib/z_ai_ui/ModelTestScreen.dart';
-  static const String zAiUiModelTrainingScreen = 'lib/ai_lib/z_ai_ui/ModelTrainingScreen.dart';
-  static const String zAiUiRecommendationTestScreen = 'lib/ai_lib/z_ai_ui/RecommendationTestScreen.dart';
-  /*static const String z.appThemeAppTheme = 'lib/z.app_theme/app_theme.dart';
-  static const String z.appThemeCircularLogo = 'lib/z.app_theme/circular_logo.dart';
-  static const String z.appThemeSplashScreen = 'lib/z.app_theme/splash_screen.dart';
-  static const String z.appThemeWelcomeHeader = 'lib/z.app_theme/welcome_header.dart';
-*/
 }

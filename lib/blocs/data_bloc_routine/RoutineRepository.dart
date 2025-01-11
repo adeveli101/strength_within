@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:get/get.dart';
 import 'package:logging/logging.dart';
 import '../../models/firebase_models/RoutineHistory.dart';
 import '../../models/firebase_models/firebase_routines.dart';
@@ -19,6 +20,29 @@ class RoutineRepository {
   final FirebaseProvider _firebaseProvider;
 
   RoutineRepository(this._sqlProvider, this._firebaseProvider);
+
+
+  void _initializeBlocs() {
+    // Providers
+    final sqlProvider = Get.put(SQLProvider());
+    final firebaseProvider = Get.put(FirebaseProvider());
+
+    // Repositories
+    final routineRepository = Get.put(RoutineRepository(
+        sqlProvider,
+        firebaseProvider
+    ));
+  }
+
+  final _cache = <int, Routines>{};
+
+  Future<List<Routines>> getRoutines() async {
+    if (_cache.isNotEmpty) return _cache.values.toList();
+    final routines = await _sqlProvider.getAllRoutines();
+    _cache.addAll({for (var r in routines) r.id: r});
+    return routines;
+  }
+
 
   Future<List<Routines>> getAllRoutines() async {
     try {
