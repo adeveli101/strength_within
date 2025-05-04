@@ -63,3 +63,7 @@ ios/Runner/GoogleService-Info.plist
 .idea/
 .DS_Store
 Thumbs.db
+
+# Firebase config files
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
