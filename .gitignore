@@ -41,3 +41,25 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Firebase/Secrets
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+.env*
+*.jks
+*.keystore
+*.cer
+*.p12
+
+# Build Artifacts / IDE Files
+/build/
+.dart_tool/
+/ios/Pods/
+/ios/.symlinks/
+/ios/Runner.xcworkspace/xcuserdata/
+/ios/Runner.xcodeproj/xcuserdata/
+/android/.gradle/
+*.iml
+.idea/
+.DS_Store
+Thumbs.db
