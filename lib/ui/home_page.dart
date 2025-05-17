@@ -38,7 +38,6 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
 
   List<Routines> _randomRoutines = [];
   List<Parts> _randomParts = [];
-  bool _isLoading = true;
 
   // AutomaticKeepAliveClientMixin için gerekli
   @override
@@ -51,8 +50,9 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
     _setupLogging();
     _routinesBloc = BlocProvider.of<RoutinesBloc>(context);
     _partsBloc = BlocProvider.of<PartsBloc>(context);
-    _loadAllData(resetRandomParts: true);
-
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadAllData(resetRandomParts: true);
+    });
   }
 
 
@@ -67,15 +67,10 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
 
 
   void _loadAllData({bool resetRandomParts = false}) {
-    if (_isLoading) return;
-    _isLoading = true;
-
     _logger.info('Loading all data for user: ${widget.userId}');
-
     // Load data using BLoC events
     _partsBloc.add(FetchParts());
     _routinesBloc.add(FetchRoutines());
-
     // Reset random parts if needed
     if (resetRandomParts) {
       setState(() {
@@ -90,11 +85,6 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
         _randomRoutines = [];
       });
     }
-
-    // Reset loading state after delay
-    Future.delayed(const Duration(milliseconds: 500), () {
-      _isLoading = false;
-    });
   }
 
   void _reloadUpdatedParts() {

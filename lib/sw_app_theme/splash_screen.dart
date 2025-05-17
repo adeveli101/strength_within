@@ -54,47 +54,28 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     _controller.forward();
   }
 
-
   Future<void> _initializeApp() async {
     if (_isInitialized) return;
 
-    // Firebase işlemleri
-    final firebaseProvider = FirebaseProvider();
-    String? userId = await firebaseProvider.signInAnonymously();
-
-    // HomePage verilerinin yüklenmesini bekle
-    await Future.wait([
-      _waitForHomePageData(),
-      Future.delayed(const Duration(seconds: 2)), // Minimum görünme süresi
-    ]);
-
-    if (mounted && !_isInitialized) {
-      _isInitialized = true;
-      widget.onInitComplete(userId);
-    }
-  }
-
-
-  Future<void> _waitForHomePageData() async {
     try {
-      // Firebase login
+      // Firebase işlemleri
       final firebaseProvider = FirebaseProvider();
       String? userId = await firebaseProvider.signInAnonymously();
 
-      if (!mounted) return;
-
-      // Initialize SQL provider
+      // SQL provider başlat
       final sqlProvider = SQLProvider();
       await sqlProvider.initDatabase();
 
-      // Wait for minimum animation duration
+      // Minimum splash süresi
       await Future.delayed(const Duration(seconds: 2));
 
-      if (mounted) {
+      if (mounted && !_isInitialized) {
+        _isInitialized = true;
         widget.onInitComplete(userId);
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && !_isInitialized) {
+        _isInitialized = true;
         widget.onInitComplete(null);
       }
     }
@@ -107,7 +88,6 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   }
 
   @override
-
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.darkBackground,
@@ -209,5 +189,4 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       ),
     );
   }
-
 }

@@ -8,7 +8,9 @@ import '../../models/sql_models/RoutineExercises.dart';
 import '../../models/sql_models/RoutinetargetedBodyParts.dart';
 import '../../models/sql_models/WorkoutType.dart';
 import '../../models/sql_models/exercises.dart';
+import '../../models/sql_models/routine_frequency.dart';
 import '../../models/sql_models/routines.dart';
+import '../../models/sql_models/workoutGoals.dart';
 import '../data_provider/sql_provider.dart';
 import '../data_provider/firebase_provider.dart';
 
@@ -431,5 +433,73 @@ class RoutineRepository {
       _logger.severe('Error accepting weekly challenge', e);
       throw Exception('Haftalık meydan okuma kabul edilirken bir hata oluştu');
     }
+  }
+
+  /// Kullanıcıdan gelen frequency ve difficulty'ye göre önerilen rutinleri döndürür
+  Future<List<Routines>> getRecommendedRoutines({
+    required int frequency,
+    required int difficulty,
+    int? startDay,
+  }) async {
+    final allRoutines = await getAllRoutines();
+    final List<Routines> filtered = [];
+    for (final routine in allRoutines) {
+      final freq = await _sqlProvider.getRoutineFrequency(routine.id);
+      if (freq == null) continue;
+      // Zorluk ve önerilen gün sayısı eşleşmeli
+      if (routine.difficulty == difficulty && freq.recommendedFrequency == frequency) {
+        filtered.add(routine);
+      }
+    }
+    // Eğer tam eşleşme yoksa, zorluk eşleşen ve frequency yakın olanları da ekle
+    if (filtered.isEmpty) {
+      for (final routine in allRoutines) {
+        final freq = await _sqlProvider.getRoutineFrequency(routine.id);
+        if (freq == null) continue;
+        if (routine.difficulty == difficulty && (freq.recommendedFrequency - frequency).abs() <= 1) {
+          filtered.add(routine);
+        }
+      }
+    }
+    // Eğer hala yoksa, sadece zorluk eşleşenleri ekle
+    if (filtered.isEmpty) {
+      filtered.addAll(allRoutines.where((r) => r.difficulty == difficulty));
+    }
+    return filtered;
+  }
+
+  /// Belirli bir rutin listesini sadece workoutgoal (goalId) ile filtreler. İsteğe bağlı olarak frequency ve difficulty de filtreye dahil edilebilir.
+  Future<List<Routines>> filterRoutinesByGoal({
+    required List<Routines> routines,
+    required List<int> goalIds,
+    int? frequency,
+    int? difficulty,
+  }) async {
+    final List<Routines> filtered = [];
+    for (final routine in routines) {
+      if (!goalIds.contains(routine.goalId)) continue;
+      if (difficulty != null && routine.difficulty != difficulty) continue;
+      if (frequency != null) {
+        RoutineFrequency? freq;
+        try {
+          freq = await _sqlProvider.getRoutineFrequency(routine.id);
+        } catch (e) {
+          _logger.warning('Rutin [33m${routine.id}[0m için frekans verisi hatalı: $e');
+          continue;
+        }
+        if (freq == null || freq.recommendedFrequency != frequency) continue;
+      }
+      filtered.add(routine);
+    }
+    return filtered;
+  }
+
+  /// Tüm WorkoutGoals kayıtlarını getirir
+  Future<List<WorkoutGoals>> getAllWorkoutGoals() async {
+    return await _sqlProvider.getAllWorkoutGoals();
+  }
+
+  Future<RoutineFrequency?> getRoutineFrequency(int routineId) async {
+    return await _sqlProvider.getRoutineFrequency(routineId);
   }
 }

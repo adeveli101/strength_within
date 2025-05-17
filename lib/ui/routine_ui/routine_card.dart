@@ -112,7 +112,7 @@ class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStat
             decoration: AppTheme.decoration(
               gradient: AppTheme.getPartGradient(
                 difficulty: widget.routine.difficulty,
-                secondaryColor: AppTheme.getTargetColor(widget.routine.goalId ?? 0),
+                secondaryColor: AppTheme.getTargetColor(widget.routine.goalId),
               ),
               borderRadius: AppTheme.getBorderRadius(all: AppTheme.borderRadiusMedium),
               shadows: [

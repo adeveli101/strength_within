@@ -20,6 +20,7 @@ import 'package:strength_within/ui/list_pages/program_merger/program_merger_page
 import 'package:strength_within/ui/test/recommend_page.dart';
 import 'package:strength_within/ui/setting_pages.dart';
 import 'package:strength_within/ui/userpprofilescreen.dart';
+import 'package:provider/provider.dart';
 
 import 'ai_predictors/ai_bloc/ai_module.dart';
 import 'ai_predictors/ai_bloc/ai_repository.dart';
@@ -83,18 +84,13 @@ void main() async {
     MaterialApp(
       debugShowCheckedModeBanner: false,
       home: SplashScreen(
-        onInitComplete: (String? userIdFromSplash) async {
-          // Eğer SplashScreen içerisinde başka bir giriş akışı varsa,
-          // onInitComplete parametresine de bakıyoruz. Boş kalırsa, yukarıda aldığımız userId'yi kullanabiliriz.
-          final resolvedUserId = userIdFromSplash ?? userId;
-
-          if (resolvedUserId != null) {
+        onInitComplete: (String? userId) async {
+          if (userId != null) {
             try {
-              // 4) Provider ve Repository'leri başlat
+              // Singleton instance kullan
               final sqlProvider = SQLProvider();
-              await sqlProvider.initDatabase();
-
-              // (Zaten tanımladığımız firebaseProvider örneğini tekrar oluşturabilir veya kullanmaya devam edebilirsiniz)
+              final firebaseProvider = FirebaseProvider();
+              // Provider ve Repository'leri başlat
               final routineRepository = RoutineRepository(sqlProvider, firebaseProvider);
               final partRepository = PartRepository(sqlProvider, firebaseProvider);
               final exerciseRepository = ExerciseRepository(
@@ -102,7 +98,6 @@ void main() async {
                 firebaseProvider: firebaseProvider,
               );
               final scheduleRepository = ScheduleRepository(firebaseProvider, sqlProvider);
-              // AIModule için gerekli bileşenleri oluştur
               final aiModule = AIModule(
                 sqlProvider: sqlProvider,
                 firebaseProvider: firebaseProvider,
@@ -110,8 +105,6 @@ void main() async {
                 exercisePlanPredictor: ExercisePlanPredictor(),
                 exerciseTypeClassifier: ExerciseTypeClassifier(routineRepository),
               );
-
-              // 5) Asıl uygulamayı başlat
               runApp(
                 MultiRepositoryProvider(
                   providers: [
@@ -128,20 +121,20 @@ void main() async {
                         create: (context) => RoutinesBloc(
                           repository: routineRepository,
                           scheduleRepository: scheduleRepository,
-                          userId: resolvedUserId,
+                          userId: userId,
                         ),
                       ),
                       BlocProvider(
                         create: (context) => PartsBloc(
                           repository: partRepository,
                           scheduleRepository: scheduleRepository,
-                          userId: resolvedUserId,
+                          userId: userId,
                         )..add(FetchParts()),
                       ),
                       BlocProvider(
                         create: (context) => ScheduleBloc(
                           repository: scheduleRepository,
-                          userId: resolvedUserId,
+                          userId: userId,
                         ),
                       ),
                       BlocProvider(
@@ -149,11 +142,11 @@ void main() async {
                           partRepository: partRepository,
                           routineRepository: routineRepository,
                           scheduleRepository: scheduleRepository,
-                          userId: resolvedUserId,
+                          userId: userId,
                         ),
                       ),
                     ],
-                    child: App(userId: resolvedUserId),
+                    child: App(userId: userId),
                   ),
                 ),
               );
@@ -169,7 +162,7 @@ void main() async {
               );
             }
           } else {
-            _logger.severe('Anonim giriş başarısız oldu. (resolvedUserId == null)');
+            _logger.severe('Anonim giriş başarısız oldu. (userId == null)');
             runApp(
               MaterialApp(
                 debugShowCheckedModeBanner: false,
@@ -395,7 +388,12 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           Icons.settings_outlined,
           color: AppTheme.primaryRed.withOpacity(0.5),
         ),
-        onPressed: () => SettingsPage(),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => SettingsPage()),
+          );
+        },
       ),
     );
   }
@@ -408,16 +406,19 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       children: [
         HomePage(userId: widget.userId),
         ForYouPage(userId: widget.userId),
-
-        UserProfileScreen(
-          userId: widget.userId,
-          aiModule: _aiModule,
+        ChangeNotifierProvider(
+          create: (_) => UserProfileFormModel(),
+          child: UserProfileScreen(
+            userId: widget.userId,
+            aiModule: _aiModule,
+          ),
         ),
         LibraryPage(
           userId: widget.userId,
           routineRepository: _routineRepository,
-          partRepository: _partRepository,
           scheduleRepository: _scheduleRepository,
+          sqlProvider: _sqlProvider,
+          firebaseProvider: _firebaseProvider,
         ),
       ],
     );

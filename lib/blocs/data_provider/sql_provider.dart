@@ -2395,6 +2395,13 @@ class SQLProvider {
     final db = await database;
     return Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM WorkoutTypes')) ?? 0;}
 
+  /// Tüm WorkoutGoals kayıtlarını getirir
+  Future<List<WorkoutGoals>> getAllWorkoutGoals() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query('WorkoutGoals');
+    return List.generate(maps.length, (i) => WorkoutGoals.fromMap(maps[i]));
+  }
+
 
 
 

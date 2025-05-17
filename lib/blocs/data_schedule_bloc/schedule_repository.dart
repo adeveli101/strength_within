@@ -533,4 +533,20 @@ class ScheduleRepository {
     }
   }
 
+  /// Başlangıç günü, antrenman sıklığı ve minimum dinlenme gününe göre haftalık antrenman günlerini hesaplar
+  List<int> calculateTrainingDays({
+    required int startDay,
+    required int frequency,
+    required int minRestDays,
+  }) {
+    final List<int> days = [];
+    int currentDay = startDay;
+    for (int i = 0; i < frequency; i++) {
+      days.add(currentDay);
+      currentDay = ((currentDay - 1 + minRestDays + 1) % 7) + 1;
+    }
+    days.sort();
+    return days;
+  }
+
 }

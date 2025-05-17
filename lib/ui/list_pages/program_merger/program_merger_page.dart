@@ -67,6 +67,7 @@ class _ProgramMergerPageState extends State<ProgramMergerPage> {
       context.read<ScheduleRepository>(),
     );
     _loadInitialData();
+    debugAllPartsAndBodyParts(); // DEBUG: Tüm veritabanı ilişkilerini yazdır
   }
 
 
@@ -81,6 +82,21 @@ class _ProgramMergerPageState extends State<ProgramMergerPage> {
 
   void _loadInitialData() {
     _partsBloc.add(const FetchPartsGroupedByBodyPart());
+  }
+
+  void debugAllPartsAndBodyParts() async {
+    final allParts = await _partRepository.getAllParts();
+    debugPrint('DEBUG: Tüm Parts:');
+    for (final part in allParts) {
+      debugPrint('Part: \\${part.id} - \\${part.name} - difficulty: \\${part.difficulty}');
+      final targets = await _partRepository.getPartTargetedBodyParts(part.id);
+      debugPrint('  Targets: ${targets.map((t) => 'bodyPartId:\\${t.bodyPartId}, isPrimary:\\${t.isPrimary}').join(', ')}');
+    }
+    final mainBodyParts = await _partRepository.getMainBodyParts();
+    debugPrint('DEBUG: Ana BodyParts:');
+    for (final bp in mainBodyParts) {
+      debugPrint('BodyPart: \\${bp.id} - \\${bp.name}');
+    }
   }
 
   @override
@@ -136,7 +152,7 @@ class _ProgramMergerPageState extends State<ProgramMergerPage> {
           color: isSelected ? Colors.red.shade900 : Colors.grey[900],
           margin: const EdgeInsets.symmetric(vertical: 8),
           child: ListTile(
-            onTap: () => setState(() => _selectedFrequency = frequency),
+            onTap: () => _onFrequencyChanged(frequency),
             leading: Icon(
               isSelected ? Icons.check_circle : Icons.circle_outlined,
               color: isSelected ? Colors.white : Colors.grey,
@@ -166,6 +182,14 @@ class _ProgramMergerPageState extends State<ProgramMergerPage> {
       );
     }
 
+    final recommendedDays = List.generate(_selectedFrequency!.maxDays - _selectedFrequency!.minDays + 1, (i) => _selectedFrequency!.minDays + i);
+    final recommendedCombos = [
+      [1, 3, 5], // Pzt, Çar, Cum
+      [2, 4, 6], // Sal, Per, Cmt
+      [1, 2, 4, 6], // Pzt, Sal, Per, Cmt
+      [1, 3, 5, 7], // Pzt, Çar, Cum, Paz
+    ];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -178,18 +202,37 @@ class _ProgramMergerPageState extends State<ProgramMergerPage> {
           ),
         ),
         const SizedBox(height: 16),
+        // Önerilen kombinasyonlar
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: recommendedCombos.map((combo) {
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ActionChip(
+                  label: Text(combo.map(_getDayName).join(', ')),
+                  backgroundColor: Colors.red.shade900.withOpacity(0.7),
+                  labelStyle: const TextStyle(color: Colors.white),
+                  onPressed: () => setState(() {
+                    _selectedDays
+                      ..clear()
+                      ..addAll(combo);
+                  }),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        const SizedBox(height: 16),
         Wrap(
           spacing: 8,
           runSpacing: 8,
           children: List.generate(7, (index) {
             final day = index + 1;
             final isSelected = _selectedDays.contains(day);
-            final isEnabled = _selectedDays.length <
-                _selectedFrequency!.maxDays || isSelected;
-
             return FilterChip(
               selected: isSelected,
-              onSelected: isEnabled ? (selected) {
+              onSelected: (selected) {
                 setState(() {
                   if (selected) {
                     _selectedDays.add(day);
@@ -197,15 +240,13 @@ class _ProgramMergerPageState extends State<ProgramMergerPage> {
                     _selectedDays.remove(day);
                   }
                 });
-              } : null,
+              },
               backgroundColor: Colors.grey[900],
               selectedColor: Colors.red.shade900,
               checkmarkColor: Colors.white,
               label: Text(
                 _getDayName(day),
-                style: TextStyle(
-                  color: isEnabled ? Colors.white : Colors.grey,
-                ),
+                style: const TextStyle(color: Colors.white),
               ),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
@@ -219,10 +260,18 @@ class _ProgramMergerPageState extends State<ProgramMergerPage> {
         if (_selectedDays.isNotEmpty) ...[
           const SizedBox(height: 16),
           Text(
-            'Seçilen gün sayısı: ${_selectedDays.length}/${_selectedFrequency!
-                .maxDays}',
-            style: const TextStyle(color: Colors.grey),
+            'Seçilen gün sayısı: ${_selectedDays.length} (Önerilen: ${_selectedFrequency!.minDays}-${_selectedFrequency!.maxDays})',
+            style: TextStyle(
+              color: (_selectedDays.length < _selectedFrequency!.minDays || _selectedDays.length > _selectedFrequency!.maxDays)
+                  ? Colors.orange
+                  : Colors.grey,
+            ),
           ),
+          if (_selectedDays.length < _selectedFrequency!.minDays || _selectedDays.length > _selectedFrequency!.maxDays)
+            const Text(
+              'Seviye için önerilen gün aralığı dışındasınız.',
+              style: TextStyle(color: Colors.orange),
+            ),
         ],
       ],
     );
@@ -257,33 +306,37 @@ class _ProgramMergerPageState extends State<ProgramMergerPage> {
       );
     }
 
-    return BlocConsumer<PartsBloc, PartsState>(
-      listener: (context, state) {
-        if (state is PartsError) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(state.message)),
-          );
-        }
-      },
-      builder: (context, state) {
-        if (state is PartsLoading) {
+    // DENGELI YENI GRUPLAMA KULLAN
+    return FutureBuilder<Map<int, List<Parts>>>(
+      future: getBalancedGroupedParts(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-
-        if (state is PartsGroupedByBodyPart) {
-          if (state.groupedParts.isEmpty) {
-            return const Center(child: Text('Hiç program bulunamadı'));
-          }
-
-          return _buildProgramList(state.groupedParts);
+        final groupedParts = snapshot.data!;
+        debugPrint('DEBUG: DENGELI groupedParts:');
+        groupedParts.forEach((k, v) {
+          debugPrint('BodyPart $k: ${v.map((p) => p.name).toList()}');
+        });
+        final hasAny = groupedParts.values.any((list) => list.isNotEmpty);
+        if (!hasAny) {
+          return const Center(
+            child: Text(
+              'Seçtiğiniz gün ve seviyeye uygun program bulunamadı. (DENGELI)',
+              style: TextStyle(color: Colors.orange),
+            ),
+          );
         }
-
-        return const Center(child: Text('Program listesi yüklenemedi'));
+        return _buildProgramList(groupedParts);
       },
     );
   }
 
   Widget _buildProgramList(Map<int, List<Parts>> groupedParts) {
+    debugPrint('DEBUG: _buildProgramList çağrıldı. groupedParts:');
+    groupedParts.forEach((k, v) {
+      debugPrint('BodyPart $k: ${v.map((p) => p.name).toList()}');
+    });
     // Ana kas grupları için sabit sıralama
     final mainBodyParts = [1, 2, 3, 4, 5, 6]; // Göğüs, Sırt, Bacak, Omuz, Kol, Karın
 
@@ -295,6 +348,7 @@ class _ProgramMergerPageState extends State<ProgramMergerPage> {
           _buildProgramSelectionHeader(),
           ...mainBodyParts.map((bodyPartId) {
             final partsForBodyPart = groupedParts[bodyPartId] ?? [];
+            debugPrint('DEBUG: mainBodyPart $bodyPartId parts: ${partsForBodyPart.map((p) => p.name).toList()}');
             if (partsForBodyPart.isEmpty) return const SizedBox.shrink();
 
             return FutureBuilder<List<PartTargetedBodyParts>>(
@@ -307,14 +361,9 @@ class _ProgramMergerPageState extends State<ProgramMergerPage> {
                   final bool difficultyMatch = _selectedFrequency != null &&
                       part.difficulty >= _selectedFrequency!.minDays &&
                       part.difficulty <= _selectedFrequency!.maxDays;
-
-                  final bool hasMatchingTarget = snapshot.data!.any((target) =>
-                  target.partId == part.id &&
-                      target.isPrimary &&
-                      target.bodyPartId == bodyPartId);
-
-                  return difficultyMatch && hasMatchingTarget;
+                  return difficultyMatch;
                 }).toList();
+                debugPrint('DEBUG: mainBodyPart $bodyPartId filteredParts: ${filteredParts.map((p) => p.name).toList()}');
 
                 if (filteredParts.isEmpty) return const SizedBox.shrink();
 
@@ -462,10 +511,9 @@ class _ProgramMergerPageState extends State<ProgramMergerPage> {
           },
         ),
         children: filteredParts.map((part) {
-          final target = primaryTargets.firstWhere(
-                (t) => t.partId == part.id,
-            orElse: () => primaryTargets.first,
-          );
+          final matchingTargets = primaryTargets.where((t) => t.partId == part.id);
+          if (matchingTargets.isEmpty) return const SizedBox.shrink();
+          final target = matchingTargets.first;
           return _buildPartCard(part, target);
         }).toList(),
       ),
@@ -690,7 +738,6 @@ class _ProgramMergerPageState extends State<ProgramMergerPage> {
 
   Widget _buildDailyProgramList(Map<String, dynamic> data) {
     final parts = data['parts'] as List<Parts>;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -705,37 +752,44 @@ class _ProgramMergerPageState extends State<ProgramMergerPage> {
         const SizedBox(height: 16),
         ...List.generate(_selectedDays.length, (index) {
           final dayNumber = _selectedDays.elementAt(index);
-          return _buildDayCard(dayNumber, parts[index % parts.length]);
+          final part = parts[index % parts.length];
+          return Card(
+            color: Colors.grey[850],
+            margin: const EdgeInsets.symmetric(vertical: 6),
+            child: ListTile(
+              leading: CircleAvatar(
+                backgroundColor: Colors.red[900],
+                child: Text(
+                  _getDayName(dayNumber)[0],
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ),
+              title: Text(
+                part.name,
+                style: const TextStyle(color: Colors.white),
+              ),
+              subtitle: FutureBuilder<List<String>>(
+                future: _partRepository.getPartTargetedBodyPartsName(part.id),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) return const SizedBox.shrink();
+                  return Text(
+                    snapshot.data!.join(', '),
+                    style: TextStyle(color: Colors.grey[400]),
+                  );
+                },
+              ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.fitness_center, color: Colors.grey[600], size: 18),
+                  const SizedBox(width: 4),
+                  Text('Zorluk: ${part.difficulty}/5', style: TextStyle(color: Colors.grey[400])),
+                ],
+              ),
+            ),
+          );
         }),
       ],
-    );
-  }
-
-  Widget _buildDayCard(int day, Parts part) {
-    return Card(
-      color: Colors.grey[900],
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      child: ExpansionTile(
-        title: Text(
-          'Gün $day: ${part.name}',
-          style: const TextStyle(color: Colors.white),
-        ),
-        children: [
-          FutureBuilder<List<PartExercise>>(
-            future: _partRepository.getPartExercisesByPartId(part.id),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              return Column(
-                children: snapshot.data!.map((exercise) {
-                  return _buildExerciseItem(exercise);
-                }).toList(),
-              );
-            },
-          ),
-        ],
-      ),
     );
   }
 
@@ -836,8 +890,6 @@ class _ProgramMergerPageState extends State<ProgramMergerPage> {
   }
 
   Future<void> _handleCreateProgram() async {
-    if (!mounted) return;
-
     setState(() => _isLoading = true);
     try {
       final program = await _mergerService.createMergedProgram(
@@ -846,18 +898,35 @@ class _ProgramMergerPageState extends State<ProgramMergerPage> {
         selectedDays: _selectedDays.toList(),
         mergeType: _selectedMergeType,
       );
-
       if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Program başarıyla oluşturuldu')),
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Başarılı'),
+          content: const Text('Program başarıyla oluşturuldu!'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Tamam'),
+            ),
+          ],
+        ),
       );
       Navigator.pop(context, program);
     } catch (e) {
       if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Hata: ${e.toString()}')),
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Hata'),
+          content: Text('Program oluşturulamadı: ${e.toString()}'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Kapat'),
+            ),
+          ],
+        ),
       );
     } finally {
       if (mounted) {
@@ -1203,13 +1272,60 @@ class _ProgramMergerPageState extends State<ProgramMergerPage> {
     }).toList();
   }
 
-  void _handlePartSelection(int partId, bool isSelected) {
-    if (!mounted) return;
+  void _onFrequencyChanged(TrainingFrequency? frequency) {
+    if (_selectedFrequency != frequency) {
+      setState(() {
+        _selectedFrequency = frequency;
+        _selectedDays.clear();
+        _selectedPartIds.clear();
+        _currentStep = 1;
+      });
+    }
+  }
 
+  void _onDaysChanged(Set<int> days) {
+    setState(() {
+      _selectedDays
+        ..clear()
+        ..addAll(days);
+      _selectedPartIds.clear();
+      _currentStep = 2;
+    });
+  }
+
+  void _handlePartSelection(int partId, bool isSelected) async {
+    if (!mounted) return;
+    final part = await _partRepository.getPartById(partId);
+    if (part == null) return;
+    final targets = await _partRepository.getPartTargetedBodyParts(partId);
+    final selectedParts = await Future.wait(_selectedPartIds.map((id) => _partRepository.getPartById(id)));
+    final selectedTargets = <int>{};
+    for (final p in selectedParts) {
+      if (p == null) continue;
+      final t = await _partRepository.getPartTargetedBodyParts(p.id);
+      for (final target in t) {
+        if (target.isPrimary) selectedTargets.add(target.bodyPartId);
+      }
+    }
+    // Aynı kas grubundan birden fazla parça seçimini engelle
+    for (final target in targets) {
+      if (target.isPrimary && isSelected && selectedTargets.contains(target.bodyPartId)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Aynı kas grubundan birden fazla parça seçemezsiniz.')),
+          );
+        }
+        return;
+      }
+    }
     setState(() {
       if (isSelected) {
         if (_selectedPartIds.length < maxSelectedProgramCount) {
           _selectedPartIds.add(partId);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('En fazla $maxSelectedProgramCount program seçebilirsiniz.')),
+          );
         }
       } else {
         _selectedPartIds.remove(partId);
@@ -1266,6 +1382,41 @@ class _ProgramMergerPageState extends State<ProgramMergerPage> {
       case 6: return Icons.circle; // Karın
       default: return Icons.fitness_center;
     }
+  }
+
+  Future<Map<int, List<Parts>>> getBalancedGroupedParts() async {
+    // 1. Ana kas gruplarını al
+    final mainBodyParts = await _partRepository.getMainBodyParts();
+    final mainBodyPartIds = mainBodyParts.map((bp) => bp.id).toSet();
+    // 2. Tüm part'ları al
+    final allParts = await _partRepository.getAllParts();
+    // 3. Sonuç haritası
+    final Map<int, List<Parts>> grouped = {for (var id in mainBodyPartIds) id: []};
+    // 4. Her part için hedef kas gruplarını bul ve ana kas grubuna ekle
+    for (final part in allParts) {
+      final targets = await _partRepository.getPartTargetedBodyParts(part.id);
+      final Set<int> anaGruplar = {};
+      for (final t in targets) {
+        int? anaId;
+        if (mainBodyPartIds.contains(t.bodyPartId)) {
+          anaId = t.bodyPartId;
+        } else {
+          final bp = await _partRepository.getBodyPartById(t.bodyPartId);
+          if (bp != null && bp.parentBodyPartId != null && mainBodyPartIds.contains(bp.parentBodyPartId)) {
+            anaId = bp.parentBodyPartId;
+          }
+        }
+        if (anaId != null) anaGruplar.add(anaId);
+      }
+      for (final anaId in anaGruplar) {
+        grouped[anaId]?.add(part);
+      }
+    }
+    // 5. Debug çıktısı
+    grouped.forEach((k, v) {
+      debugPrint('DENGELI-GROUP: BodyPart $k: ${v.map((p) => p.name).toList()}');
+    });
+    return grouped;
   }
 
 }
