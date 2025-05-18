@@ -265,6 +265,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   late final SQLProvider _sqlProvider;
   late final FirebaseProvider _firebaseProvider;
   late final RoutineRepository _routineRepository;
+  // ignore: unused_field
   late final PartRepository _partRepository;
   late final ScheduleRepository _scheduleRepository;
   late final AIModule _aiModule;

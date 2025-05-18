@@ -11,6 +11,7 @@ import 'package:strength_within/ui/routine_ui/routine_detail.dart';
 import '../ai_predictors/ai_bloc/ai_module.dart';
 import '../blocs/data_bloc_routine/RoutineRepository.dart';
 import '../blocs/data_bloc_routine/routines_bloc.dart';
+import '../blocs/data_provider/firebase_provider.dart';
 import '../blocs/data_schedule_bloc/schedule_bloc.dart';
 import '../blocs/data_schedule_bloc/schedule_repository.dart';
 import '../main.dart';
@@ -25,7 +26,6 @@ import 'profile_steps/age_step.dart';
 import 'profile_steps/training_days_step.dart';
 import 'profile_steps/training_days_manual_step.dart';
 import 'profile_steps/difficulty_step.dart';
-import 'profile_steps/profile_summary_step.dart';
 import 'profile_steps/welcome_step.dart';
 
 class UserProfileFormModel extends ChangeNotifier {
@@ -330,10 +330,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> with AutomaticKee
               model: model,
               onNext: () => _pageController.nextPage(duration: AppTheme.normalAnimation, curve: Curves.easeInOut),
             ),
-            ProfileSummaryStep(
-              model: model,
-              onSubmit: _createProfile,
-            ),
+            _buildSummaryPage(model),
           ],
         );
       },
@@ -666,6 +663,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> with AutomaticKee
       _logger.info('All routine IDs: [36m${allRoutines.map((r) => r.id).toList()}[0m');
       final aiRoutines = allRoutines.where((r) =>
         recommendedRoutineIds.contains(r.id) ||
+        // ignore: collection_methods_unrelated_type
         recommendedRoutineIds.contains(r.id.toString())
       ).toList();
       if (aiRoutines.isEmpty) {
@@ -680,13 +678,36 @@ class _UserProfileScreenState extends State<UserProfileScreen> with AutomaticKee
       if (filteredRoutines.isEmpty) {
         filteredRoutines.addAll(aiRoutines);
       }
-      _logger.info('Step 4: Filtered routines after AI and user selection. Count: ${filteredRoutines.length}');
+      // Yüksek uyumluluk/puanlama sıralaması (örnek: score varsa)
+      // filteredRoutines.sort((a, b) => (b.score ?? 0).compareTo(a.score ?? 0));
+      // En yüksek puanlı ilk 5 rutin ID'sini al
+      final topRoutineIds = filteredRoutines.take(5).map((r) => r.id.toString()).toList();
+      _logger.info('Step 4.1: Top recommended routine IDs: $topRoutineIds');
+
+      // Profil objesini recommendedRoutineIds ile oluştur
+      final userProfileWithRecommendedRoutineIds = UserAIProfile(
+        userId: widget.userId,
+        bmi: null, // AI'dan gelen değerle doldurulabilir
+        bfp: null, // AI'dan gelen değerle doldurulabilir
+        fitnessLevel: 3, // AI'dan gelen değerle doldurulabilir
+        modelScores: null, // AI'dan gelen değerle doldurulabilir
+        recommendedRoutineIds: topRoutineIds,
+        lastUpdateTime: DateTime.now(),
+        metrics: AIMetrics.initial(),
+        weight: model.weight,
+        height: model.height,
+        gender: model.gender,
+        goal: 1, // AI'dan gelen değerle doldurulabilir
+      );
+      // Firestore'a kaydet
+      await FirebaseProvider().addUserPrediction(widget.userId, userProfileWithRecommendedRoutineIds.toFirestore());
+      _logger.info('Step 4.2: User profile with recommendedRoutineIds saved to Firestore.');
 
       _logger.info('Step 5: Showing ProfileResultBottomSheet...');
       await ProfileResultBottomSheet.show(
         context,
         userId: widget.userId,
-        userProfile: userProfile,
+        userProfile: userProfileWithRecommendedRoutineIds,
         recommendedRoutines: filteredRoutines,
         routineRepository: routineRepository,
         scheduleRepository: context.read<ScheduleRepository>(),

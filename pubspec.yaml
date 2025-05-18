@@ -141,7 +141,7 @@ dependencies:
       url: https://github.com/google/flutter-desktop-embedding
       path: plugins/window_size
 
-
+  table_calendar: ^3.0.9
 
 # Splash screen yapılandırması
 flutter_native_splash:

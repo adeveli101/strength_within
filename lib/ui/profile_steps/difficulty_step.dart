@@ -11,7 +11,7 @@ import 'package:provider/provider.dart';
 class DifficultyStep extends StatefulWidget {
   final UserProfileFormModel model;
   final VoidCallback onNext;
-  const DifficultyStep({required this.model, required this.onNext, Key? key}) : super(key: key);
+  const DifficultyStep({required this.model, required this.onNext, super.key});
   @override
   State<DifficultyStep> createState() => _DifficultyStepState();
 }

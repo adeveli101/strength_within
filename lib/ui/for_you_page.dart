@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:table_calendar/table_calendar.dart';
 
 
 import '../blocs/data_bloc_part/PartRepository.dart';
@@ -32,57 +34,327 @@ class ForYouPage extends StatefulWidget {
 class _ForYouPageState extends State<ForYouPage> {
   final sqlProvider = SQLProvider();
   final firebaseProvider = FirebaseProvider();
-  bool isTestMode = false;
+  DateTime _focusedDay = DateTime.now();
+  DateTime? _selectedDay;
+  Map<DateTime, List<Map<String, dynamic>>> _workoutsByDay = {};
+  bool _loading = true;
 
   @override
-  Widget build(BuildContext context) {
-    return MultiBlocProvider(
-      providers: [
-        BlocProvider(
-          create: (context) => ForYouBloc(
-            userId: widget.userId,
-            partRepository: PartRepository(sqlProvider, firebaseProvider),
-            routineRepository: RoutineRepository(sqlProvider, firebaseProvider),
-            isTestMode: isTestMode, scheduleRepository: ScheduleRepository(firebaseProvider, sqlProvider),
-          )..add(FetchForYouData(userId: widget.userId)),
-        ),
+  void initState() {
+    super.initState();
+    _fetchWorkouts();
+  }
 
-      ],
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Senin İçin'),
-          actions: [
-            IconButton(
-              icon: Icon(isTestMode ? Icons.bug_report : Icons.bug_report_outlined),
-              onPressed: () {
-                setState(() {
-                  isTestMode = !isTestMode;
-                });
-                context.read<ForYouBloc>().add(FetchForYouData(userId: widget.userId));
-              },
-              tooltip: 'Test Modu',
-            ),
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              onPressed: () {
-                context.read<ForYouBloc>().add(FetchForYouData(userId: widget.userId));
-              },
-            ),
-          ],
+  Future<void> _fetchWorkouts() async {
+    setState(() => _loading = true);
+    final userId = widget.userId;
+    final snapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('exerciseProgress')
+        .where('isCompleted', isEqualTo: true)
+        .get();
+    final Map<DateTime, List<Map<String, dynamic>>> byDay = {};
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      if (data['completionDate'] != null) {
+        final date = (data['completionDate'] as Timestamp).toDate();
+        final day = DateTime(date.year, date.month, date.day);
+        byDay.putIfAbsent(day, () => []).add({...data, 'id': doc.id});
+      }
+    }
+    setState(() {
+      _workoutsByDay = byDay;
+      _loading = false;
+    });
+  }
+
+  List<Map<String, dynamic>> _getWorkoutsForDay(DateTime day) {
+    final key = DateTime(day.year, day.month, day.day);
+    return _workoutsByDay[key] ?? [];
+  }
+
+  int _getActiveDaysInMonth(DateTime month) {
+    return _workoutsByDay.keys.where((d) => d.year == month.year && d.month == month.month).length;
+  }
+
+  int _getInactiveDaysInMonth(DateTime month) {
+    final daysInMonth = DateUtils.getDaysInMonth(month.year, month.month);
+    return daysInMonth - _getActiveDaysInMonth(month);
+  }
+
+  void _showDayDetails(BuildContext context, DateTime day) {
+    final workouts = _getWorkoutsForDay(day);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: AppTheme.cardBackground,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
-        body: Column(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (isTestMode)
-              Container(
-                color: Colors.yellow,
-                padding: EdgeInsets.all(8),
-                child: Text('TEST MODU', style: TextStyle(fontWeight: FontWeight.bold)),
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-
+            ),
+            Text(
+              'Antrenmanlar - ${day.day.toString().padLeft(2, '0')}.${day.month.toString().padLeft(2, '0')}.${day.year}',
+              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 18),
+            ),
+            const SizedBox(height: 8),
+            if (workouts.isEmpty)
+              Center(child: Text('Bu gün için kayıtlı antrenman yok.', style: TextStyle(color: Colors.white70))),
+            ...workouts.map((workout) => Card(
+                  color: AppTheme.surfaceColor,
+                  margin: const EdgeInsets.symmetric(vertical: 6),
+                  child: ListTile(
+                    leading: Icon(Icons.check_circle, color: AppTheme.primaryGreen),
+                    title: Text(
+                      workout['exerciseName'] ?? 'Antrenman',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      'Tamamlandı',
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                    trailing: workout['completionDate'] != null
+                        ? Text(
+                            '${(workout['completionDate'] as Timestamp).toDate().hour.toString().padLeft(2, '0')}:${(workout['completionDate'] as Timestamp).toDate().minute.toString().padLeft(2, '0')}',
+                            style: const TextStyle(color: Colors.white54),
+                          )
+                        : null,
+                  ),
+                )),
+            const SizedBox(height: 12),
+            if (workouts.isNotEmpty)
+              Center(
+                child: Text(
+                  'Harika! Bugün aktif kaldın 🎉',
+                  style: TextStyle(color: AppTheme.primaryGreen, fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+              ),
+            if (workouts.isEmpty)
+              Center(
+                child: Text(
+                  'Bugün dinlenme günü. Yarın tekrar dene! 💪',
+                  style: TextStyle(color: AppTheme.primaryRed, fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+              ),
           ],
         ),
       ),
     );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedDay = _selectedDay ?? _focusedDay;
+    final month = DateTime(_focusedDay.year, _focusedDay.month);
+    final activeDays = _getActiveDaysInMonth(month);
+    final inactiveDays = _getInactiveDaysInMonth(month);
+    return Scaffold(
+      backgroundColor: AppTheme.darkBackground,
+      appBar: AppBar(
+        title: const Text('Aktivite Takvimi'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _fetchWorkouts,
+          ),
+        ],
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
+              children: [
+                // Gradientli başlık ve özet
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [AppTheme.primaryRed, AppTheme.primaryGreen.withOpacity(0.7)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(32)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${_focusedDay.year} - ${_focusedDay.month.toString().padLeft(2, '0')}',
+                        style: const TextStyle(color: Colors.white70, fontSize: 16),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(Icons.calendar_today, color: Colors.white, size: 20),
+                          const SizedBox(width: 8),
+                          Text('Aktif gün: ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          Text('$activeDays', style: TextStyle(color: AppTheme.primaryGreen, fontWeight: FontWeight.bold)),
+                          const SizedBox(width: 16),
+                          Icon(Icons.hotel, color: Colors.white, size: 20),
+                          const SizedBox(width: 8),
+                          Text('İnaktif gün: ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          Text('$inactiveDays', style: TextStyle(color: AppTheme.primaryRed, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Icon(Icons.emoji_events, color: Colors.amberAccent, size: 20),
+                          const SizedBox(width: 8),
+                          Text('En uzun seri: ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          Text(_getLongestStreak().toString(), style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Takvim
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  child: TableCalendar(
+                    firstDay: DateTime.utc(2022, 1, 1),
+                    lastDay: DateTime.utc(2100, 12, 31),
+                    focusedDay: _focusedDay,
+                    selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+                    calendarFormat: CalendarFormat.month,
+                    eventLoader: (day) => _getWorkoutsForDay(day),
+                    calendarStyle: CalendarStyle(
+                      todayDecoration: BoxDecoration(
+                        color: AppTheme.primaryRed.withOpacity(0.7),
+                        shape: BoxShape.circle,
+                      ),
+                      selectedDecoration: BoxDecoration(
+                        color: AppTheme.primaryGreen,
+                        shape: BoxShape.circle,
+                      ),
+                      markerDecoration: BoxDecoration(
+                        color: AppTheme.primaryRed,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    calendarBuilders: CalendarBuilders(
+                      markerBuilder: (context, day, events) {
+                        if (events.isNotEmpty) {
+                          return Align(
+                            alignment: Alignment.bottomCenter,
+                            child: Icon(Icons.fitness_center, color: AppTheme.primaryGreen, size: 18),
+                          );
+                        }
+                        return null;
+                      },
+                      defaultBuilder: (context, day, focusedDay) {
+                        final isToday = isSameDay(day, DateTime.now());
+                        final isSelected = isSameDay(day, _selectedDay);
+                        return AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? AppTheme.primaryGreen.withOpacity(0.2)
+                                : isToday
+                                    ? AppTheme.primaryRed.withOpacity(0.1)
+                                    : Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Center(
+                            child: Text(
+                              '${day.day}',
+                              style: TextStyle(
+                                color: isSelected
+                                    ? AppTheme.primaryGreen
+                                    : isToday
+                                        ? AppTheme.primaryRed
+                                        : Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    onDaySelected: (selected, focused) {
+                      setState(() {
+                        _selectedDay = selected;
+                        _focusedDay = focused;
+                      });
+                      _showDayDetails(context, selected);
+                    },
+                    onPageChanged: (focused) {
+                      setState(() => _focusedDay = focused);
+                    },
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Motivasyon mesajı
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4),
+                  child: Row(
+                    children: [
+                      Icon(Icons.mood, color: AppTheme.primaryGreen),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _getMotivationMessage(selectedDay),
+                          style: const TextStyle(color: Colors.white70, fontStyle: FontStyle.italic),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  int _getLongestStreak() {
+    // En uzun üst üste aktif gün serisini hesapla
+    final days = _workoutsByDay.keys.toList()..sort();
+    int maxStreak = 0;
+    int currentStreak = 0;
+    DateTime? prev;
+    for (final day in days) {
+      if (prev != null && day.difference(prev).inDays == 1) {
+        currentStreak++;
+      } else {
+        currentStreak = 1;
+      }
+      if (currentStreak > maxStreak) maxStreak = currentStreak;
+      prev = day;
+    }
+    return maxStreak;
+  }
+
+  String _getMotivationMessage(DateTime day) {
+    final workouts = _getWorkoutsForDay(day);
+    if (isSameDay(day, DateTime.now()) && workouts.isNotEmpty) {
+      return 'Bugün de aktif kaldın, harikasın!';
+    } else if (workouts.isNotEmpty) {
+      return 'Bu gün antrenman yaptın, devam et!';
+    } else if (isSameDay(day, DateTime.now())) {
+      return 'Bugün henüz antrenman yapmadın. Hadi başlayalım!';
+    } else {
+      return 'Dinlenmek de önemli. Yarın tekrar dene!';
+    }
   }
 
   Widget _buildWeeklyChallenge(
