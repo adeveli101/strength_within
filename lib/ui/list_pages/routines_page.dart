@@ -1,3 +1,5 @@
+// ignore_for_file: unused_field
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
@@ -21,17 +23,27 @@ class _RoutinesPageState extends State<RoutinesPage> {
   final _logger = Logger('RoutinesPage');
   String? _selectedDifficulty;
   List<Map<String, dynamic>> difficultyFilterOptions = [];
+  // ignore: prefer_final_fields
   bool _isListView = false;
   int _currentWorkoutTypeIndex = 0;
   final PageController _pageController = PageController();
+  late ScrollController _chipScrollController;
 
   @override
   void initState() {
     super.initState();
+    _chipScrollController = ScrollController();
     _setupLogging();
     _routinesBloc = BlocProvider.of<RoutinesBloc>(context);
     _loadAllData();
     _loadFilterOptions();
+  }
+
+  @override
+  void dispose() {
+    _chipScrollController.dispose();
+    _pageController.dispose();
+    super.dispose();
   }
 
   void _setupLogging() {
@@ -43,10 +55,16 @@ class _RoutinesPageState extends State<RoutinesPage> {
   }
 
   void _loadAllData() {
-    _logger.info('Loading all routines for user: ${widget.userId}');
+    _logger.info('Loading all routines for user: \\${widget.userId}');
     _routinesBloc.add(FetchRoutines());
     setState(() {
       _selectedDifficulty = null;
+      _currentWorkoutTypeIndex = 0;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_pageController.hasClients) {
+        _pageController.jumpToPage(0);
+      }
     });
   }
 
@@ -58,7 +76,6 @@ class _RoutinesPageState extends State<RoutinesPage> {
         ..sort((a, b) => int.parse(a['value']).compareTo(int.parse(b['value'])));
     });
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -106,22 +123,29 @@ class _RoutinesPageState extends State<RoutinesPage> {
             children: [
               Expanded(
                 child: PageView.builder(
+                  key: const PageStorageKey('workoutTypePageView'),
                   controller: _pageController,
                   itemCount: workoutTypes.length,
+                  physics: const BouncingScrollPhysics(),
+                  pageSnapping: true,
                   onPageChanged: (index) {
                     setState(() {
                       _currentWorkoutTypeIndex = index;
                     });
+                    _scrollToChip(index);
                   },
                   itemBuilder: (context, index) {
                     final workoutType = workoutTypes[index];
-                    return Column(
-                      children: [
-                        _buildWorkoutTypeTabs(workoutTypes),
-                        Expanded(
-                          child: _buildWorkoutTypeSection(workoutType['id'], workoutType['name'], filteredRoutines),
-                        ),
-                      ],
+                    return KeyedSubtree(
+                      key: ValueKey(workoutType['id']),
+                      child: Column(
+                        children: [
+                          _buildWorkoutTypeTabs(workoutTypes),
+                          Expanded(
+                            child: _buildWorkoutTypeSection(workoutType['id'], workoutType['name'], filteredRoutines),
+                          ),
+                        ],
+                      ),
                     );
                   },
                 ),
@@ -138,6 +162,7 @@ class _RoutinesPageState extends State<RoutinesPage> {
     return SizedBox(
       height: 50,
       child: ListView.builder(
+        controller: _chipScrollController,
         scrollDirection: Axis.horizontal,
         itemCount: workoutTypes.length,
         itemBuilder: (context, index) {
@@ -147,24 +172,29 @@ class _RoutinesPageState extends State<RoutinesPage> {
             onTap: () {
               _pageController.animateToPage(
                 index,
-                duration: Duration(milliseconds: 300),
-                curve: Curves.easeInOut,
+                duration: const Duration(milliseconds: 500),
+                curve: Curves.easeInOutCubic,
               );
+              _scrollToChip(index);
             },
             child: AnimatedContainer(
-              duration: Duration(milliseconds: 200),
-              margin: EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-              padding: EdgeInsets.symmetric(horizontal: isSelected ? 16 : 12, vertical: isSelected ? 6 : 6),
+              duration: const Duration(milliseconds: 350),
+              curve: Curves.easeInOutCubic,
+              margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              padding: EdgeInsets.symmetric(horizontal: isSelected ? 18 : 12, vertical: 6),
               decoration: BoxDecoration(
                 color: isSelected ? Colors.deepOrangeAccent : Colors.grey[800],
                 borderRadius: BorderRadius.circular(8),
+                boxShadow: isSelected
+                    ? [BoxShadow(color: Colors.deepOrangeAccent.withOpacity(0.2), blurRadius: 8, offset: Offset(0, 2))]
+                    : [],
               ),
               child: Center(
                 child: Text(
                   workoutType['name'],
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: isSelected ? 16 : 12,
+                    fontSize: isSelected ? 16 : 13,
                     fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                   ),
                 ),
@@ -182,16 +212,26 @@ class _RoutinesPageState extends State<RoutinesPage> {
       ..sort((a, b) => int.parse(a['value']).compareTo(int.parse(b['value'])));
 
     return Container(
-      padding: EdgeInsets.all(8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       color: Colors.grey[850],
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
           children: [
             _buildFilterChip(
-              label: Icon(Icons.all_inbox, color: Colors.white, size: 15),
+              label: const Icon(Icons.all_inbox, color: Colors.white, size: 15),
               selected: _selectedDifficulty == null,
-              onSelected: (selected) => setState(() => _selectedDifficulty = null),
+              onSelected: (selected) {
+                setState(() {
+                  _selectedDifficulty = null;
+                  _currentWorkoutTypeIndex = 0;
+                });
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (_pageController.hasClients) {
+                    _pageController.jumpToPage(0);
+                  }
+                });
+              },
             ),
             ...sortedDifficulties.map((difficulty) => _buildFilterChip(
               label: Row(
@@ -205,7 +245,17 @@ class _RoutinesPageState extends State<RoutinesPage> {
                 }),
               ),
               selected: _selectedDifficulty == difficulty['value'],
-              onSelected: (selected) => setState(() => _selectedDifficulty = selected ? difficulty['value'] : null),
+              onSelected: (selected) {
+                setState(() {
+                  _selectedDifficulty = selected ? difficulty['value'] : null;
+                  _currentWorkoutTypeIndex = 0;
+                });
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (_pageController.hasClients) {
+                    _pageController.jumpToPage(0);
+                  }
+                });
+              },
             )),
           ],
         ),
@@ -213,12 +263,16 @@ class _RoutinesPageState extends State<RoutinesPage> {
     );
   }
 
-
-
-
   Widget _buildWorkoutTypeSection(int workoutTypeId, String workoutTypeName, List<Routines> filteredRoutines) {
     final workoutTypeRoutines = filteredRoutines.where((routine) => routine.workoutTypeId == workoutTypeId).toList();
-    if (workoutTypeRoutines.isEmpty) return Center(child: Text('Bu antrenman türü için rutin bulunamadı.', style: TextStyle(color: Colors.white)));
+    if (workoutTypeRoutines.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Text('Bu antrenman türü için rutin bulunamadı.', style: TextStyle(color: Colors.white, fontSize: 16)),
+        ),
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -231,33 +285,17 @@ class _RoutinesPageState extends State<RoutinesPage> {
                 children: [
                   Text(
                     workoutTypeName,
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
                   ),
                   IconButton(
-                    icon: Icon(Icons.arrow_right_alt, color: Colors.white),
+                    icon: const Icon(Icons.arrow_right_alt, color: Colors.white),
                     onPressed: () {
                       int nextIndex = (_currentWorkoutTypeIndex + 1) % _getWorkoutTypes().length;
                       _pageController.animateToPage(
                         nextIndex,
-                        duration: Duration(milliseconds: 300),
+                        duration: const Duration(milliseconds: 300),
                         curve: Curves.easeInOut,
                       );
-                    },
-                  ),
-                ],
-              ),
-              Row(
-                children: [
-                  Text(
-                    'Görünümü Değiştir',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.normal, color: Colors.white),
-                  ),
-                  IconButton(
-                    icon: Icon(_isListView ? Icons.grid_view : Icons.list, color: Colors.white),
-                    onPressed: () {
-                      setState(() {
-                        _isListView = !_isListView;
-                      });
                     },
                   ),
                 ],
@@ -266,74 +304,30 @@ class _RoutinesPageState extends State<RoutinesPage> {
           ),
         ),
         Expanded(
-          child: _isListView
-              ? _buildListView(workoutTypeRoutines)
-              : _buildCardView(workoutTypeRoutines),
+          child: _buildCardView(workoutTypeRoutines),
         ),
       ],
     );
   }
 
-  Widget _buildListView(List<Routines> routines) {
-    return GridView.builder(
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        childAspectRatio: 2,
-        crossAxisSpacing: 5,
-        mainAxisSpacing: 5,
-      ),
+  Widget _buildCardView(List<Routines> routines) {
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
       itemCount: routines.length,
       itemBuilder: (context, index) {
         final routine = routines[index];
-        return Container(
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.orange, width: 1),
-            borderRadius: BorderRadius.circular(4),
+        return Card(
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
           ),
-          child: ListTile(
-            dense: true,
-            contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            title: Text(
-              routine.name,
-              style: TextStyle(color: Colors.white, fontSize: 12),
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
-            ),
-            subtitle: Row(
-              children: List.generate(5, (i) => Icon(
-                i < routine.difficulty ? Icons.star : Icons.star_border,
-                color: Colors.yellow,
-                size: 12,
-              )),
-            ),
-            trailing: Icon(
-              routine.isFavorite ? Icons.favorite : Icons.favorite_border,
-              color: routine.isFavorite ? Colors.red : Colors.grey,
-              size: 16,
-            ),
+          color: Colors.grey[850],
+          child: RoutineCard(
+            key: ValueKey(routine.id),
+            routine: routine,
+            userId: widget.userId,
             onTap: () => _showRoutineDetailBottomSheet(routine.id),
           ),
-        );
-      },
-    );
-  }
-
-
-
-
-
-  Widget _buildCardView(List<Routines> routines) {
-    return GridView.builder(
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 0.85,
-      ),
-      itemCount: routines.length,
-      itemBuilder: (context, index) {
-        return RoutineCard(
-          routine: routines[index],
-          userId: widget.userId,
-          onTap: () => _showRoutineDetailBottomSheet(routines[index].id),
         );
       },
     );
@@ -415,21 +409,37 @@ class _RoutinesPageState extends State<RoutinesPage> {
 
   Widget _buildPageIndicator(int pageCount) {
     return Container(
-      padding: EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: List.generate(pageCount, (index) {
-          return Container(
-            width: 8,
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: _currentWorkoutTypeIndex == index ? 16 : 8,
             height: 8,
-            margin: EdgeInsets.symmetric(horizontal: 4),
+            margin: const EdgeInsets.symmetric(horizontal: 4),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: _currentWorkoutTypeIndex == index ? Colors.blue : Colors.grey,
+              boxShadow: _currentWorkoutTypeIndex == index
+                  ? [BoxShadow(color: Colors.blue.withOpacity(0.3), blurRadius: 6, offset: Offset(0, 2))]
+                  : [],
             ),
           );
         }),
       ),
+    );
+  }
+
+  void _scrollToChip(int index) {
+    // Her chip'in genişliği yaklaşık 90px (padding ve margin ile birlikte)
+    double chipWidth = 90.0;
+    double offset = (index * chipWidth) - (MediaQuery.of(context).size.width / 2) + (chipWidth / 2);
+    if (offset < 0) offset = 0;
+    _chipScrollController.animateTo(
+      offset,
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeInOutCubic,
     );
   }
 }

@@ -106,9 +106,11 @@ class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStat
             }
           },
           child: Container(
-            height: 400,
-            width: 400,
             margin: EdgeInsets.all(AppTheme.paddingSmall),
+            constraints: const BoxConstraints(
+              minHeight: 140,
+              maxWidth: double.infinity,
+            ),
             decoration: AppTheme.decoration(
               gradient: AppTheme.getPartGradient(
                 difficulty: widget.routine.difficulty,
@@ -139,7 +141,7 @@ class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStat
                     borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
                   ),
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    mainAxisAlignment: MainAxisAlignment.start,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildHeader(),
@@ -224,7 +226,7 @@ class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStat
 
   Widget _buildHeader() {
     return Container(
-      padding: EdgeInsets.all(AppTheme.paddingSmall),
+      padding: EdgeInsets.symmetric(horizontal: AppTheme.paddingMedium, vertical: AppTheme.paddingSmall),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -243,6 +245,8 @@ class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStat
               widget.routine.name,
               style: AppTheme.headingSmall.copyWith(
                 color: AppTheme.textPrimary,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -258,7 +262,7 @@ class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStat
     return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: AppTheme.paddingMedium,
-        vertical: AppTheme.paddingMedium,
+        vertical: AppTheme.paddingSmall,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -276,13 +280,15 @@ class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStat
                   _getWorkoutTypeByName(widget.routine.workoutTypeId),
                   style: AppTheme.bodySmall.copyWith(
                     color: AppTheme.textSecondary,
+                    fontWeight: FontWeight.w500,
                   ),
                   overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ),
             ],
           ),
-          SizedBox(height: AppTheme.paddingMedium),
+          SizedBox(height: AppTheme.paddingSmall),
           Row(
             children: [
               Icon(Icons.speed,
@@ -291,11 +297,8 @@ class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStat
               ),
               SizedBox(width: AppTheme.paddingSmall),
               Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: AppTheme.buildDifficultyStars(widget.routine.difficulty),
-                  ),
+                child: Row(
+                  children: AppTheme.buildDifficultyStars(widget.routine.difficulty),
                 ),
               ),
             ],
@@ -322,19 +325,18 @@ class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStat
         horizontal: AppTheme.paddingMedium,
         vertical: AppTheme.paddingSmall,
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.play_circle_outline,
-              color: AppTheme.primaryRed,
-              size: AppTheme.difficultyStarBaseSize,
-            ),
-            SizedBox(width: AppTheme.paddingSmall),
-            Text(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.max,
+        children: [
+          Icon(
+            Icons.play_circle_outline,
+            color: AppTheme.primaryRed,
+            size: AppTheme.difficultyStarBaseSize,
+          ),
+          SizedBox(width: AppTheme.paddingSmall),
+          Expanded(
+            child: Text(
               'Başlamak için hazır',
               style: AppTheme.bodySmall.copyWith(
                 fontWeight: FontWeight.w500,
@@ -342,8 +344,8 @@ class _RoutineCardState extends State<RoutineCard> with SingleTickerProviderStat
               overflow: TextOverflow.ellipsis,
               maxLines: 1,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

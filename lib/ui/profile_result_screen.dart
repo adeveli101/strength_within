@@ -535,30 +535,30 @@ class _ProfileResultBottomSheetState extends State<ProfileResultBottomSheet>
           }
         }
         return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
             if (title.isNotEmpty)
-              Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppTheme.paddingSmall,
-                  vertical: AppTheme.paddingSmall,
-                ),
-                child: Text(
-                  title,
-                  style: isWideScreen ? AppTheme.headingMedium : AppTheme.headingSmall,
-                ),
-              ),
+          Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: AppTheme.paddingSmall,
+              vertical: AppTheme.paddingSmall,
+            ),
+            child: Text(
+              title,
+              style: isWideScreen ? AppTheme.headingMedium : AppTheme.headingSmall,
+            ),
+          ),
             if (highScoreRoutines.isNotEmpty)
-              SizedBox(
-                height: isWideScreen ? 320 : 270,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  padding: EdgeInsets.symmetric(horizontal: AppTheme.paddingSmall),
+          SizedBox(
+            height: isWideScreen ? 320 : 270,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              padding: EdgeInsets.symmetric(horizontal: AppTheme.paddingSmall),
                   itemCount: highScoreRoutines.length,
-                  itemBuilder: (context, index) {
-                    return SizedBox(
-                      width: isWideScreen ? 300 : 250,
+              itemBuilder: (context, index) {
+                return SizedBox(
+                  width: isWideScreen ? 300 : 250,
                       child: _buildRoutineCard(context, highScoreRoutines[index], suitabilityScore: highScores[index]),
                     );
                   },
@@ -591,11 +591,11 @@ class _ProfileResultBottomSheetState extends State<ProfileResultBottomSheet>
                     return SizedBox(
                       width: isWideScreen ? 300 : 250,
                       child: _buildRoutineCard(context, routine), // No suitabilityScore chip
-                    );
-                  },
-                ),
-              ),
-            ],
+                );
+              },
+            ),
+          ),
+        ],
           ],
         );
       },
@@ -607,51 +607,51 @@ class _ProfileResultBottomSheetState extends State<ProfileResultBottomSheet>
     return Stack(
       children: [
         Card(
-          margin: EdgeInsets.all(AppTheme.paddingSmall),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
+      margin: EdgeInsets.all(AppTheme.paddingSmall),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
+      ),
+      child: Container(
+        decoration: AppTheme.decoration(
+          gradient: AppTheme.getPartGradient(
+            difficulty: routine.difficulty,
+            secondaryColor: AppTheme.primaryRed,
           ),
-          child: Container(
-            decoration: AppTheme.decoration(
-              gradient: AppTheme.getPartGradient(
-                difficulty: routine.difficulty,
-                secondaryColor: AppTheme.primaryRed,
-              ),
-              borderRadius: AppTheme.getBorderRadius(
-                  all: AppTheme.borderRadiusMedium
-              ),
-              shadows: [
-                BoxShadow(
-                  color: AppTheme.getDifficultyColor(routine.difficulty)
-                      .withOpacity(AppTheme.shadowOpacity),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
+          borderRadius: AppTheme.getBorderRadius(
+              all: AppTheme.borderRadiusMedium
+          ),
+          shadows: [
+            BoxShadow(
+              color: AppTheme.getDifficultyColor(routine.difficulty)
+                  .withOpacity(AppTheme.shadowOpacity),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppTheme.cardBackground.withOpacity(0.9),
+                AppTheme.cardBackground.withOpacity(0.7),
               ],
             ),
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    AppTheme.cardBackground.withOpacity(0.9),
-                    AppTheme.cardBackground.withOpacity(0.7),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
-              ),
-              child: BlocProvider.value(
-                value: context.read<RoutinesBloc>(),
-                child: RoutineCard(
-                  key: ValueKey(routine.id),
-                  routine: routine,
-                  userId: widget.userId,
-                  onTap: () => _showRoutineDetailBottomSheet(context, routine.id),
-                ),
-              ),
+            borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
+          ),
+          child: BlocProvider.value(
+            value: context.read<RoutinesBloc>(),
+            child: RoutineCard(
+              key: ValueKey(routine.id),
+              routine: routine,
+              userId: widget.userId,
+              onTap: () => _showRoutineDetailBottomSheet(context, routine.id),
             ),
           ),
+        ),
+      ),
         ),
         if (suitabilityScore != null)
           Positioned(

@@ -23,6 +23,7 @@ class RoutineRepository {
 
   RoutineRepository(this._sqlProvider, this._firebaseProvider);
 
+  SQLProvider get sqlProvider => _sqlProvider;
 
   void _initializeBlocs() {
     // Providers
@@ -36,12 +37,62 @@ class RoutineRepository {
     ));
   }
 
-  final _cache = <int, Routines>{};
+  final _routineCache = <int, Routines>{}; // Yerel rutinler
+  final _userRoutineCache = <int, FirebaseRoutines>{}; // Kullanıcıya özel rutinler
+
+  /// Tüm cache'i güncelle (hem SQL hem Firebase)
+  Future<void> refreshRoutineCache(String userId) async {
+    final routines = await _sqlProvider.getAllRoutines();
+    _routineCache
+      ..clear()
+      ..addAll({for (var r in routines) r.id: r});
+
+    final userRoutines = await _firebaseProvider.getUserRoutines(userId);
+    _userRoutineCache
+      ..clear()
+      ..addAll({for (var ur in userRoutines) int.tryParse(ur.id) ?? -1: ur});
+  }
+
+  /// Cache'i temizle
+  void clearCache() {
+    _routineCache.clear();
+    _userRoutineCache.clear();
+  }
+
+  /// Birleştirilmiş rutin listesi (cache'den)
+  List<Routines> getCombinedRoutines() {
+    return _routineCache.values.map((routine) {
+      final userRoutine = _userRoutineCache[routine.id];
+      return routine.copyWith(
+        isFavorite: userRoutine?.isFavorite ?? false,
+        isCustom: userRoutine?.isCustom ?? false,
+        userProgress: userRoutine?.userProgress,
+        lastUsedDate: userRoutine?.lastUsedDate,
+        userRecommended: userRoutine?.userRecommended ?? false,
+      );
+    }).toList();
+  }
+
+  /// Favori güncelle (hem Firebase hem cache)
+  Future<void> updateFavorite(String userId, int routineId, bool isFavorite) async {
+    await _firebaseProvider.toggleFavorite(userId, routineId.toString(), 'routine', isFavorite);
+    final old = _userRoutineCache[routineId];
+    _userRoutineCache[routineId] = (old ?? FirebaseRoutines.fromRoutine(_routineCache[routineId]!))
+        .copyWith(isFavorite: isFavorite);
+  }
+
+  /// İlerleme güncelle (hem Firebase hem cache)
+  Future<void> updateProgress(String userId, int routineId, int progress) async {
+    await _firebaseProvider.updateUserProgress(userId, routineId.toString(), 'routine', progress);
+    final old = _userRoutineCache[routineId];
+    _userRoutineCache[routineId] = (old ?? FirebaseRoutines.fromRoutine(_routineCache[routineId]!))
+        .copyWith(userProgress: progress);
+  }
 
   Future<List<Routines>> getRoutines() async {
-    if (_cache.isNotEmpty) return _cache.values.toList();
+    if (_routineCache.isNotEmpty) return _routineCache.values.toList();
     final routines = await _sqlProvider.getAllRoutines();
-    _cache.addAll({for (var r in routines) r.id: r});
+    _routineCache.addAll({for (var r in routines) r.id: r});
     return routines;
   }
 
@@ -268,52 +319,11 @@ class RoutineRepository {
   }
 
   Future<List<Routines>> getRoutinesWithUserData(String userId) async {
-    try {
-      List<Routines> localRoutines = await getAllRoutines();
-      _logger.info("Yerel rutinler yüklendi: ${localRoutines.length}");
-
-      List<FirebaseRoutines> userRoutines = await getUserRoutines(userId);
-      _logger.info("Kullanıcı rutinleri yüklendi: ${userRoutines.length}");
-
-      List<Routines> combinedRoutines = await Future.wait(
-        localRoutines.map((localRoutine) async {
-          try {
-            // Hedef vücut bölümlerini al
-            final targetedBodyParts = await _sqlProvider.getRoutineTargetedBodyParts(localRoutine.id);
-
-            FirebaseRoutines? matchingUserRoutine = userRoutines.firstWhere(
-                  (userRoutine) => userRoutine.id == localRoutine.id.toString(),
-              orElse: () => FirebaseRoutines(
-                id: localRoutine.id.toString(),
-                name: localRoutine.name,
-                description: localRoutine.description,
-                targetedBodyPartIds: targetedBodyParts.map((t) => t.bodyPartId).toList(),
-                workoutTypeId: localRoutine.workoutTypeId,
-                exerciseIds: [],
-              ),
-            );
-
-            return localRoutine.copyWith(
-              isFavorite: matchingUserRoutine.isFavorite,
-              isCustom: matchingUserRoutine.isCustom,
-              userProgress: matchingUserRoutine.userProgress,
-              lastUsedDate: matchingUserRoutine.lastUsedDate,
-              userRecommended: matchingUserRoutine.userRecommended ?? false,
-              targetedBodyParts: targetedBodyParts,
-            );
-          } catch (e, stackTrace) {
-            _logger.warning('Rutin birleştirme hatası: ${localRoutine.id}', e, stackTrace);
-            return localRoutine;
-          }
-        }),
-      );
-
-      _logger.info("Toplam birleştirilmiş rutin: ${combinedRoutines.length}");
-      return combinedRoutines;
-    } catch (e, stackTrace) {
-      _logger.severe('Error in getRoutinesWithUserData', e, stackTrace);
-      rethrow;
+    // Eğer cache boşsa veya güncel değilse, cache'i tazele
+    if (_routineCache.isEmpty || _userRoutineCache.isEmpty) {
+      await refreshRoutineCache(userId);
     }
+    return getCombinedRoutines();
   }
 
   Future<Routines?> getRoutineWithUserData(String userId, int routineId) async {
@@ -501,5 +511,29 @@ class RoutineRepository {
 
   Future<RoutineFrequency?> getRoutineFrequency(int routineId) async {
     return await _sqlProvider.getRoutineFrequency(routineId);
+  }
+
+  /// Bir WorkoutGoal için, ilişkili tüm rutinleri uyumluluk yüzdesine göre getirir.
+  Future<List<Routines>> getRoutinesByGoalWithCompatibility(int goalId, {int minRecommendedPercentage = 0}) async {
+    // 1. O goal ile ilişkili WorkoutTypeGoals kayıtlarını al
+    final typeGoals = await _sqlProvider.getWorkoutTypeGoalPercentages(goalId);
+    final compatibleTypeIds = typeGoals
+        .map((tg) => tg['id'] as int)
+        .toList();
+
+    // 2. O goal ve bu workoutTypeId'ler için rutinleri getir
+    final allRoutines = await _sqlProvider.getAllRoutines();
+    final filtered = allRoutines.where((r) =>
+      r.goalId == goalId && compatibleTypeIds.contains(r.workoutTypeId)
+    ).toList();
+
+    // 3. recommendedPercentage'a göre sıralama
+    filtered.sort((a, b) {
+      final aPercent = typeGoals.firstWhere((tg) => tg['id'] == a.workoutTypeId, orElse: () => {'recommendedPercentage': 0})['recommendedPercentage'] ?? 0;
+      final bPercent = typeGoals.firstWhere((tg) => tg['id'] == b.workoutTypeId, orElse: () => {'recommendedPercentage': 0})['recommendedPercentage'] ?? 0;
+      return bPercent.compareTo(aPercent);
+    });
+
+    return filtered;
   }
 }

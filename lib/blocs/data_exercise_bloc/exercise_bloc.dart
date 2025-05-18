@@ -1,6 +1,8 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../models/sql_models/BodyPart.dart';
 import '../../models/sql_models/PartExercises.dart';
 import '../../models/sql_models/exercises.dart';
+import '../../models/sql_models/workoutGoals.dart';
 import '../data_provider/firebase_provider.dart';
 import '../data_provider/sql_provider.dart';
 import 'package:flutter/cupertino.dart';
@@ -48,6 +50,10 @@ class UpdateExerciseOrder extends ExerciseEvent {
   UpdateExerciseOrder(this.partId, this.newOrder);
 }
 
+class FetchBodyParts extends ExerciseEvent {}
+
+class FetchWorkoutGoals extends ExerciseEvent {}
+
 // State Sınıfları
 abstract class ExerciseState {}
 
@@ -74,6 +80,16 @@ class ExerciseError extends ExerciseState {
   ExerciseError(this.message);
 }
 
+class BodyPartsLoaded extends ExerciseState {
+  final List<BodyParts> bodyParts;
+  BodyPartsLoaded(this.bodyParts);
+}
+
+class WorkoutGoalsLoaded extends ExerciseState {
+  final List<WorkoutGoals> goals;
+  WorkoutGoalsLoaded(this.goals);
+}
+
 // Bloc Sınıfı
 class ExerciseBloc extends Bloc<ExerciseEvent, ExerciseState> {
   final ExerciseRepository exerciseRepository;
@@ -91,10 +107,9 @@ class ExerciseBloc extends Bloc<ExerciseEvent, ExerciseState> {
     on<FetchExercisesByWorkoutType>(_onFetchExercisesByWorkoutType);
     on<UpdateExerciseCompletion>(_onUpdateExerciseCompletion);
     on<UpdateExerciseOrder>(_onUpdateExerciseOrder);
-
+    on<FetchBodyParts>(_onFetchBodyParts);
+    on<FetchWorkoutGoals>(_onFetchWorkoutGoals);
   }
-
-
 
   Future<void> _onFetchExercises(
       FetchExercises event,
@@ -183,5 +198,29 @@ class ExerciseBloc extends Bloc<ExerciseEvent, ExerciseState> {
     }
   }
 
+  Future<void> _onFetchBodyParts(
+      FetchBodyParts event,
+      Emitter<ExerciseState> emit,
+      ) async {
+    emit(ExerciseLoading());
+    try {
+      final bodyParts = await exerciseRepository.getAllBodyParts();
+      emit(BodyPartsLoaded(bodyParts));
+    } catch (e) {
+      emit(ExerciseError("Vücut bölgeleri yüklenirken hata oluştu: $e"));
+    }
+  }
 
+  Future<void> _onFetchWorkoutGoals(
+      FetchWorkoutGoals event,
+      Emitter<ExerciseState> emit,
+      ) async {
+    emit(ExerciseLoading());
+    try {
+      final goals = await exerciseRepository.getAllWorkoutGoals();
+      emit(WorkoutGoalsLoaded(goals));
+    } catch (e) {
+      emit(ExerciseError("Antrenman hedefleri yüklenirken hata oluştu: $e"));
+    }
+  }
 }

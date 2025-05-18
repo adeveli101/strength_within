@@ -12,6 +12,9 @@ import '../../../models/sql_models/Parts.dart';
 import '../../../models/sql_models/exercises.dart';
 import '../../components/program_merger.dart';
 import '../../part_ui/part_card.dart';
+import 'package:strength_within/blocs/data_exercise_bloc/exercise_bloc.dart';
+import 'package:strength_within/models/sql_models/BodyPart.dart';
+import 'package:strength_within/models/sql_models/workoutGoals.dart';
 
 enum TrainingFrequency {
   beginner(2, 3, 'Başlangıç', 'Haftada 2-3 gün antrenman'),
@@ -34,139 +37,335 @@ enum TrainingFrequency {
 
 class ProgramMergerPage extends StatefulWidget {
   final String userId;
-  const ProgramMergerPage({super.key, required this.userId});
+  const ProgramMergerPage({required this.userId, super.key});
 
   @override
   State<ProgramMergerPage> createState() => _ProgramMergerPageState();
 }
 
 class _ProgramMergerPageState extends State<ProgramMergerPage> {
-  static const int maxSelectedProgramCount = 4;
-  final ScrollController _scrollController = ScrollController();
-
-  // State değişkenleri
   int _currentStep = 0;
-  final Set<int> _selectedPartIds = {};
-  final Set<int> _selectedDays = {};
-  TrainingFrequency? _selectedFrequency;
-  final MergeType _selectedMergeType = MergeType.sequential;
-  bool _isLoading = false;
 
-  // Repository ve Service
-  late final PartRepository _partRepository;
-  late final PartsBloc _partsBloc;
-  late final ProgramMergerService _mergerService;
+  // Kullanıcı seçimleri burada tutulacak
+  String? selectedGoal;
+  List<int> selectedBodyParts = [];
+  Map<int, List<int>> selectedExercises = {}; // bodyPartId -> egzersizId listesi
+  Map<int, Map<String, dynamic>> exerciseDetails = {}; // egzersizId -> detaylar
+  Map<int, List<int>> dayToExercises = {}; // gün -> egzersizId listesi
 
   @override
   void initState() {
     super.initState();
-    _partRepository = context.read<PartRepository>();
-    _partsBloc = context.read<PartsBloc>();
-    _mergerService = ProgramMergerService(
-      _partRepository,
-      context.read<ScheduleRepository>(),
-    );
-    _loadInitialData();
-    debugAllPartsAndBodyParts(); // DEBUG: Tüm veritabanı ilişkilerini yazdır
-  }
-
-
-  void _initializeServices() {
-    _partRepository = context.read<PartRepository>();
-    _partsBloc = context.read<PartsBloc>();
-    _mergerService = ProgramMergerService(
-      _partRepository,
-      context.read<ScheduleRepository>(),
-    );
-  }
-
-  void _loadInitialData() {
-    _partsBloc.add(const FetchPartsGroupedByBodyPart());
-  }
-
-  void debugAllPartsAndBodyParts() async {
-    final allParts = await _partRepository.getAllParts();
-    debugPrint('DEBUG: Tüm Parts:');
-    for (final part in allParts) {
-      debugPrint('Part: \\${part.id} - \\${part.name} - difficulty: \\${part.difficulty}');
-      final targets = await _partRepository.getPartTargetedBodyParts(part.id);
-      debugPrint('  Targets: ${targets.map((t) => 'bodyPartId:\\${t.bodyPartId}, isPrimary:\\${t.isPrimary}').join(', ')}');
-    }
-    final mainBodyParts = await _partRepository.getMainBodyParts();
-    debugPrint('DEBUG: Ana BodyParts:');
-    for (final bp in mainBodyParts) {
-      debugPrint('BodyPart: \\${bp.id} - \\${bp.name}');
-    }
+    // Event'leri sadece bir kez tetikle
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final bloc = context.read<ExerciseBloc>();
+      bloc.add(FetchWorkoutGoals());
+      bloc.add(FetchBodyParts());
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Program Oluştur'),
-        backgroundColor: Colors.grey[900],
-      ),
+      appBar: AppBar(title: Text('Rutin Oluştur')),
       body: Stepper(
         currentStep: _currentStep,
-        onStepContinue: () {
-          if (_currentStep < 3) {
-            setState(() => _currentStep++);
-          }
-        },
-        onStepCancel: () {
-          if (_currentStep > 0) {
-            setState(() => _currentStep--);
-          }
-        },
+        onStepContinue: _onContinue,
+        onStepCancel: _onCancel,
         steps: [
           Step(
-            title: const Text('Seviye Seçimi'),
-            content: _buildLevelSelectionStep(),
-            isActive: _currentStep >= 0,
+            title: Text('Hedefini Seç'),
+            content: _buildGoalStep(),
+            isActive: _currentStep == 0,
           ),
           Step(
-            title: const Text('Gün Seçimi'),
-            content: _buildDaySelectionStep(),
-            isActive: _currentStep >= 1,
+            title: Text('Bölge Seç'),
+            content: _buildBodyPartStep(),
+            isActive: _currentStep == 1,
           ),
           Step(
-            title: const Text('Program Seçimi'),
-            content: _buildProgramSelectionStep(),
-            isActive: _currentStep >= 2,
+            title: Text('Egzersiz Seç'),
+            content: _buildExerciseStep(),
+            isActive: _currentStep == 2,
           ),
           Step(
-            title: const Text('Program Özeti'),
-            content: _buildProgramSummaryStep(),
-            isActive: _currentStep >= 3,
+            title: Text('Detayları Gir'),
+            content: _buildExerciseDetailStep(),
+            isActive: _currentStep == 3,
+          ),
+          Step(
+            title: Text('Günlere Dağıt'),
+            content: _buildDayAssignmentStep(),
+            isActive: _currentStep == 4,
+          ),
+          Step(
+            title: Text('Özet'),
+            content: _buildSummaryStep(),
+            isActive: _currentStep == 5,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildLevelSelectionStep() {
+  void _onContinue() {
+    if (_currentStep < 5) setState(() => _currentStep++);
+    // Son adımda kaydetme işlemi yapılabilir
+  }
+
+  void _onCancel() {
+    if (_currentStep > 0) setState(() => _currentStep--);
+  }
+
+  Widget _buildGoalStep() {
+    // Hedef seçimi UI (gerçek veri)
+    return BlocBuilder<ExerciseBloc, ExerciseState>(
+      builder: (context, state) {
+        if (state is ExerciseLoading) {
+          return Center(child: CircularProgressIndicator());
+        } else if (state is WorkoutGoalsLoaded) {
+          final goals = state.goals;
+          return Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: goals.map((goal) {
+              final isSelected = selectedGoal == goal.id.toString();
+              return ChoiceChip(
+                label: Text(goal.name),
+                selected: isSelected,
+                selectedColor: Colors.deepOrangeAccent,
+                backgroundColor: Colors.grey[850],
+                labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.white70),
+                onSelected: (selected) {
+                  setState(() {
+                    selectedGoal = selected ? goal.id.toString() : null;
+                  });
+                },
+              );
+            }).toList(),
+          );
+        } else if (state is ExerciseError) {
+          return Text('Hedefler yüklenemedi: ${state.message}', style: TextStyle(color: Colors.red));
+        } else {
+          return Center(child: CircularProgressIndicator());
+        }
+      },
+    );
+  }
+
+  Widget _buildBodyPartStep() {
+    // Vücut bölgesi seçimi UI (gerçek veri)
+    return BlocBuilder<ExerciseBloc, ExerciseState>(
+      builder: (context, state) {
+        if (state is ExerciseLoading) {
+          return Center(child: CircularProgressIndicator());
+        } else if (state is BodyPartsLoaded) {
+          final bodyParts = state.bodyParts;
+          return Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: bodyParts.map((bp) {
+              final isSelected = selectedBodyParts.contains(bp.id);
+              return ChoiceChip(
+                label: Text(bp.name),
+                selected: isSelected,
+                selectedColor: Colors.deepOrangeAccent,
+                backgroundColor: Colors.grey[850],
+                labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.white70),
+                onSelected: (selected) {
+                  setState(() {
+                    if (selected) {
+                      selectedBodyParts.add(bp.id);
+                    } else {
+                      selectedBodyParts.remove(bp.id);
+                    }
+                  });
+                },
+              );
+            }).toList(),
+          );
+        } else if (state is ExerciseError) {
+          return Text('Vücut bölgeleri yüklenemedi: ${state.message}', style: TextStyle(color: Colors.red));
+        } else {
+          return Center(child: CircularProgressIndicator());
+        }
+      },
+    );
+  }
+
+  Widget _buildExerciseStep() {
+    // Egzersiz seçimi UI
+    // Örnek egzersiz ve hedef body part verisi
+    final Map<int, List<Map<String, dynamic>>> exercisesByBodyPart = {
+      1: [ // Göğüs
+        {'id': 101, 'name': 'Bench Press', 'targets': [{'name': 'Göğüs', 'percentage': 80}, {'name': 'Triceps', 'percentage': 20}]},
+        {'id': 102, 'name': 'Incline Dumbbell Press', 'targets': [{'name': 'Üst Göğüs', 'percentage': 70}, {'name': 'Ön Omuz', 'percentage': 30}]},
+        {'id': 103, 'name': 'Chest Fly', 'targets': [{'name': 'Göğüs', 'percentage': 90}]},
+      ],
+      2: [ // Sırt
+        {'id': 201, 'name': 'Barbell Row', 'targets': [{'name': 'Sırt', 'percentage': 70}, {'name': 'Arka Omuz', 'percentage': 30}]},
+        {'id': 202, 'name': 'Lat Pulldown', 'targets': [{'name': 'Sırt', 'percentage': 80}, {'name': 'Biceps', 'percentage': 20}]},
+        {'id': 203, 'name': 'Face Pull', 'targets': [{'name': 'Arka Omuz', 'percentage': 60}, {'name': 'Sırt', 'percentage': 40}]},
+      ],
+      3: [ // Bacak
+        {'id': 301, 'name': 'Squat', 'targets': [{'name': 'Bacak', 'percentage': 80}, {'name': 'Kalça', 'percentage': 20}]},
+        {'id': 302, 'name': 'Leg Press', 'targets': [{'name': 'Bacak', 'percentage': 90}]},
+        {'id': 303, 'name': 'Lunge', 'targets': [{'name': 'Bacak', 'percentage': 70}, {'name': 'Kalça', 'percentage': 30}]},
+      ],
+      4: [ // Omuz
+        {'id': 401, 'name': 'Shoulder Press', 'targets': [{'name': 'Omuz', 'percentage': 80}, {'name': 'Triceps', 'percentage': 20}]},
+        {'id': 402, 'name': 'Lateral Raise', 'targets': [{'name': 'Yan Omuz', 'percentage': 90}]},
+        {'id': 403, 'name': 'Front Raise', 'targets': [{'name': 'Ön Omuz', 'percentage': 90}]},
+      ],
+      5: [ // Kol
+        {'id': 501, 'name': 'Biceps Curl', 'targets': [{'name': 'Biceps', 'percentage': 100}]},
+        {'id': 502, 'name': 'Triceps Extension', 'targets': [{'name': 'Triceps', 'percentage': 100}]},
+        {'id': 503, 'name': 'Hammer Curl', 'targets': [{'name': 'Biceps', 'percentage': 80}, {'name': 'Ön Kol', 'percentage': 20}]},
+      ],
+      6: [ // Karın
+        {'id': 601, 'name': 'Crunch', 'targets': [{'name': 'Karın', 'percentage': 100}]},
+        {'id': 602, 'name': 'Plank', 'targets': [{'name': 'Karın', 'percentage': 80}, {'name': 'Sırt', 'percentage': 20}]},
+        {'id': 603, 'name': 'Leg Raise', 'targets': [{'name': 'Alt Karın', 'percentage': 100}]},
+      ],
+    };
+
+    if (selectedBodyParts.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Text('Lütfen önce çalışmak istediğiniz vücut bölgelerini seçin.', style: TextStyle(color: Colors.orange)),
+      );
+    }
+
     return Column(
-      children: TrainingFrequency.values.map((frequency) {
-        final isSelected = _selectedFrequency == frequency;
-        return Card(
-          color: isSelected ? Colors.red.shade900 : Colors.grey[900],
-          margin: const EdgeInsets.symmetric(vertical: 8),
-          child: ListTile(
-            onTap: () => _onFrequencyChanged(frequency),
-            leading: Icon(
-              isSelected ? Icons.check_circle : Icons.circle_outlined,
-              color: isSelected ? Colors.white : Colors.grey,
-            ),
-            title: Text(
-              frequency.title,
-              style: TextStyle(
-                color: isSelected ? Colors.white : Colors.white70,
-                fontWeight: FontWeight.bold,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ...selectedBodyParts.map((bodyPartId) {
+          final exercises = exercisesByBodyPart[bodyPartId] ?? [];
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 16, bottom: 8),
+                child: Text(
+                  _getBodyPartName(bodyPartId),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
+                ),
               ),
-            ),
-            subtitle: Text(
-              frequency.description,
-              style: TextStyle(color: Colors.grey[400]),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: exercises.map((ex) {
+                  final selectedList = selectedExercises[bodyPartId] ?? [];
+                  final isSelected = selectedList.contains(ex['id']);
+                  return FilterChip(
+                    label: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(ex['name'].toString(), style: TextStyle(fontWeight: FontWeight.bold)),
+                        if (ex['targets'] != null)
+                          Wrap(
+                            spacing: 4,
+                            children: (ex['targets'] as List).map((t) => Text(
+                              '${t['name']} (%${t['percentage']})',
+                              style: TextStyle(fontSize: 11, color: Colors.white70),
+                            )).toList(),
+                          ),
+                      ],
+                    ),
+                    selected: isSelected,
+                    selectedColor: Colors.deepOrangeAccent,
+                    backgroundColor: Colors.grey[850],
+                    labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.white70),
+                    onSelected: (selected) {
+                      setState(() {
+                        final list = selectedExercises[bodyPartId] ?? [];
+                        if (selected) {
+                          if (!list.contains(ex['id'])) list.add(ex['id'] as int);
+                        } else {
+                          list.remove(ex['id'] as int);
+                        }
+                        selectedExercises[bodyPartId] = list;
+                      });
+                    },
+                  );
+                }).toList(),
+              ),
+            ],
+          );
+        }).toList(),
+      ],
+    );
+  }
+
+  String _getBodyPartName(int id) {
+    switch (id) {
+      case 1:
+        return 'Göğüs';
+      case 2:
+        return 'Sırt';
+      case 3:
+        return 'Bacak';
+      case 4:
+        return 'Omuz';
+      case 5:
+        return 'Kol';
+      case 6:
+        return 'Karın';
+      default:
+        return '';
+    }
+  }
+
+  Widget _buildExerciseDetailStep() {
+    // Set/rep gibi detaylar (basit)
+    // Günlere atanmış egzersizlerin benzersiz listesini çıkar
+    final assignedExerciseIds = <int>{};
+    dayToExercises.forEach((_, exList) => assignedExerciseIds.addAll(exList));
+    if (assignedExerciseIds.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Text('Lütfen önce egzersizleri günlere atayın.', style: TextStyle(color: Colors.orange)),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: assignedExerciseIds.map((exId) {
+        final details = exerciseDetails[exId] ?? {'sets': 3, 'reps': 10};
+        return Card(
+          color: Colors.grey[900],
+          margin: const EdgeInsets.symmetric(vertical: 6),
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Row(
+              children: [
+                Expanded(child: Text(_getExerciseNameById(exId), style: TextStyle(color: Colors.white))),
+                SizedBox(width: 12),
+                _NumberInputField(
+                  label: 'Set',
+                  initialValue: details['sets'],
+                  onChanged: (val) {
+                    setState(() {
+                      exerciseDetails[exId] = {
+                        ...details,
+                        'sets': val,
+                      };
+                    });
+                  },
+                ),
+                SizedBox(width: 12),
+                _NumberInputField(
+                  label: 'Tekrar',
+                  initialValue: details['reps'],
+                  onChanged: (val) {
+                    setState(() {
+                      exerciseDetails[exId] = {
+                        ...details,
+                        'reps': val,
+                      };
+                    });
+                  },
+                ),
+              ],
             ),
           ),
         );
@@ -174,616 +373,98 @@ class _ProgramMergerPageState extends State<ProgramMergerPage> {
     );
   }
 
-  Widget _buildDaySelectionStep() {
-    if (_selectedFrequency == null) {
-      return const Text(
-        'Lütfen önce seviye seçimi yapın',
-        style: TextStyle(color: Colors.red),
-      );
+  Widget _buildDayAssignmentStep() {
+    // Egzersizleri günlere dağıtma UI
+    // Haftada kaç gün çalışmak istiyorsun?
+    final weekDays = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+    int totalDays = dayToExercises.keys.isNotEmpty ? dayToExercises.keys.length : 3;
+
+    // Eğer hiç gün atanmadıysa, varsayılan olarak 3 gün göster
+    if (dayToExercises.isEmpty) {
+      for (int i = 0; i < totalDays; i++) {
+        dayToExercises[i] = [];
+      }
     }
 
-    final recommendedDays = List.generate(_selectedFrequency!.maxDays - _selectedFrequency!.minDays + 1, (i) => _selectedFrequency!.minDays + i);
-    final recommendedCombos = [
-      [1, 3, 5], // Pzt, Çar, Cum
-      [2, 4, 6], // Sal, Per, Cmt
-      [1, 2, 4, 6], // Pzt, Sal, Per, Cmt
-      [1, 3, 5, 7], // Pzt, Çar, Cum, Paz
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Antrenman Günlerinizi Seçin',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 16),
-        // Önerilen kombinasyonlar
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: recommendedCombos.map((combo) {
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: ActionChip(
-                  label: Text(combo.map(_getDayName).join(', ')),
-                  backgroundColor: Colors.red.shade900.withOpacity(0.7),
-                  labelStyle: const TextStyle(color: Colors.white),
-                  onPressed: () => setState(() {
-                    _selectedDays
-                      ..clear()
-                      ..addAll(combo);
-                  }),
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: List.generate(7, (index) {
-            final day = index + 1;
-            final isSelected = _selectedDays.contains(day);
-            return FilterChip(
-              selected: isSelected,
-              onSelected: (selected) {
-                setState(() {
-                  if (selected) {
-                    _selectedDays.add(day);
-                  } else {
-                    _selectedDays.remove(day);
-                  }
-                });
-              },
-              backgroundColor: Colors.grey[900],
-              selectedColor: Colors.red.shade900,
-              checkmarkColor: Colors.white,
-              label: Text(
-                _getDayName(day),
-                style: const TextStyle(color: Colors.white),
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-                side: BorderSide(
-                  color: isSelected ? Colors.red : Colors.grey[700]!,
-                ),
-              ),
-            );
-          }),
-        ),
-        if (_selectedDays.isNotEmpty) ...[
-          const SizedBox(height: 16),
-          Text(
-            'Seçilen gün sayısı: ${_selectedDays.length} (Önerilen: ${_selectedFrequency!.minDays}-${_selectedFrequency!.maxDays})',
-            style: TextStyle(
-              color: (_selectedDays.length < _selectedFrequency!.minDays || _selectedDays.length > _selectedFrequency!.maxDays)
-                  ? Colors.orange
-                  : Colors.grey,
-            ),
-          ),
-          if (_selectedDays.length < _selectedFrequency!.minDays || _selectedDays.length > _selectedFrequency!.maxDays)
-            const Text(
-              'Seviye için önerilen gün aralığı dışındasınız.',
-              style: TextStyle(color: Colors.orange),
-            ),
-        ],
-      ],
-    );
-  }
-
-  String _getDayName(int day) {
-    switch (day) {
-      case 1:
-        return 'Pzt';
-      case 2:
-        return 'Sal';
-      case 3:
-        return 'Çar';
-      case 4:
-        return 'Per';
-      case 5:
-        return 'Cum';
-      case 6:
-        return 'Cmt';
-      case 7:
-        return 'Paz';
-      default:
-        return '';
-    }
-  }
-
-  Widget _buildProgramSelectionStep() {
-    if (_selectedFrequency == null || _selectedDays.isEmpty) {
-      return const Text(
-        'Lütfen önce seviye ve gün seçimi yapın',
-        style: TextStyle(color: Colors.red),
-      );
-    }
-
-    // DENGELI YENI GRUPLAMA KULLAN
-    return FutureBuilder<Map<int, List<Parts>>>(
-      future: getBalancedGroupedParts(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        final groupedParts = snapshot.data!;
-        debugPrint('DEBUG: DENGELI groupedParts:');
-        groupedParts.forEach((k, v) {
-          debugPrint('BodyPart $k: ${v.map((p) => p.name).toList()}');
-        });
-        final hasAny = groupedParts.values.any((list) => list.isNotEmpty);
-        if (!hasAny) {
-          return const Center(
-            child: Text(
-              'Seçtiğiniz gün ve seviyeye uygun program bulunamadı. (DENGELI)',
-              style: TextStyle(color: Colors.orange),
-            ),
-          );
-        }
-        return _buildProgramList(groupedParts);
-      },
-    );
-  }
-
-  Widget _buildProgramList(Map<int, List<Parts>> groupedParts) {
-    debugPrint('DEBUG: _buildProgramList çağrıldı. groupedParts:');
-    groupedParts.forEach((k, v) {
-      debugPrint('BodyPart $k: ${v.map((p) => p.name).toList()}');
+    // Seçilen tüm egzersizlerin düz listesi
+    final allSelectedExercises = <Map<String, dynamic>>[];
+    selectedExercises.forEach((bodyPartId, exList) {
+      for (var exId in exList) {
+        allSelectedExercises.add({'id': exId, 'bodyPartId': bodyPartId});
+      }
     });
-    // Ana kas grupları için sabit sıralama
-    final mainBodyParts = [1, 2, 3, 4, 5, 6]; // Göğüs, Sırt, Bacak, Omuz, Kol, Karın
 
-    return SingleChildScrollView(
-      controller: _scrollController,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildProgramSelectionHeader(),
-          ...mainBodyParts.map((bodyPartId) {
-            final partsForBodyPart = groupedParts[bodyPartId] ?? [];
-            debugPrint('DEBUG: mainBodyPart $bodyPartId parts: ${partsForBodyPart.map((p) => p.name).toList()}');
-            if (partsForBodyPart.isEmpty) return const SizedBox.shrink();
-
-            return FutureBuilder<List<PartTargetedBodyParts>>(
-              future: _partRepository.getPrimaryTargetedPartsForBodyPart(bodyPartId),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) return const SizedBox.shrink();
-
-                // Zorluk seviyesine göre filtreleme
-                final filteredParts = partsForBodyPart.where((part) {
-                  final bool difficultyMatch = _selectedFrequency != null &&
-                      part.difficulty >= _selectedFrequency!.minDays &&
-                      part.difficulty <= _selectedFrequency!.maxDays;
-                  return difficultyMatch;
-                }).toList();
-                debugPrint('DEBUG: mainBodyPart $bodyPartId filteredParts: ${filteredParts.map((p) => p.name).toList()}');
-
-                if (filteredParts.isEmpty) return const SizedBox.shrink();
-
-                // Zorluk seviyesine göre sıralama
-                filteredParts.sort((a, b) => b.difficulty.compareTo(a.difficulty));
-
-                return _buildBodyPartSection(
-                    bodyPartId,
-                    filteredParts,
-                    snapshot.data!
-                );
-              },
-            );
-          }).toList(),
-        ],
-      ),
-    );
-  }
-
-  List<Widget> _buildBodyPartGroups(Map<int, List<Parts>> groupedParts) {
-    final Set<int> usedPartIds = {};
-
-    return [1, 2, 3, 4, 5, 6].map((bodyPartId) {
-      final parts = groupedParts[bodyPartId] ?? [];
-      if (parts.isEmpty) return const SizedBox.shrink();
-
-      return FutureBuilder<List<PartTargetedBodyParts>>(
-        future: _partRepository.getPrimaryTargetedPartsForBodyPart(bodyPartId),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) return const SizedBox.shrink();
-
-          final primaryTargets = snapshot.data!;
-
-          // Filtreleme işlemi
-          final filteredParts = parts.where((part) {
-            // Daha önce kullanılmış part kontrolü
-            if (usedPartIds.contains(part.id)) return false;
-
-            // Zorluk seviyesi kontrolü
-            final bool difficultyMatch = _selectedFrequency != null &&
-                part.difficulty >= _selectedFrequency!.minDays &&
-                part.difficulty <= _selectedFrequency!.maxDays;
-
-            // Primary hedef kontrolü
-            final bool isPrimaryTarget = primaryTargets.any((target) =>
-            target.partId == part.id &&
-                target.isPrimary &&
-                target.bodyPartId == bodyPartId
-            );
-
-            // Koşullar sağlanıyorsa part'ı işaretle
-            if (difficultyMatch && isPrimaryTarget) {
-              usedPartIds.add(part.id);
-              return true;
-            }
-            return false;
-          }).toList();
-
-          if (filteredParts.isEmpty) return const SizedBox.shrink();
-
-          // Zorluk seviyesine göre sıralama
-          filteredParts.sort((a, b) => b.difficulty.compareTo(a.difficulty));
-
-          return _buildBodyPartSection(
-              bodyPartId,
-              filteredParts,
-              primaryTargets
-          );
-        },
-      );
-    }).toList();
-  }
-
-
-  List<Parts> _filterPartsByFrequency(
-      List<Parts> parts,
-      List<PartTargetedBodyParts> targets
-      ) {
-    if (_selectedFrequency == null) return parts;
-
-    return parts.where((part) {
-      final bool difficultyMatch = part.difficulty >= _selectedFrequency!.minDays &&
-          part.difficulty <= _selectedFrequency!.maxDays;
-
-      final bool hasMatchingTarget = targets.any((target) =>
-      target.partId == part.id && target.isPrimary
-      );
-
-      return difficultyMatch && hasMatchingTarget;
-    }).toList();
-  }
-
-
-  Widget _buildProgramSelectionHeader() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Seçilen Programlar: ${_selectedPartIds
-                .length}/$maxSelectedProgramCount',
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 16,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Seçilen Günler: ${_selectedDays.length} gün',
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 16,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-
-  Widget _buildBodyPartSection(int bodyPartId, List<Parts> filteredParts,
-      List<PartTargetedBodyParts> primaryTargets) {
-    return Card(
-      color: Colors.grey[900],
-      margin: const EdgeInsets.all(8),
-      child: ExpansionTile(
-        initiallyExpanded: _selectedPartIds.any(
-                (id) => filteredParts.any((part) => part.id == id)
-        ),
-        leading: Icon(
-          _getBodyPartIcon(bodyPartId),
-          color: Colors.red[300],
-        ),
-        title: FutureBuilder<String>(
-          future: _partRepository.getBodyPartName(bodyPartId),
-          builder: (context, snapshot) {
-            return Text(
-              snapshot.data ?? 'Yükleniyor...',
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            );
-          },
-        ),
-        children: filteredParts.map((part) {
-          final matchingTargets = primaryTargets.where((t) => t.partId == part.id);
-          if (matchingTargets.isEmpty) return const SizedBox.shrink();
-          final target = matchingTargets.first;
-          return _buildPartCard(part, target);
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildPartCard(Parts part, PartTargetedBodyParts target) {
-    final isSelected = _selectedPartIds.contains(part.id);
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      decoration: BoxDecoration(
-        color: isSelected ? Colors.red.shade900.withOpacity(0.2) : Colors
-            .transparent,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isSelected ? Colors.red : Colors.grey[700]!,
-          width: 1,
-        ),
-      ),
-      child: ListTile(
-        onTap: () => _handlePartSelection(part.id, !isSelected),
-        leading: Icon(
-          isSelected ? Icons.check_circle : Icons.circle_outlined,
-          color: isSelected ? Colors.red : Colors.grey,
-        ),
-        title: Text(
-          part.name,
-          style: TextStyle(
-            color: isSelected ? Colors.white : Colors.white70,
-          ),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildDifficultyRow(part),
-            if (target.targetPercentage < 100)
-              _buildTargetRow(target),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDifficultyRow(Parts part) {
-    return Row(
-      children: [
-        Icon(Icons.fitness_center, size: 16, color: Colors.grey[600]),
-        const SizedBox(width: 4),
-        Text(
-          'Zorluk: ${part.difficulty}/5',
-          style: TextStyle(color: Colors.grey[400]),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTargetRow(PartTargetedBodyParts target) {
-    return Row(
-      children: [
-        Icon(Icons.adjust, size: 16, color: Colors.grey[600]),
-        const SizedBox(width: 4),
-        Text(
-          'Hedef: %${target.targetPercentage}',
-          style: TextStyle(color: Colors.grey[400]),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildProgramSummaryStep() {
-    if (_selectedPartIds.isEmpty) {
-      return const Center(
-        child: Text(
-          'Lütfen önce program seçimi yapın',
-          style: TextStyle(color: Colors.red),
-        ),
-      );
-    }
-
-    return FutureBuilder<Map<String, dynamic>>(
-      future: _loadProgramSummaryData(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        if (!snapshot.hasData) {
-          return const Center(child: Text('Program detayları yüklenemedi'));
-        }
-
-        final data = snapshot.data!;
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildSummaryOverview(data),
-              const SizedBox(height: 24),
-              _buildDailyProgramList(data),
-              const SizedBox(height: 32),
-              _buildCreateProgramButton(),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildFrequencyInfo() {
-    return Card(
-      color: Colors.grey[900],
-      child: ListTile(
-        leading: Icon(Icons.fitness_center, color: Colors.red[300]),
-        title: Text(
-          _selectedFrequency?.title ?? '',
-          style: const TextStyle(color: Colors.white),
-        ),
-        subtitle: Text(
-          _selectedFrequency?.description ?? '',
-          style: TextStyle(color: Colors.grey[400]),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSummaryOverview(Map<String, dynamic> data) {
-    final parts = (data['parts'] as List).cast<Parts>();
-
-    return Card(
-      color: Colors.grey[900],
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildSummaryHeader(parts),
-            const Divider(color: Colors.grey),
-            _buildTargetMuscleGroups(data),
-            const Divider(color: Colors.grey),
-            _buildFrequencyInfo(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSummaryHeader(List<Parts> parts) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Program Özeti',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 8),
-
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        Text('Haftada kaç gün çalışmak istiyorsun?', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+        SizedBox(height: 10),
+        Row(
           children: [
-            Text(
-              'Seçilen Program Sayısı: ${parts.length}',
-              style: TextStyle(color: Colors.grey[400]),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Text(
-                  'Ortalama Zorluk: ',
-                  style: TextStyle(color: Colors.grey[400]),
+            for (int i = 2; i <= 6; i++)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                child: ChoiceChip(
+                  label: Text('$i gün'),
+                  selected: totalDays == i,
+                  selectedColor: Colors.deepOrangeAccent,
+                  backgroundColor: Colors.grey[850],
+                  labelStyle: TextStyle(color: totalDays == i ? Colors.white : Colors.white70),
+                  onSelected: (selected) {
+                    setState(() {
+                      totalDays = i;
+                      // Gün sayısı değişince dayToExercises güncellenir
+                      final newMap = <int, List<int>>{};
+                      for (int d = 0; d < totalDays; d++) {
+                        newMap[d] = dayToExercises[d] ?? [];
+                      }
+                      dayToExercises = newMap;
+                    });
+                  },
                 ),
-                _buildAverageDifficultyDisplay(parts),
-              ],
-            ),
+              ),
           ],
-        )
-
-      ],
-    );
-  }
-
-  Widget _buildCreateProgramButton() {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: _isLoading ? null : _handleCreateProgram,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.white54,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
         ),
-        child: _isLoading
-            ? const CircularProgressIndicator(color: Colors.white)
-            : const Text(
-          'Programı Oluştur',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-      ),
-    );
-  }
-
-  Future<Map<String, dynamic>> _loadProgramSummaryData() async {
-    try {
-      final selectedParts = await _loadSelectedParts();
-      final Map<String, dynamic> summaryData = {
-        'parts': selectedParts,
-        'targetedBodyParts': await _loadTargetedBodyParts(selectedParts),
-        'exerciseCounts': await _calculateExerciseCounts(selectedParts),
-        'averageDifficulty': _calculateAverageDifficulty(selectedParts),
-      };
-      return summaryData;
-    } catch (e) {
-      throw Exception('Program özeti yüklenirken hata: $e');
-    }
-  }
-
-  Widget _buildDailyProgramList(Map<String, dynamic> data) {
-    final parts = data['parts'] as List<Parts>;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Günlük Program Detayları',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 16),
-        ...List.generate(_selectedDays.length, (index) {
-          final dayNumber = _selectedDays.elementAt(index);
-          final part = parts[index % parts.length];
+        SizedBox(height: 18),
+        Text('Egzersizleri günlere ata:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+        SizedBox(height: 10),
+        ...List.generate(totalDays, (dayIdx) {
           return Card(
-            color: Colors.grey[850],
+            color: Colors.grey[900],
             margin: const EdgeInsets.symmetric(vertical: 6),
-            child: ListTile(
-              leading: CircleAvatar(
-                backgroundColor: Colors.red[900],
-                child: Text(
-                  _getDayName(dayNumber)[0],
-                  style: const TextStyle(color: Colors.white),
-                ),
-              ),
-              title: Text(
-                part.name,
-                style: const TextStyle(color: Colors.white),
-              ),
-              subtitle: FutureBuilder<List<String>>(
-                future: _partRepository.getPartTargetedBodyPartsName(part.id),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) return const SizedBox.shrink();
-                  return Text(
-                    snapshot.data!.join(', '),
-                    style: TextStyle(color: Colors.grey[400]),
-                  );
-                },
-              ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
+            child: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.fitness_center, color: Colors.grey[600], size: 18),
-                  const SizedBox(width: 4),
-                  Text('Zorluk: ${part.difficulty}/5', style: TextStyle(color: Colors.grey[400])),
+                  Text('Gün ${dayIdx + 1} (${weekDays[dayIdx % 7]})', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepOrangeAccent)),
+                  SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: allSelectedExercises.map((ex) {
+                      final exId = ex['id'] as int;
+                      final isSelected = dayToExercises[dayIdx]?.contains(exId) ?? false;
+                      return FilterChip(
+                        label: Text(_getExerciseNameById(exId)),
+                        selected: isSelected,
+                        selectedColor: Colors.deepOrangeAccent,
+                        backgroundColor: Colors.grey[850],
+                        labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.white70),
+                        onSelected: (selected) {
+                          setState(() {
+                            final list = dayToExercises[dayIdx] ?? [];
+                            if (selected) {
+                              if (!list.contains(exId)) list.add(exId);
+                            } else {
+                              list.remove(exId);
+                            }
+                            dayToExercises[dayIdx] = list;
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
                 ],
               ),
             ),
@@ -793,630 +474,200 @@ class _ProgramMergerPageState extends State<ProgramMergerPage> {
     );
   }
 
-  Widget _buildSelectedDaysInfo() {
-    return Card(
-      color: Colors.grey[900],
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Seçilen Günler',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              children: _selectedDays.map((day) {
-                return Chip(
-                  backgroundColor: Colors.red.shade900,
-                  label: Text(
-                    _getDayName(day),
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                );
-              }).toList(),
-            ),
-          ],
-        ),
-      ),
-    );
+  String _getExerciseNameById(int exId) {
+    // Egzersiz adını bulmak için örnek veriyle eşleştir
+    final allExercises = <int, String>{
+      101: 'Bench Press', 102: 'Incline Dumbbell Press', 103: 'Chest Fly',
+      201: 'Barbell Row', 202: 'Lat Pulldown', 203: 'Face Pull',
+      301: 'Squat', 302: 'Leg Press', 303: 'Lunge',
+      401: 'Shoulder Press', 402: 'Lateral Raise', 403: 'Front Raise',
+      501: 'Biceps Curl', 502: 'Triceps Extension', 503: 'Hammer Curl',
+      601: 'Crunch', 602: 'Plank', 603: 'Leg Raise',
+    };
+    return allExercises[exId] ?? 'Egzersiz';
   }
 
-  Future<List<Parts>> _loadSelectedParts() async {
-    final parts = <Parts>[];
-    for (var id in _selectedPartIds) {
-      final part = await _partRepository.getPartById(id);
-      if (part != null) {
-        parts.add(part);
-      }
+  Widget _buildSummaryStep() {
+    // Özet ve kaydet
+    final weekDays = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+    // Egzersiz hedef body part mock verisi (id->targets)
+    final Map<int, List<Map<String, dynamic>>> exerciseTargets = {
+      101: [{'name': 'Göğüs', 'percentage': 80}, {'name': 'Triceps', 'percentage': 20}],
+      102: [{'name': 'Üst Göğüs', 'percentage': 70}, {'name': 'Ön Omuz', 'percentage': 30}],
+      103: [{'name': 'Göğüs', 'percentage': 90}],
+      201: [{'name': 'Sırt', 'percentage': 70}, {'name': 'Arka Omuz', 'percentage': 30}],
+      202: [{'name': 'Sırt', 'percentage': 80}, {'name': 'Biceps', 'percentage': 20}],
+      203: [{'name': 'Arka Omuz', 'percentage': 60}, {'name': 'Sırt', 'percentage': 40}],
+      301: [{'name': 'Bacak', 'percentage': 80}, {'name': 'Kalça', 'percentage': 20}],
+      302: [{'name': 'Bacak', 'percentage': 90}],
+      303: [{'name': 'Bacak', 'percentage': 70}, {'name': 'Kalça', 'percentage': 30}],
+      401: [{'name': 'Omuz', 'percentage': 80}, {'name': 'Triceps', 'percentage': 20}],
+      402: [{'name': 'Yan Omuz', 'percentage': 90}],
+      403: [{'name': 'Ön Omuz', 'percentage': 90}],
+      501: [{'name': 'Biceps', 'percentage': 100}],
+      502: [{'name': 'Triceps', 'percentage': 100}],
+      503: [{'name': 'Biceps', 'percentage': 80}, {'name': 'Ön Kol', 'percentage': 20}],
+      601: [{'name': 'Karın', 'percentage': 100}],
+      602: [{'name': 'Karın', 'percentage': 80}, {'name': 'Sırt', 'percentage': 20}],
+      603: [{'name': 'Alt Karın', 'percentage': 100}],
+    };
+    if (dayToExercises.isEmpty || exerciseDetails.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Text('Lütfen önce egzersizleri günlere atayın ve detayları girin.', style: TextStyle(color: Colors.orange)),
+      );
     }
-    return parts;
-  }
-
-  Widget _buildExerciseItem(PartExercise exercise) {
-    return FutureBuilder<Exercises?>(
-      future: _partRepository.getExerciseById(exercise.exerciseId),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return const SizedBox.shrink();
-
-        final exerciseData = snapshot.data!;
-        return ListTile(
-          leading: Icon(Icons.fitness_center, color: Colors.grey[400]),
-          title: Text(
-            exerciseData.name,
-            style: const TextStyle(color: Colors.white),
-          ),
-          subtitle: Text(
-            '${exerciseData.defaultSets} set x ${exerciseData
-                .defaultReps} tekrar',
-            style: TextStyle(color: Colors.grey[400]),
-          ),
-        );
-      },
-    );
-  }
-
-  double _calculateAverageDifficulty(List<Parts> parts) {
-    if (parts.isEmpty) return 0;
-
-    int totalDifficulty = parts.fold<int>(
-      0,
-          (sum, part) => sum + part.difficulty,
-    );
-
-    return totalDifficulty / parts.length;
-  }
-
-  Widget _buildAverageDifficultyDisplay(List<Parts> parts) {
-    double averageDifficulty = _calculateAverageDifficulty(parts);
-
-    // Tam sayı olarak gösterim için rounded kullanabiliriz
-    int roundedDifficulty = averageDifficulty.round();
-
-    return Row(
-      children: List.generate(5, (index) {
-        return Icon(
-          index < roundedDifficulty ? Icons.star : Icons.star_border,
-          color: Colors.redAccent,
-        );
-      }),
-    );
-  }
-
-  Future<void> _handleCreateProgram() async {
-    setState(() => _isLoading = true);
-    try {
-      final program = await _mergerService.createMergedProgram(
-        userId: _partsBloc.userId,
-        selectedPartIds: _selectedPartIds.toList(),
-        selectedDays: _selectedDays.toList(),
-        mergeType: _selectedMergeType,
-      );
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Başarılı'),
-          content: const Text('Program başarıyla oluşturuldu!'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Tamam'),
-            ),
-          ],
-        ),
-      );
-      Navigator.pop(context, program);
-    } catch (e) {
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Hata'),
-          content: Text('Program oluşturulamadı: ${e.toString()}'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Kapat'),
-            ),
-          ],
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  Widget _buildTargetMuscleGroups(Map<String, dynamic> data) {
-    final parts = data['parts'] as List<Parts>;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Hedef Kas Grupları',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 16),
-        FutureBuilder<Map<String, int>>(
-          future: calculateMainBodyPartPercentages(parts),
-          builder: (context, snapshot) {
-            if (!snapshot.hasData) {
-              return const Center(child: CircularProgressIndicator());
-            }
-
-            final groupedData = snapshot.data!;
-            final overloadThreshold = 70; // Aşırı yüklenme eşiği
-            final filteredData = groupedData.entries
-                .where((entry) => entry.value >= 10) // %10'un altındaki grupları gösterme
-                .toList();
-
-            if (filteredData.isEmpty) {
-              return const Text(
-                'Yeterli hedef kas grubu bulunamadı.',
-                style: TextStyle(color: Colors.grey),
-              );
-            }
-
-            bool isOverloaded = filteredData.any((entry) => entry.value > overloadThreshold);
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (isOverloaded)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Row(
-                      children: [
-                        Icon(Icons.warning, color: Colors.red[300]),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Bir bölgeye aşırı yüklenme var!',
-                          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                  ),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 8,
-                    crossAxisSpacing: 8,
-                    childAspectRatio: 3,
-                  ),
-                  itemCount: filteredData.length,
-                  itemBuilder: (context, index) {
-                    final entry = filteredData[index];
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: Colors.grey[900],
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Center(
-                        child: Text(
-                          entry.key,
-                          style:
-                          const TextStyle(color: Colors.white, fontSize: 14),
-                        ),
+        Text('Rutin Özeti', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white)),
+        SizedBox(height: 16),
+        _buildTargetAnalysis(exerciseTargets),
+        ...dayToExercises.entries.map((entry) {
+          final dayIdx = entry.key;
+          final exList = entry.value;
+          if (exList.isEmpty) return SizedBox.shrink();
+          return Card(
+            color: Colors.grey[900],
+            margin: const EdgeInsets.symmetric(vertical: 6),
+            child: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Gün ${dayIdx + 1} (${weekDays[dayIdx % 7]})', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepOrangeAccent)),
+                  SizedBox(height: 8),
+                  ...exList.map((exId) {
+                    final details = exerciseDetails[exId] ?? {'sets': 3, 'reps': 10};
+                    final targets = exerciseTargets[exId] ?? [];
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(child: Text(_getExerciseNameById(exId), style: TextStyle(color: Colors.white))),
+                              Text('${details['sets']} x ${details['reps']}', style: TextStyle(color: Colors.white70)),
+                            ],
+                          ),
+                          if (targets.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 8.0, top: 2, bottom: 2),
+                              child: Wrap(
+                                spacing: 6,
+                                children: targets.map<Widget>((t) => Text(
+                                  '${t['name']} (%${t['percentage']})',
+                                  style: TextStyle(fontSize: 11, color: Colors.white54),
+                                )).toList(),
+                              ),
+                            ),
+                        ],
                       ),
                     );
-                  },
-                ),
-              ],
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  Future<Map<String, int>> calculateMainBodyPartPercentages(List<Parts> parts) async {
-    final Map<String, int> percentages = {};
-
-    for (var part in parts) {
-      final targets = await _partRepository.getPartTargetedBodyParts(part.id);
-
-      for (var target in targets) {
-        // Sadece ana kas gruplarını hesapla
-        if (target.isPrimary) {
-          final bodyPartName = await _partRepository.getBodyPartName(target.bodyPartId);
-
-          percentages[bodyPartName] =
-              (percentages[bodyPartName] ?? 0) + target.targetPercentage;
-        }
-      }
-    }
-
-    return percentages;
-  }
-
-
-  Widget _buildCreateButton() {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: _isLoading ? null : _handleCreateProgram,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.red,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
-        child: _isLoading
-            ? const SizedBox(
-          height: 20,
-          width: 20,
-          child: CircularProgressIndicator(color: Colors.red),
-        )
-            : const Text(
-          'Programı Oluştur',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-              color: Colors.white,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProgramDetails(List<Parts> selectedParts) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Program Detayları',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 16),
-        ...selectedParts.map((part) => _buildProgramDetailCard(part)).toList(),
-      ],
-    );
-  }
-
-  Widget _buildProgramDetailCard(Parts part) {
-    return Card(
-      color: Colors.grey[900],
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      child: ExpansionTile(
-        title: Text(
-          part.name,
-          style: const TextStyle(color: Colors.white),
-        ),
-        subtitle: FutureBuilder<List<String>>(
-          future: _partRepository.getPartTargetedBodyPartsName(part.id),
-          builder: (context, snapshot) {
-            if (!snapshot.hasData) return const SizedBox.shrink();
-            return Text(
-              snapshot.data!.join(', '),
-              style: TextStyle(color: Colors.grey[400]),
-            );
-          },
-        ),
-        children: [
-          FutureBuilder<List<PartExercise>>(
-            future: _partRepository.getPartExercisesByPartId(part.id),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              return Column(
-                children: snapshot.data!.map((exercise) {
-                  return _buildExerciseDetailItem(exercise);
-                }).toList(),
+                  }).toList(),
+                ],
+              ),
+            ),
+          );
+        }),
+        SizedBox(height: 24),
+        Center(
+          child: ElevatedButton.icon(
+            icon: Icon(Icons.save),
+            label: Text('Kaydet'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.deepOrangeAccent,
+              padding: EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () {
+              // Şimdilik sadece snackbar ile onay
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Rutin kaydedildi!')),
               );
             },
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  Widget _buildExerciseDetailItem(PartExercise exercise) {
-    return FutureBuilder<Exercises?>(
-      future: _partRepository.getExerciseById(exercise.exerciseId),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return const SizedBox.shrink();
+  Widget _buildTargetAnalysis(Map<int, List<Map<String, dynamic>>> exerciseTargets) {
+    // Tüm günlerdeki egzersizleri topla
+    final Map<String, int> bodyPartTotals = {};
+    dayToExercises.forEach((_, exList) {
+      for (var exId in exList) {
+        final targets = exerciseTargets[exId] ?? [];
+        for (var t in targets) {
+          bodyPartTotals[t['name']] = (bodyPartTotals[t['name']] ?? 0) + (t['percentage'] as int);
+        }
+      }
+    });
 
-        final exerciseData = snapshot.data!;
-        return ListTile(
-          leading: Icon(Icons.fitness_center, color: Colors.grey[400]),
-          title: Text(
-            exerciseData.name,
-            style: const TextStyle(color: Colors.white),
-          ),
-          subtitle: Text(
-            '${exerciseData.defaultSets} set x ${exerciseData
-                .defaultReps} tekrar',
-            style: TextStyle(color: Colors.grey[400]),
-          ),
-          trailing: Text(
-            '${exerciseData.defaultWeight} kg',
-            style: TextStyle(color: Colors.grey[400]),
-          ),
-        );
-      },
-    );
-  }
+    if (bodyPartTotals.isEmpty) {
+      return SizedBox.shrink();
+    }
 
-  Widget _buildDayDistribution(List<Parts> parts) {
+    // Analiz ve uyarı
+    final maxEntry = bodyPartTotals.entries.reduce((a, b) => a.value > b.value ? a : b);
+    final minEntry = bodyPartTotals.entries.reduce((a, b) => a.value < b.value ? a : b);
+
     return Card(
-      color: Colors.grey[900],
+      color: Colors.grey[850],
+      margin: const EdgeInsets.symmetric(vertical: 8),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Günlük Program Dağılımı',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: _selectedDays.length,
-              itemBuilder: (context, index) {
-                final day = _selectedDays.elementAt(index);
-                final part = parts[index % parts.length];
-                return ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: Colors.red[900],
-                    child: Text(
-                      _getDayName(day)[0],
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                  ),
-                  title: Text(
-                    part.name,
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                  subtitle: FutureBuilder<List<String>>(
-                    future: _partRepository.getPartTargetedBodyPartsName(
-                        part.id),
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) return const SizedBox.shrink();
-                      return Text(
-                        snapshot.data!.join(', '),
-                        style: TextStyle(color: Colors.grey[400]),
-                      );
-                    },
-                  ),
-                );
-              },
-            ),
+            Text('Kas Grubu Analizi', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepOrangeAccent)),
+            SizedBox(height: 8),
+            ...bodyPartTotals.entries.map((e) => Row(
+              children: [
+                Expanded(child: Text(e.key.toString(), style: TextStyle(color: Colors.white))),
+                Text('%${e.value}', style: TextStyle(color: Colors.white70)),
+              ],
+            )),
+            SizedBox(height: 8),
+            if (minEntry.value < 20)
+              Text('Uyarı: ${minEntry.key} çok az çalıştırılıyor!', style: TextStyle(color: Colors.orange)),
+            if (maxEntry.value > 180)
+              Text('Uyarı: ${maxEntry.key} aşırı yükleniyor!', style: TextStyle(color: Colors.redAccent)),
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildExerciseStats(Map<int, int> exerciseCounts) {
-    return Card(
-      color: Colors.grey[900],
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Egzersiz İstatistikleri',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: exerciseCounts.length,
-              itemBuilder: (context, index) {
-                final bodyPartId = exerciseCounts.keys.elementAt(index);
-                final count = exerciseCounts[bodyPartId]!;
-                return FutureBuilder<String>(
-                  future: _partRepository.getBodyPartName(bodyPartId),
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData) return const SizedBox.shrink();
-                    return ListTile(
-                      title: Text(
-                        snapshot.data!,
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                      trailing: Text(
-                        '$count egzersiz',
-                        style: TextStyle(color: Colors.grey[400]),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  List<Parts> _filterPartsByDifficulty(List<Parts> parts) {
-    if (_selectedFrequency == null) return parts;
-
-    final minDifficulty = _selectedFrequency!.minDays;
-    final maxDifficulty = _selectedFrequency!.maxDays;
-
-    return parts.where((part) {
-      return part.difficulty >= minDifficulty &&
-          part.difficulty <= maxDifficulty;
-    }).toList();
-  }
-
-  void _onFrequencyChanged(TrainingFrequency? frequency) {
-    if (_selectedFrequency != frequency) {
-      setState(() {
-        _selectedFrequency = frequency;
-        _selectedDays.clear();
-        _selectedPartIds.clear();
-        _currentStep = 1;
-      });
-    }
-  }
-
-  void _onDaysChanged(Set<int> days) {
-    setState(() {
-      _selectedDays
-        ..clear()
-        ..addAll(days);
-      _selectedPartIds.clear();
-      _currentStep = 2;
-    });
-  }
-
-  void _handlePartSelection(int partId, bool isSelected) async {
-    if (!mounted) return;
-    final part = await _partRepository.getPartById(partId);
-    if (part == null) return;
-    final targets = await _partRepository.getPartTargetedBodyParts(partId);
-    final selectedParts = await Future.wait(_selectedPartIds.map((id) => _partRepository.getPartById(id)));
-    final selectedTargets = <int>{};
-    for (final p in selectedParts) {
-      if (p == null) continue;
-      final t = await _partRepository.getPartTargetedBodyParts(p.id);
-      for (final target in t) {
-        if (target.isPrimary) selectedTargets.add(target.bodyPartId);
-      }
-    }
-    // Aynı kas grubundan birden fazla parça seçimini engelle
-    for (final target in targets) {
-      if (target.isPrimary && isSelected && selectedTargets.contains(target.bodyPartId)) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Aynı kas grubundan birden fazla parça seçemezsiniz.')),
-          );
-        }
-        return;
-      }
-    }
-    setState(() {
-      if (isSelected) {
-        if (_selectedPartIds.length < maxSelectedProgramCount) {
-          _selectedPartIds.add(partId);
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('En fazla $maxSelectedProgramCount program seçebilirsiniz.')),
-          );
-        }
-      } else {
-        _selectedPartIds.remove(partId);
-      }
-    });
-  }
-
-  Future<Map<String, dynamic>> _calculateExerciseCounts(
-      List<Parts> parts) async {
-    final Map<int, int> exerciseCounts = {};
-
-    for (var part in parts) {
-      final exercises = await _partRepository.getPartExercisesByPartId(part.id);
-      for (var exercise in exercises) {
-        final targets = await _partRepository.getPartTargetedBodyParts(
-            exercise.partId);
-        for (var target in targets) {
-          exerciseCounts[target.bodyPartId] =
-              (exerciseCounts[target.bodyPartId] ?? 0) + 1;
-        }
-      }
-    }
-
-    return {
-      'exerciseCounts': exerciseCounts,
-    };
-  }
-
-  Future<List<String>> _loadTargetedBodyParts(List<Parts> parts) async {
-    final Set<String> bodyParts = {};
-
-    for (var part in parts) {
-      final targets = await _partRepository.getPartTargetedBodyPartsName(
-          part.id);
-      bodyParts.addAll(targets);
-    }
-
-    return bodyParts.toList();
-  }
+class _NumberInputField extends StatelessWidget {
+  final String label;
+  final int initialValue;
+  final ValueChanged<int> onChanged;
+  const _NumberInputField({required this.label, required this.initialValue, required this.onChanged, super.key});
 
   @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
+  Widget build(BuildContext context) {
+    final controller = TextEditingController(text: initialValue.toString());
+    return SizedBox(
+      width: 60,
+      child: TextField(
+        controller: controller,
+        keyboardType: TextInputType.number,
+        style: TextStyle(color: Colors.white),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: TextStyle(color: Colors.white70, fontSize: 12),
+          isDense: true,
+          enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+          focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.deepOrangeAccent)),
+        ),
+        onChanged: (val) {
+          final parsed = int.tryParse(val);
+          if (parsed != null) onChanged(parsed);
+        },
+      ),
+    );
   }
-
-  IconData _getBodyPartIcon(int bodyPartId) {
-    switch (bodyPartId) {
-      case 1: return Icons.fitness_center; // Göğüs
-      case 2: return Icons.accessibility_new; // Sırt
-      case 3: return Icons.directions_walk; // Bacak
-      case 4: return Icons.sports_martial_arts; // Omuz
-      case 5: return Icons.sports_handball; // Kol
-      case 6: return Icons.circle; // Karın
-      default: return Icons.fitness_center;
-    }
-  }
-
-  Future<Map<int, List<Parts>>> getBalancedGroupedParts() async {
-    // 1. Ana kas gruplarını al
-    final mainBodyParts = await _partRepository.getMainBodyParts();
-    final mainBodyPartIds = mainBodyParts.map((bp) => bp.id).toSet();
-    // 2. Tüm part'ları al
-    final allParts = await _partRepository.getAllParts();
-    // 3. Sonuç haritası
-    final Map<int, List<Parts>> grouped = {for (var id in mainBodyPartIds) id: []};
-    // 4. Her part için hedef kas gruplarını bul ve ana kas grubuna ekle
-    for (final part in allParts) {
-      final targets = await _partRepository.getPartTargetedBodyParts(part.id);
-      final Set<int> anaGruplar = {};
-      for (final t in targets) {
-        int? anaId;
-        if (mainBodyPartIds.contains(t.bodyPartId)) {
-          anaId = t.bodyPartId;
-        } else {
-          final bp = await _partRepository.getBodyPartById(t.bodyPartId);
-          if (bp != null && bp.parentBodyPartId != null && mainBodyPartIds.contains(bp.parentBodyPartId)) {
-            anaId = bp.parentBodyPartId;
-          }
-        }
-        if (anaId != null) anaGruplar.add(anaId);
-      }
-      for (final anaId in anaGruplar) {
-        grouped[anaId]?.add(part);
-      }
-    }
-    // 5. Debug çıktısı
-    grouped.forEach((k, v) {
-      debugPrint('DENGELI-GROUP: BodyPart $k: ${v.map((p) => p.name).toList()}');
-    });
-    return grouped;
-  }
-
 }

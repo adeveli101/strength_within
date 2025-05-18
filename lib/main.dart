@@ -32,6 +32,7 @@ import 'blocs/data_bloc_part/part_bloc.dart';
 import 'blocs/data_bloc_routine/RoutineRepository.dart';
 import 'blocs/data_bloc_routine/routines_bloc.dart';
 import 'blocs/data_exercise_bloc/ExerciseRepository.dart';
+import 'blocs/data_exercise_bloc/exercise_bloc.dart';
 import 'blocs/data_provider/firebase_provider.dart';
 import 'blocs/data_provider/sql_provider.dart';
 import 'blocs/data_schedule_bloc/schedule_bloc.dart';
@@ -367,8 +368,18 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => ProgramMergerPage(
-                        userId: widget.userId,
+                      builder: (context) => BlocProvider(
+                        create: (context) => ExerciseBloc(
+                          exerciseRepository: ExerciseRepository(
+                            sqlProvider: _sqlProvider,
+                            firebaseProvider: _firebaseProvider,
+                          ),
+                          sqlProvider: _sqlProvider,
+                          firebaseProvider: _firebaseProvider,
+                        ),
+                        child: ProgramMergerPage(
+                          userId: widget.userId,
+                        ),
                       ),
                     ),
                   );

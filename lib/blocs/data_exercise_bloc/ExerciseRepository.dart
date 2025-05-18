@@ -1,8 +1,10 @@
 import 'package:logging/logging.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../models/sql_models/BodyPart.dart';
 import '../../models/sql_models/ExerciseTargetedBodyParts.dart';
 import '../../models/sql_models/PartExercises.dart';
 import '../../models/sql_models/exercises.dart';
+import '../../models/sql_models/workoutGoals.dart';
 import '../data_provider/firebase_provider.dart';
 import '../data_provider/sql_provider.dart';
 import '../data_provider_cache/app_cache.dart';
@@ -175,6 +177,24 @@ class ExerciseRepository {
     return name;
   }
 
+  // Tüm vücut bölgelerini getir
+  Future<List<BodyParts>> getAllBodyParts() async {
+    try {
+      return await sqlProvider.getAllBodyParts();
+    } catch (e) {
+      _logger.severe('Vücut bölgeleri alınırken hata oluştu', e);
+      throw Exception("Vücut bölgeleri alınırken hata oluştu: $e");
+    }
+  }
 
+  // Tüm antrenman hedeflerini getir
+  Future<List<WorkoutGoals>> getAllWorkoutGoals() async {
+    try {
+      return await sqlProvider.getAllWorkoutGoals();
+    } catch (e) {
+      _logger.severe('Antrenman hedefleri alınırken hata oluştu', e);
+      throw Exception("Antrenman hedefleri alınırken hata oluştu: $e");
+    }
+  }
 
 }
