@@ -2402,6 +2402,32 @@ class SQLProvider {
     return List.generate(maps.length, (i) => WorkoutGoals.fromMap(maps[i]));
   }
 
+  Future<List<Exercises>> getExercisesByMainBodyPart(int mainBodyPartId) async {
+    try {
+      final db = await database;
+      // Alt kas gruplarını bul
+      final List<Map<String, dynamic>> subParts = await db.query(
+        'BodyParts',
+        columns: ['id'],
+        where: 'parentBodyPartId = ?',
+        whereArgs: [mainBodyPartId],
+      );
+      final List<int> subPartIds = subParts.map((e) => e['id'] as int).toList();
+      if (subPartIds.isEmpty) return [];
+      // Alt kas gruplarına bağlı egzersizleri getir
+      final List<Map<String, dynamic>> maps = await db.rawQuery('''
+        SELECT DISTINCT e.*
+        FROM Exercises e
+        INNER JOIN ExerciseTargetedBodyParts etb ON e.id = etb.exerciseId
+        WHERE etb.bodyPartId IN (${subPartIds.join(',')})
+      ''');
+      return List.generate(maps.length, (i) => Exercises.fromMap(maps[i]));
+    } catch (e) {
+      _logger.severe('Error getting exercises by main body part', e);
+      return [];
+    }
+  }
+
 
 
 

@@ -197,4 +197,35 @@ class ExerciseRepository {
     }
   }
 
+  Future<List<Exercises>> getExercisesByBodyPartIds(List<int> bodyPartIds) async {
+    print('[DEBUG] getExercisesByBodyPartIds called with: $bodyPartIds');
+    final Set<int> allExerciseIds = {};
+    for (final partId in bodyPartIds) {
+      final exercises = await sqlProvider.getExercisesByBodyPart(partId);
+      allExerciseIds.addAll(exercises.map((e) => e.id));
+    }
+    if (allExerciseIds.isEmpty) return [];
+    final result = await getExercisesByIds(allExerciseIds.toList());
+    print('[DEBUG] getExercisesByBodyPartIds result count: ${result.length}');
+    return result;
+  }
+
+  Future<List<BodyParts>> getMainBodyParts() async {
+    try {
+      return await sqlProvider.getMainBodyParts();
+    } catch (e) {
+      _logger.severe('Error getting main body parts', e);
+      return [];
+    }
+  }
+
+  Future<List<Exercises>> getExercisesByMainBodyPart(int mainBodyPartId) async {
+    try {
+      return await sqlProvider.getExercisesByMainBodyPart(mainBodyPartId);
+    } catch (e) {
+      _logger.severe('Error getting exercises by main body part', e);
+      return [];
+    }
+  }
+
 }

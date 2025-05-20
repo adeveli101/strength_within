@@ -54,6 +54,16 @@ class FetchBodyParts extends ExerciseEvent {}
 
 class FetchWorkoutGoals extends ExerciseEvent {}
 
+class FetchExercisesByBodyParts extends ExerciseEvent {
+  final List<int> bodyPartIds;
+  FetchExercisesByBodyParts(this.bodyPartIds);
+}
+
+class FetchExercisesByMainBodyPart extends ExerciseEvent {
+  final int mainBodyPartId;
+  FetchExercisesByMainBodyPart(this.mainBodyPartId);
+}
+
 // State Sınıfları
 abstract class ExerciseState {}
 
@@ -109,6 +119,8 @@ class ExerciseBloc extends Bloc<ExerciseEvent, ExerciseState> {
     on<UpdateExerciseOrder>(_onUpdateExerciseOrder);
     on<FetchBodyParts>(_onFetchBodyParts);
     on<FetchWorkoutGoals>(_onFetchWorkoutGoals);
+    on<FetchExercisesByBodyParts>(_onFetchExercisesByBodyParts);
+    on<FetchExercisesByMainBodyPart>(_onFetchExercisesByMainBodyPart);
   }
 
   Future<void> _onFetchExercises(
@@ -204,7 +216,7 @@ class ExerciseBloc extends Bloc<ExerciseEvent, ExerciseState> {
       ) async {
     emit(ExerciseLoading());
     try {
-      final bodyParts = await exerciseRepository.getAllBodyParts();
+      final bodyParts = await exerciseRepository.getMainBodyParts();
       emit(BodyPartsLoaded(bodyParts));
     } catch (e) {
       emit(ExerciseError("Vücut bölgeleri yüklenirken hata oluştu: $e"));
@@ -221,6 +233,38 @@ class ExerciseBloc extends Bloc<ExerciseEvent, ExerciseState> {
       emit(WorkoutGoalsLoaded(goals));
     } catch (e) {
       emit(ExerciseError("Antrenman hedefleri yüklenirken hata oluştu: $e"));
+    }
+  }
+
+  Future<void> _onFetchExercisesByBodyParts(
+    FetchExercisesByBodyParts event,
+    Emitter<ExerciseState> emit,
+  ) async {
+    print('[DEBUG] _onFetchExercisesByBodyParts called with: event.bodyPartIds = ${event.bodyPartIds}');
+    emit(ExerciseLoading());
+    try {
+      final exercises = await exerciseRepository.getExercisesByBodyPartIds(event.bodyPartIds);
+      print('[DEBUG] getExercisesByBodyPartIds returned: ${exercises.length} exercises');
+      emit(ExerciseLoaded(exercises));
+    } catch (e) {
+      print('[DEBUG] Error in _onFetchExercisesByBodyParts: $e');
+      emit(ExerciseError("Vücut bölgelerine göre egzersizler yüklenirken hata: $e"));
+    }
+  }
+
+  Future<void> _onFetchExercisesByMainBodyPart(
+    FetchExercisesByMainBodyPart event,
+    Emitter<ExerciseState> emit,
+  ) async {
+    print('[DEBUG] Bloc: FetchExercisesByMainBodyPart event received for mainBodyPartId: ${event.mainBodyPartId}');
+    emit(ExerciseLoading());
+    try {
+      final exercises = await exerciseRepository.getExercisesByMainBodyPart(event.mainBodyPartId);
+      print('[DEBUG] Bloc: getExercisesByMainBodyPart returned ${exercises.length} exercises');
+      emit(ExerciseLoaded(exercises));
+    } catch (e) {
+      print('[DEBUG] Bloc: Error in getExercisesByMainBodyPart: $e');
+      emit(ExerciseError("Ana kas grubuna göre egzersizler yüklenirken hata: $e"));
     }
   }
 }

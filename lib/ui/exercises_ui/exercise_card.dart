@@ -12,12 +12,16 @@ class ExerciseCard extends StatefulWidget {
   final Exercises exercise;
   final String userId;
   final Function(bool)? onCompletionChanged;
+  final bool? isSelected;
+  final Function(bool)? onSelectionChanged;
 
   const ExerciseCard({
     Key? key,
     required this.exercise,
     required this.userId,
     this.onCompletionChanged,
+    this.isSelected,
+    this.onSelectionChanged,
   }) : super(key: key);
 
   @override
@@ -166,6 +170,16 @@ class _ExerciseCardState extends State<ExerciseCard> {
   }
 
   Widget _buildCompletionCheckbox() {
+    if (widget.onSelectionChanged != null && widget.isSelected != null) {
+      return Checkbox(
+        value: widget.isSelected,
+        onChanged: (val) {
+          if (val != null) widget.onSelectionChanged!(val);
+        },
+        checkColor: AppTheme.textPrimary,
+        fillColor: WidgetStateProperty.resolveWith((states) => Colors.transparent),
+      );
+    }
     return Checkbox(
       value: isCompleted,
       onChanged: (bool? value) {
@@ -178,7 +192,7 @@ class _ExerciseCardState extends State<ExerciseCard> {
       },
       checkColor: AppTheme.textPrimary,
       fillColor: WidgetStateProperty.resolveWith(
-            (states) => Colors.transparent,
+        (states) => Colors.transparent,
       ),
     );
   }
